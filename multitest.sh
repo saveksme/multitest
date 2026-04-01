@@ -22,19 +22,30 @@ NC='\033[0m'
 if [[ "$1" == "--install" ]]; then
     echo -e "${CYAN}Установка multitest...${NC}"
     INSTALL_PATH="/usr/local/bin/multitest"
+    TMP_FILE=$(mktemp)
 
     if command -v curl &>/dev/null; then
-        curl -sL "$REPO_URL" -o "$INSTALL_PATH"
+        curl -sL "$REPO_URL" -o "$TMP_FILE"
     elif command -v wget &>/dev/null; then
-        wget -qO "$INSTALL_PATH" "$REPO_URL"
+        wget -qO "$TMP_FILE" "$REPO_URL"
     else
         echo -e "${RED}Нужен curl или wget для установки.${NC}"
         exit 1
     fi
 
-    chmod +x "$INSTALL_PATH"
-    echo -e "${GREEN}Установлено в ${INSTALL_PATH}${NC}"
-    echo -e "${GREEN}Теперь можно запускать командой: ${BOLD}multitest${NC}"
+    # Проверяем что скачался именно скрипт, а не страница ошибки
+    if head -1 "$TMP_FILE" 2>/dev/null | grep -q "^#!/bin/bash"; then
+        mv "$TMP_FILE" "$INSTALL_PATH"
+        chmod +x "$INSTALL_PATH"
+        echo -e "${GREEN}Установлено в ${INSTALL_PATH}${NC}"
+        echo -e "${GREEN}Теперь можно запускать командой: ${BOLD}multitest${NC}"
+    else
+        rm -f "$TMP_FILE"
+        echo -e "${RED}Ошибка: загрузка не удалась (CDN кэш). Установите напрямую:${NC}"
+        echo ""
+        echo "  curl -sL $REPO_URL -o /usr/local/bin/multitest && chmod +x /usr/local/bin/multitest"
+        echo ""
+    fi
     exit 0
 fi
 
