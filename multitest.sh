@@ -139,6 +139,7 @@ install_deps() {
     check_and_install curl
     check_and_install wget
     check_and_install sysbench
+    check_and_install iperf3
     echo -e "${GREEN}Все зависимости в порядке.${NC}"
     echo ""
 }
@@ -168,6 +169,7 @@ run_censorcheck_dpi() {
 run_iperf3_ru() {
     print_separator "iPerf3 — тест до российских серверов"
     check_and_install wget
+    check_and_install iperf3
     bash <(wget -qO- https://github.com/itdoginfo/russian-iperf3-servers/raw/main/speedtest.sh)
 }
 
