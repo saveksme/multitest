@@ -7,13 +7,13 @@
 **Запуск без установки:**
 
 ```bash
-bash <(curl -sL https://raw.githubusercontent.com/saveksme/multitest/master/multitest.sh)
+bash <(curl -sL https://raw.githubusercontent.com/Mrzalupa-lolz/multitest/refs/heads/master/multitest.sh)
 ```
 
 **Установка как команда `multitest`:**
 
 ```bash
-curl -sL https://raw.githubusercontent.com/saveksme/multitest/master/multitest.sh -o /usr/local/bin/multitest && chmod +x /usr/local/bin/multitest && echo "Установлено! Запуск: multitest"
+curl -sL https://raw.githubusercontent.com/Mrzalupa-lolz/multitest/refs/heads/master/multitest.sh -o /usr/local/bin/multitest && chmod +x /usr/local/bin/multitest && echo "Установлено! Запуск: multitest"
 ```
 
 После установки скрипт доступен из любого места:
