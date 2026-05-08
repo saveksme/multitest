@@ -173,6 +173,13 @@ run_iperf3_ru() {
     bash <(wget -qO- https://github.com/itdoginfo/russian-iperf3-servers/raw/main/speedtest.sh)
 }
 
+run_iperf3_tlab() {
+    print_separator "iPerf3 — bench.tlab.pw (РФ)"
+    check_and_install wget
+    check_and_install iperf3
+    wget -qO- bench.tlab.pw | bash
+}
+
 run_yabs() {
     print_separator "YABS — бенчмарк сервера"
     check_and_install curl
@@ -221,6 +228,7 @@ run_all() {
         "run_censorcheck_geoblock"
         "run_censorcheck_dpi"
         "run_iperf3_ru"
+        "run_iperf3_tlab"
         "run_yabs"
         "run_ip_check_place"
         "run_bench_sh"
@@ -232,6 +240,7 @@ run_all() {
         "Censorcheck — проверка геоблока"
         "Censorcheck — DPI (серверы РФ)"
         "iPerf3 — тест до российских серверов"
+        "iPerf3 — bench.tlab.pw (РФ)"
         "YABS — бенчмарк сервера"
         "IP Check Place — блокировки зарубежными сервисами"
         "bench.sh — параметры сервера и скорость"
@@ -391,21 +400,22 @@ show_menu() {
     echo -e "  ${GREEN} 2)${NC}  Censorcheck — проверка геоблока"
     echo -e "  ${GREEN} 3)${NC}  Censorcheck — DPI (серверы РФ)"
     echo -e "  ${GREEN} 4)${NC}  iPerf3 — тест до российских серверов"
-    echo -e "  ${GREEN} 5)${NC}  YABS — бенчмарк сервера"
-    echo -e "  ${GREEN} 6)${NC}  IP Check Place — блокировки зарубежными сервисами"
-    echo -e "  ${GREEN} 7)${NC}  bench.sh — параметры сервера и скорость"
-    echo -e "  ${GREEN} 8)${NC}  IPQuality"
-    echo -e "  ${GREEN} 9)${NC}  sysbench CPU — тест процессора"
+    echo -e "  ${GREEN} 5)${NC}  iPerf3 — bench.tlab.pw (РФ)"
+    echo -e "  ${GREEN} 6)${NC}  YABS — бенчмарк сервера"
+    echo -e "  ${GREEN} 7)${NC}  IP Check Place — блокировки зарубежными сервисами"
+    echo -e "  ${GREEN} 8)${NC}  bench.sh — параметры сервера и скорость"
+    echo -e "  ${GREEN} 9)${NC}  IPQuality"
+    echo -e "  ${GREEN}10)${NC}  sysbench CPU — тест процессора"
     echo ""
-    echo -e "  ${YELLOW}10)${NC}  ${BOLD}Мультитест — запуск всех тестов${NC}"
+    echo -e "  ${YELLOW}11)${NC}  ${BOLD}Мультитест — запуск всех тестов${NC}"
     echo ""
     echo -e "  ${CYAN}${BOLD}── Утилиты ──${NC}"
     echo ""
-    echo -e "  ${GREEN}11)${NC}  Утилиты (BBR, IPv6...)"
+    echo -e "  ${GREEN}12)${NC}  Утилиты (BBR, IPv6...)"
     echo ""
     echo -e "  ${RED} 0)${NC}  Выход"
     echo ""
-    echo -ne "  ${BOLD}Выберите пункт [0-11]: ${NC}"
+    echo -ne "  ${BOLD}Выберите пункт [0-12]: ${NC}"
 }
 
 # ============================================================
@@ -421,13 +431,14 @@ while true; do
         2)  run_censorcheck_geoblock; pause_prompt ;;
         3)  run_censorcheck_dpi; pause_prompt ;;
         4)  run_iperf3_ru; pause_prompt ;;
-        5)  run_yabs; pause_prompt ;;
-        6)  run_ip_check_place; pause_prompt ;;
-        7)  run_bench_sh; pause_prompt ;;
-        8)  run_ip_quality; pause_prompt ;;
-        9)  run_sysbench_cpu; pause_prompt ;;
-        10) run_all; pause_prompt ;;
-        11) show_utilities_menu ;;
+        5)  run_iperf3_tlab; pause_prompt ;;
+        6)  run_yabs; pause_prompt ;;
+        7)  run_ip_check_place; pause_prompt ;;
+        8)  run_bench_sh; pause_prompt ;;
+        9)  run_ip_quality; pause_prompt ;;
+        10) run_sysbench_cpu; pause_prompt ;;
+        11) run_all; pause_prompt ;;
+        12) show_utilities_menu ;;
         0)  echo -e "${GREEN}До свидания!${NC}"; exit 0 ;;
         *)  echo -e "${RED}Неверный выбор. Попробуйте снова.${NC}"; pause_prompt ;;
     esac
