@@ -270,6 +270,8 @@ run_all() {
                 ;;
         esac
 
+        sleep 2
+
         # Запуск теста в подоболочке, Ctrl+C убивает только тест
         MULTITEST_SKIPPED=0
         trap multitest_skip_handler INT
@@ -280,6 +282,8 @@ run_all() {
             echo ""
             echo -e "  ${YELLOW}Тест пропущен (Ctrl+C).${NC}"
         fi
+
+        sleep 2
     done
 
     echo ""
