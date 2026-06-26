@@ -1077,6 +1077,25 @@ test_glyph() {
     esac
 }
 
+# Иконка для подписи в карточке «Сервер» (viewBox 24, обводка C_PRI=#5FD4E8).
+sys_glyph() {
+    case "$1" in
+        cpu)  printf '%s' '<rect x="7" y="7" width="10" height="10" rx="1.5" stroke="#5FD4E8" stroke-width="1.8" fill="none"/><rect x="10" y="10" width="4" height="4" rx="0.6" stroke="#5FD4E8" stroke-width="1.4" fill="none"/><path d="M9.5 7V4.5 M14.5 7V4.5 M9.5 19.5V17 M14.5 19.5V17 M7 9.5H4.5 M7 14.5H4.5 M19.5 9.5H17 M19.5 14.5H17" stroke="#5FD4E8" stroke-width="1.6" stroke-linecap="round"/>' ;;
+        ram)  printf '%s' '<rect x="3" y="8" width="18" height="9" rx="1.5" stroke="#5FD4E8" stroke-width="1.8" fill="none"/><path d="M7 8v9 M12 8v9 M17 8v9" stroke="#5FD4E8" stroke-width="1.5" stroke-linecap="round"/><path d="M6 20v-3 M10 20v-3 M14 20v-3 M18 20v-3" stroke="#5FD4E8" stroke-width="1.6" stroke-linecap="round"/>' ;;
+        disk) printf '%s' '<ellipse cx="12" cy="6.5" rx="8" ry="3" stroke="#5FD4E8" stroke-width="1.8" fill="none"/><path d="M4 6.5v5c0 1.66 3.58 3 8 3s8-1.34 8-3v-5" stroke="#5FD4E8" stroke-width="1.8" fill="none"/><path d="M4 11.5v5c0 1.66 3.58 3 8 3s8-1.34 8-3v-5" stroke="#5FD4E8" stroke-width="1.8" fill="none"/>' ;;
+        os)   printf '%s' '<path d="M12 3c2.4 0 3.6 2 3.6 4.6 0 2 1.2 3 2.4 5 1.5 2.5 2 4.8 1 6.3-1 1.5-3 1.1-3.6.2-.6.9-2.2 1.3-3.4 1.3s-2.8-.4-3.4-1.3c-.6.9-2.6 1.3-3.6-.2-1-1.5-.5-3.8 1-6.3 1.2-2 2.4-3 2.4-5C8.4 5 9.6 3 12 3z" stroke="#5FD4E8" stroke-width="1.8" fill="none"/><circle cx="10.4" cy="7.2" r="0.9" fill="#5FD4E8"/><circle cx="13.6" cy="7.2" r="0.9" fill="#5FD4E8"/><path d="M10.8 9.4c.7.7 1.7.7 2.4 0" stroke="#5FD4E8" stroke-width="1.4" stroke-linecap="round" fill="none"/>' ;;
+        kernel) printf '%s' '<rect x="3" y="4.5" width="18" height="15" rx="2" stroke="#5FD4E8" stroke-width="1.8" fill="none"/><path d="M7 9.5l3 2.5-3 2.5" stroke="#5FD4E8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M12.5 15h4" stroke="#5FD4E8" stroke-width="1.8" stroke-linecap="round"/>' ;;
+        virt) printf '%s' '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" stroke="#5FD4E8" stroke-width="1.8" fill="none" stroke-linejoin="round"/><path d="M12 21V12 M12 12l8-4.5 M12 12L4 7.5" stroke="#5FD4E8" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>' ;;
+        ip)   printf '%s' '<circle cx="12" cy="12" r="9" stroke="#5FD4E8" stroke-width="1.8" fill="none"/><path d="M3 12h18 M12 3v18" stroke="#5FD4E8" stroke-width="1.5" stroke-linecap="round"/><path d="M12 3c3 2.5 4.5 5.7 4.5 9S15 18.5 12 21c-3-2.5-4.5-5.7-4.5-9S9 5.5 12 3z" stroke="#5FD4E8" stroke-width="1.5" fill="none"/>' ;;
+        geo)  printf '%s' '<path d="M12 21.5c4-4.5 7-7.8 7-11.5a7 7 0 1 0-14 0c0 3.7 3 7 7 11.5z" stroke="#5FD4E8" stroke-width="1.8" fill="none" stroke-linejoin="round"/><circle cx="12" cy="10" r="2.6" stroke="#5FD4E8" stroke-width="1.6" fill="none"/>' ;;
+        asn)  printf '%s' '<rect x="5" y="3.5" width="14" height="17" rx="1.5" stroke="#5FD4E8" stroke-width="1.8" fill="none"/><path d="M9 7.5h2 M13 7.5h2 M9 11h2 M13 11h2 M9 14.5h2 M13 14.5h2" stroke="#5FD4E8" stroke-width="1.6" stroke-linecap="round"/><path d="M10.5 20.5v-3h3v3" stroke="#5FD4E8" stroke-width="1.6" stroke-linejoin="round" fill="none"/>' ;;
+        bbr)  printf '%s' '<path d="M3.5 17a8.5 8.5 0 0 1 17 0" stroke="#5FD4E8" stroke-width="1.8" stroke-linecap="round" fill="none"/><path d="M12 17l5-4" stroke="#5FD4E8" stroke-width="1.8" stroke-linecap="round" fill="none"/><circle cx="12" cy="17" r="1.6" fill="#5FD4E8"/>' ;;
+        uptime) printf '%s' '<circle cx="12" cy="12" r="8.5" stroke="#5FD4E8" stroke-width="1.8" fill="none"/><path d="M12 7v5l3.5 2" stroke="#5FD4E8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>' ;;
+        load) printf '%s' '<path d="M3 12h4l2.5-6 4 13 2.5-7H21" stroke="#5FD4E8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>' ;;
+        *)    printf '%s' '<circle cx="12" cy="12" r="3" fill="#5FD4E8"/>' ;;
+    esac
+}
+
 sv() { SVG_BODY="${SVG_BODY}$1"$'\n'; }
 sv_esc() { printf '%s' "$1" | xml_escape; }
 sv_is_dark() { local h="${1#\#}"; [[ ${#h} -lt 6 ]] && { echo 0; return; }
@@ -1102,11 +1121,16 @@ sv_tile() {
     fi
 }
 
+# Длина строки В СИМВОЛАХ независимо от локали. В C/POSIX (а это типичная локаль
+# для `wget|bash`) ${#s} считает БАЙТЫ, и кириллица меряется ×2 — отсюда «съезжал»
+# весь текст. Убираем UTF-8 continuation-байты (0x80-0xBF) — остаётся по байту на символ.
+vlen() { local c="${1//[$'\x80'-$'\xbf']/}"; echo "${#c}"; }
+
 # чип-вердикт у правого края xr
 sv_vchip() {
     local xr="$1" y="$2" st="$3" t="$4" cf cb; cf=$(sv_state_col "$st")
     case "$st" in ok) cb="$C_OKC";; bad) cb="$C_ERRC";; warn) cb="$C_WARNC";; *) cb="$C_SCH";; esac
-    local w=$(( ${#t}*7 + 20 )); [[ $w -lt 40 ]] && w=40
+    local w=$(( $(vlen "$t")*8 + 22 )); [[ $w -lt 42 ]] && w=42
     sv "<rect x=\"$((xr-w))\" y=\"$y\" width=\"$w\" height=\"24\" rx=\"12\" fill=\"$cb\"/>"
     sv "<text x=\"$((xr-w/2))\" y=\"$((y+16))\" text-anchor=\"middle\" fill=\"$cf\" font-size=\"12\" font-weight=\"700\">$(sv_esc "$t")</text>"
 }
@@ -1131,12 +1155,12 @@ sv_row_bar() {
     sv "<text x=\"$((x+cw))\" y=\"$((y+19))\" text-anchor=\"end\" fill=\"$col\" font-size=\"12.5\" font-weight=\"700\">$(sv_esc "$val")</text>"
 }
 
-sv_chipw() { echo $(( ${#1}*7 + 16 + ${#2}*8 + 18 )); }
+sv_chipw() { echo $(( $(vlen "$1")*8 + 18 + $(vlen "$2")*8 + 20 )); }
 
 # метрика-чип: x y label value colorkey ; ширина -> MCW
 sv_mchip() {
     local x="$1" y="$2" l="$3" v="$4" ck="$5"; local c; c=$(sv_state_col "$ck")
-    local lw=$(( ${#l}*7 + 16 )) vw=$(( ${#v}*8 + 18 )); local cw=$((lw+vw))
+    local lw=$(( $(vlen "$l")*8 + 18 )) vw=$(( $(vlen "$v")*8 + 20 )); local cw=$((lw+vw))
     sv "<rect x=\"$x\" y=\"$y\" width=\"$cw\" height=\"36\" rx=\"12\" fill=\"$C_SCH\"/>"
     sv "<path d=\"M$((x+12)) $y h$((lw-12)) v36 h-$((lw-12)) a12 12 0 0 1 -12 -12 v-12 a12 12 0 0 1 12 -12 z\" fill=\"$C_SCHX\"/>"
     sv "<text x=\"$((x+lw/2))\" y=\"$((y+23))\" text-anchor=\"middle\" fill=\"$C_ONSV\" font-size=\"12\" font-weight=\"600\">$(sv_esc "$l")</text>"
@@ -1146,8 +1170,8 @@ sv_mchip() {
 
 sv_status_chip() {
     local xr="$1" y="$2" st="$3" cb cf t
-    case "$st" in done) cb="$C_OKC";cf="$C_OKF";t="выполнен";; skip) cb="$C_WARNC";cf="$C_WARNF";t="пропущен";; err) cb="$C_ERRC";cf="$C_ERRF";t="ошибка";; *) cb="$C_SCH";cf="$C_ONSV";t="не запускался";; esac
-    local w=$(( ${#t}*8 + 46 ))
+    case "$st" in done) cb="$C_OKC";cf="$C_OKF";t="выполнен";; skip) cb="$C_WARNC";cf="$C_WARNF";t="пропущен";; err) cb="$C_ERRC";cf="$C_ERRF";t="ошибка";; *) cb="$C_NEUC";cf="$C_NEUF";t="не запускался";; esac
+    local w=$(( $(vlen "$t")*8 + 48 ))
     sv "<g transform=\"translate($((xr-w)),$y)\"><rect width=\"$w\" height=\"30\" rx=\"15\" fill=\"$cb\"/>"
     case "$st" in
         done) sv "<path d=\"M17 15 l4 4 8 -9\" fill=\"none\" stroke=\"$cf\" stroke-width=\"2.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>";;
@@ -1162,11 +1186,12 @@ sv_status_chip() {
 build_summary_svg() {
     load_logos
     # --- Material 3 dark tokens ---
-    local C_BG="#0E1116" C_SCL="#161A20" C_SC="#1A1E24" C_SCH="#222730" C_SCHX="#2B313B"
-    local C_ONS="#E5E8EE" C_ONSV="#A6AEBC" C_OUTV="#333941"
-    local C_PRI="#76D4E6" C_PRIC="#0E3E48" C_ONPRIC="#A8EDF7" C_TER="#C9BFFF"
-    local C_OKC="#11371E" C_OKF="#74E29A" C_ERRC="#4E1714" C_ERRF="#FFB4AB" C_WARNC="#3C3110" C_WARNF="#F2CD6B"
-    local C_MONO=( "#8AB4F8" "#F28B82" "#FDD663" "#81C995" "#C58AF9" "#FF8BCB" "#78D9EC" "#FCAD70" "#A7D98C" "#9FA8FF" "#F6A6C1" "#7FD1C4" )
+    local C_BG="#0D1014" C_SCL="#14181E" C_SC="#191E25" C_SCH="#212730" C_SCHX="#2B323C"
+    local C_ONS="#E6E9EF" C_ONSV="#AAB2C0" C_OUT="#5A6473" C_OUTV="#363D47"
+    local C_PRI="#5FD4E8" C_ONPRI="#00363F" C_PRIC="#114049" C_ONPRIC="#9CEFFB" C_TER="#CBBFFF"
+    local C_OKC="#0E3A22" C_OKF="#7CE0A0" C_WARNC="#3E330F" C_WARNF="#F4CE6E" C_ERRC="#561E1A" C_ERRF="#FFB4AB"
+    local C_NEUC="#262C35" C_NEUF="#C2CAD8" C_FOOT="#6B7480"
+    local C_MONO=( "#8AB4F8" "#F2A6B0" "#FBD267" "#86D89A" "#C9A4FB" "#FF9FD0" "#6FD6E6" "#FBB874" "#A8DD8A" "#9CA8FF" "#7FD8C8" "#E59ACB" )
     local W=1100 PAD=28 IPAD=26; local CARDW=$((W-2*PAD)); local MCW=0
     SVG_BODY=""
     local Y=$PAD
@@ -1192,9 +1217,10 @@ build_summary_svg() {
     # ---- HEADER ----
     local HH=152
     sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$HH\" rx=\"28\" fill=\"$C_SC\"/>"
+    sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"1\" rx=\"0.5\" fill=\"#FFFFFF\" opacity=\"0.05\"/>"
     sv "<rect x=\"$PAD\" y=\"$Y\" width=\"6\" height=\"$HH\" rx=\"3\" fill=\"url(#hdr)\"/>"
     sv "<rect x=\"$((PAD+28))\" y=\"$((Y+32))\" width=\"66\" height=\"66\" rx=\"19\" fill=\"url(#hdr)\"/>"
-    sv "<g transform=\"translate($((PAD+44)),$((Y+49))) scale(1.45)\"><rect x=\"0\" y=\"0\" width=\"22\" height=\"7\" rx=\"2\" fill=\"#08222A\"/><rect x=\"0\" y=\"10\" width=\"22\" height=\"7\" rx=\"2\" fill=\"#08222A\"/><circle cx=\"5\" cy=\"3.5\" r=\"1.5\" fill=\"$C_PRI\"/><circle cx=\"5\" cy=\"13.5\" r=\"1.5\" fill=\"$C_PRI\"/></g>"
+    sv "<g transform=\"translate($((PAD+44)),$((Y+49))) scale(1.45)\"><rect x=\"0\" y=\"0\" width=\"22\" height=\"7\" rx=\"2\" fill=\"$C_ONPRI\"/><rect x=\"0\" y=\"10\" width=\"22\" height=\"7\" rx=\"2\" fill=\"$C_ONPRI\"/><circle cx=\"5\" cy=\"3.5\" r=\"1.5\" fill=\"$C_PRI\"/><circle cx=\"5\" cy=\"13.5\" r=\"1.5\" fill=\"$C_PRI\"/></g>"
     sv "<text x=\"$((PAD+116))\" y=\"$((Y+60))\" fill=\"#FFFFFF\" font-size=\"36\" font-weight=\"800\" letter-spacing=\"1.5\">MULTITEST</text>"
     sv "<text x=\"$((PAD+118))\" y=\"$((Y+88))\" fill=\"$C_ONPRIC\" font-size=\"15\" font-weight=\"600\">Сводка диагностики сервера · v${SCRIPT_VERSION}</text>"
     sv "<text x=\"$((PAD+118))\" y=\"$((Y+114))\" fill=\"#B7C4D0\" font-size=\"13.5\">${host_e} · ${ip_e} · ${SYS_COUNTRY}/${SYS_CITY} · ${date_e}</text>"
@@ -1206,22 +1232,30 @@ build_summary_svg() {
         printf "<circle cx=\"%d\" cy=\"%d\" r=\"%d\" fill=\"none\" stroke=\"%s\" stroke-width=\"11\" stroke-linecap=\"round\" stroke-dasharray=\"%.2f %.2f\" transform=\"rotate(%.2f %d %d)\"/>",cx,cy,r,col[k],(seg-4>0?seg-4:0.5),C-seg+4,rot,cx,cy; cum+=v[k];}}')"
     sv "<text x=\"$DCX\" y=\"$((DCY-1))\" text-anchor=\"middle\" fill=\"#FFFFFF\" font-size=\"30\" font-weight=\"800\">$d</text>"
     sv "<text x=\"$DCX\" y=\"$((DCY+20))\" text-anchor=\"middle\" fill=\"$C_ONPRIC\" font-size=\"12.5\" font-weight=\"600\">из $tot</text>"
-    Y=$((Y+HH+18))
+    Y=$((Y+HH+20))
 
-    # ---- SYSTEM CARD ----
-    local -a SF=( "CPU|$SYS_CPU · $SYS_CORES ядер" "RAM|$SYS_RAM" "Диск|$SYS_DISK" "ОС|$SYS_OS" "Ядро|$SYS_KERNEL" "Virt|$SYS_VIRT" "IP|$ip_disp" "Гео|$SYS_COUNTRY / $SYS_CITY" "ASN|$SYS_ASN" "BBR / qdisc|$SYS_CC / $SYS_QDISC" "Uptime|$SYS_UPTIME" "Load avg|$SYS_LOAD" )
-    local SR=$(( (${#SF[@]}+1)/2 )); local SH=$(( 60 + SR*36 ))
+    # ---- SYSTEM CARD ---- (label|value|iconkey; подписи сразу заглавными — локале-проч)
+    local -a SF=( "CPU|$SYS_CPU · $SYS_CORES ядер|cpu" "RAM|$SYS_RAM|ram" "ДИСК|$SYS_DISK|disk" \
+        "ОС|$SYS_OS|os" "ЯДРО|$SYS_KERNEL|kernel" "VIRT|$SYS_VIRT|virt" "IP|$ip_disp|ip" \
+        "ГЕО|$SYS_COUNTRY / $SYS_CITY|geo" "ASN|$SYS_ASN|asn" "BBR / QDISC|$SYS_CC / $SYS_QDISC|bbr" \
+        "UPTIME|$SYS_UPTIME|uptime" "LOAD AVG|$SYS_LOAD|load" )
+    local SR=$(( (${#SF[@]}+1)/2 )); local SH=$(( 58 + SR*48 + 16 ))
     sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$SH\" rx=\"24\" fill=\"$C_SCL\"/>"
+    sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"1\" rx=\"0.5\" fill=\"#FFFFFF\" opacity=\"0.05\"/>"
     sv "<rect x=\"$((PAD+IPAD))\" y=\"$((Y+22))\" width=\"4\" height=\"18\" rx=\"2\" fill=\"$C_PRI\"/>"
-    sv "<text x=\"$((PAD+IPAD+16))\" y=\"$((Y+37))\" fill=\"$C_ONS\" font-size=\"19\" font-weight=\"700\">Сервер</text>"
-    local c1=$((PAD+IPAD)) c2=$((PAD+CARDW/2+8)) ry=$((Y+66)) i lbl val cx
-    for i in "${!SF[@]}"; do lbl="${SF[$i]%%|*}"; val="${SF[$i]#*|}"
+    sv "<text x=\"$((PAD+IPAD+16))\" y=\"$((Y+37))\" fill=\"$C_ONS\" font-size=\"18\" font-weight=\"700\">Сервер</text>"
+    sv "<line x1=\"$((PAD+IPAD))\" y1=\"$((Y+50))\" x2=\"$((PAD+CARDW-IPAD))\" y2=\"$((Y+50))\" stroke=\"$C_OUTV\" stroke-width=\"1\"/>"
+    local c1=$((PAD+IPAD)) c2=$((PAD+CARDW/2+8)) ry=$((Y+58)) i lbl val ik cx
+    for i in "${!SF[@]}"; do
+        lbl="${SF[$i]%%|*}"; ik="${SF[$i]##*|}"; val="${SF[$i]#*|}"; val="${val%|*}"
         if ((i%2==0)); then cx=$c1; else cx=$c2; fi
-        sv "<text x=\"$cx\" y=\"$ry\" fill=\"$C_ONSV\" font-size=\"11\" font-weight=\"700\" letter-spacing=\"0.7\">$(sv_esc "${lbl^^}")</text>"
-        sv "<text x=\"$cx\" y=\"$((ry+18))\" fill=\"$C_ONS\" font-size=\"14.5\">$(sv_esc "$(printf '%s' "$val" | cut -c1-52)")</text>"
-        ((i%2==1)) && ry=$((ry+36))
+        sv "<rect x=\"$cx\" y=\"$((ry+4))\" width=\"28\" height=\"28\" rx=\"8\" fill=\"$C_SCH\"/>"
+        sv "<g transform=\"translate($((cx+5)),$((ry+9))) scale(0.75)\">$(sys_glyph "$ik")</g>"
+        sv "<text x=\"$((cx+38))\" y=\"$((ry+16))\" fill=\"$C_ONSV\" font-size=\"11\" font-weight=\"700\" letter-spacing=\"0.8\">$(sv_esc "$lbl")</text>"
+        sv "<text x=\"$((cx+38))\" y=\"$((ry+36))\" fill=\"$C_ONS\" font-size=\"14\" font-weight=\"500\">$(sv_esc "$(printf '%s' "$val" | cut -c1-56)")</text>"
+        ((i%2==1)) && ry=$((ry+48))
     done
-    Y=$((Y+SH+18))
+    Y=$((Y+SH+20))
 
     local colw=$(( (CARDW-2*IPAD-22)/2 )) sx1=$((PAD+IPAD)) sx2=$((PAD+IPAD+ (CARDW-2*IPAD-22)/2 +22))
 
@@ -1236,13 +1270,13 @@ build_summary_svg() {
         if [[ -z "$st" ]]; then
             # не выбран
             local H=70
-            sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$H\" rx=\"24\" fill=\"$C_SCL\" opacity=\"0.55\"/>"
-            sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$H\" rx=\"24\" fill=\"none\" stroke=\"$C_OUTV\" stroke-width=\"1.5\" stroke-dasharray=\"7 5\"/>"
+            sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$H\" rx=\"24\" fill=\"$C_SCL\" opacity=\"0.5\"/>"
+            sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$H\" rx=\"24\" fill=\"none\" stroke=\"$C_OUT\" stroke-width=\"1.5\" stroke-dasharray=\"7 5\"/>"
             sv "<rect x=\"$((PAD+IPAD))\" y=\"$((Y+20))\" width=\"40\" height=\"40\" rx=\"12\" fill=\"$C_PRIC\"/><g transform=\"translate($((PAD+IPAD+8)),$((Y+28)))\">$glyph</g>"
             sv "<text x=\"$((PAD+IPAD+54))\" y=\"$((Y+39))\" fill=\"$C_ONSV\" font-size=\"16\" font-weight=\"600\">$(sv_esc "$nm")</text>"
-            sv "<text x=\"$((PAD+IPAD+54))\" y=\"$((Y+57))\" fill=\"#6B7280\" font-size=\"12.5\">Не выбран в этом запуске.</text>"
+            sv "<text x=\"$((PAD+IPAD+54))\" y=\"$((Y+57))\" fill=\"$C_NEUF\" font-size=\"13\">Не выбран в этом запуске.</text>"
             sv_status_chip $((PAD+CARDW-IPAD)) $((Y+25)) "off"
-            Y=$((Y+H+16)); continue
+            Y=$((Y+H+20)); continue
         fi
 
         local sstate="done"; case "$st" in выполнен) sstate="done";; ошибка) sstate="err";; *) sstate="skip";; esac
@@ -1280,6 +1314,7 @@ build_summary_svg() {
         fi
 
         sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$H\" rx=\"24\" fill=\"$C_SCL\"/>"
+        sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"1\" rx=\"0.5\" fill=\"#FFFFFF\" opacity=\"0.05\"/>"
         sv "<rect x=\"$((PAD+IPAD))\" y=\"$((Y+20))\" width=\"40\" height=\"40\" rx=\"12\" fill=\"$C_PRIC\"/><g transform=\"translate($((PAD+IPAD+8)),$((Y+28)))\">$glyph</g>"
         sv "<text x=\"$((PAD+IPAD+54))\" y=\"$((Y+45))\" fill=\"$C_ONS\" font-size=\"17\" font-weight=\"700\">$(sv_esc "$nm")</text>"
         sv_status_chip $((PAD+CARDW-IPAD)) $((Y+25)) "$sstate"
@@ -1288,7 +1323,7 @@ build_summary_svg() {
             local note="Пропущен пользователем во время прогона."
             [[ "$sstate" == "err" ]] && note="Тест завершился с ошибкой или без вывода."
             sv "<text x=\"$((PAD+IPAD+54))\" y=\"$((Y+57))\" fill=\"$C_ONSV\" font-size=\"13.5\">$note</text>"
-            Y=$((Y+H+18)); continue
+            Y=$((Y+H+20)); continue
         fi
 
         # чипы метрик
@@ -1315,18 +1350,18 @@ build_summary_svg() {
                 ((j%2==1)) && r=$((r+1)); j=$((j+1))
             done < "$sfile"
         fi
-        Y=$((Y+H+18))
+        Y=$((Y+H+20))
     done
 
     # ---- FOOTER ----
-    sv "<text x=\"$PAD\" y=\"$Y\" fill=\"#5B636E\" font-size=\"12.5\">Сгенерировано multitest v${SCRIPT_VERSION} · ${date_e} · ${#MT_CAT_FUNCS[@]} тестов в каталоге · логотипы Simple Icons (CC0)</text>"
+    sv "<text x=\"$PAD\" y=\"$Y\" fill=\"$C_FOOT\" font-size=\"12.5\">Сгенерировано multitest v${SCRIPT_VERSION} · ${date_e} · ${#MT_CAT_FUNCS[@]} тестов в каталоге · логотипы Simple Icons (CC0)</text>"
     Y=$((Y+22))
 
     local SVGH=$Y
     cat <<HEAD
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 $W $SVGH" font-family="Manrope, Roboto, 'Noto Sans', 'DejaVu Sans', sans-serif">
-<defs><linearGradient id="hdr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#76D4E6"/><stop offset="1" stop-color="#C9BFFF"/></linearGradient></defs>
-<rect width="$W" height="$SVGH" fill="#0E1116"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 $W $SVGH" text-rendering="geometricPrecision" font-family="Manrope, Roboto, 'Noto Sans', 'DejaVu Sans', sans-serif">
+<defs><linearGradient id="hdr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5FD4E8"/><stop offset="1" stop-color="#CBBFFF"/></linearGradient></defs>
+<rect width="$W" height="$SVGH" fill="#0D1014"/>
 HEAD
     printf '%s' "$SVG_BODY"
     echo "</svg>"
