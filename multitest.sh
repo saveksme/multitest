@@ -608,35 +608,51 @@ ensure_rsvg() {
 # Best-effort: ставит шрифт Roboto (Material You) + Noto/DejaVu как запас.
 # Кириллица есть во всех трёх. Никогда не фатальна. Пакеты ставятся по одному,
 # чтобы отсутствие одного имени не валило остальные.
+# Best-effort: ставит шрифт для сводки. Приоритет — Manrope (геометричный шрифт
+# в духе Google Sans, с полной кириллицей; статические начертания качаем с CDN,
+# т.к. в пакетных репозиториях его нет). Запас — Roboto/Noto/DejaVu из пакетов.
+# librsvg игнорирует @font-face, поэтому шрифт обязан попасть в fontconfig.
 ensure_fonts() {
-    fc-list 2>/dev/null | grep -qiE 'roboto' && return 0
     command -v fc-list &>/dev/null || install_package fontconfig >/dev/null 2>&1
-    echo -e "${YELLOW}Устанавливаю шрифт Roboto для сводки...${NC}"
-    local pm
-    pm=$(detect_pkg_manager)
-    case "$pm" in
-        apt)
-            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fonts-roboto >/dev/null 2>&1 \
-                || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fonts-roboto-unhinted >/dev/null 2>&1
-            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fonts-noto-core >/dev/null 2>&1
-            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fonts-dejavu-core >/dev/null 2>&1
-            ;;
-        dnf|yum)
-            $pm install -y -q google-roboto-fonts >/dev/null 2>&1
-            $pm install -y -q google-noto-sans-fonts >/dev/null 2>&1
-            $pm install -y -q dejavu-sans-fonts >/dev/null 2>&1
-            ;;
-        apk)
-            apk add --quiet font-roboto >/dev/null 2>&1
-            apk add --quiet font-noto >/dev/null 2>&1
-            apk add --quiet font-dejavu >/dev/null 2>&1
-            ;;
-        pacman)
-            pacman -S --noconfirm --quiet ttf-roboto >/dev/null 2>&1
-            pacman -S --noconfirm --quiet noto-fonts >/dev/null 2>&1
-            pacman -S --noconfirm --quiet ttf-dejavu >/dev/null 2>&1
-            ;;
-    esac
+
+    local got_manrope=0
+    if fc-list 2>/dev/null | grep -qi 'manrope'; then
+        got_manrope=1
+    else
+        echo -e "${YELLOW}Загружаю шрифт Manrope для сводки...${NC}"
+        local fdir="/usr/share/fonts/truetype/manrope"
+        mkdir -p "$fdir" 2>/dev/null || { fdir="$HOME/.local/share/fonts/manrope"; mkdir -p "$fdir" 2>/dev/null; }
+        local base="https://cdn.jsdelivr.net/npm/@expo-google-fonts/manrope" w f
+        for w in 400Regular 500Medium 600SemiBold 700Bold 800ExtraBold; do
+            f="$fdir/Manrope_${w}.ttf"
+            if command -v curl &>/dev/null; then
+                curl -fsSL --max-time 30 "$base/Manrope_${w}.ttf" -o "$f" 2>/dev/null
+            else
+                wget -qO "$f" "$base/Manrope_${w}.ttf" 2>/dev/null
+            fi
+            # держим только валидные TTF (магия 00 01 00 00), битые удаляем
+            if [[ -s "$f" ]] && [[ "$(head -c4 "$f" 2>/dev/null | od -An -tx1 | tr -d ' \n')" == "00010000" ]]; then
+                got_manrope=1
+            else
+                rm -f "$f"
+            fi
+        done
+        [[ $got_manrope -eq 1 ]] || echo -e "${YELLOW}Manrope недоступен — использую запасной шрифт.${NC}"
+    fi
+
+    # Запасные шрифты ставим только если Manrope не получен и Roboto ещё нет.
+    if [[ $got_manrope -eq 0 ]] && ! fc-list 2>/dev/null | grep -qi 'roboto'; then
+        local pm; pm=$(detect_pkg_manager)
+        case "$pm" in
+            apt)
+                DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fonts-roboto >/dev/null 2>&1 \
+                    || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fonts-roboto-unhinted >/dev/null 2>&1
+                DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fonts-noto-core fonts-dejavu-core >/dev/null 2>&1 ;;
+            dnf|yum) $pm install -y -q google-roboto-fonts google-noto-sans-fonts dejavu-sans-fonts >/dev/null 2>&1 ;;
+            apk)     apk add --quiet font-roboto font-noto font-dejavu >/dev/null 2>&1 ;;
+            pacman)  pacman -S --noconfirm --quiet ttf-roboto noto-fonts ttf-dejavu >/dev/null 2>&1 ;;
+        esac
+    fi
     command -v fc-cache &>/dev/null && fc-cache -f >/dev/null 2>&1
     return 0
 }
@@ -820,8 +836,11 @@ brand_slug_for() {
 #  .services: kind(chip|bar) \t name \t slug \t state(ok|bad|warn|na) \t value \t frac(0..1|-1)
 # ============================================================
 
-mt_metric() { printf '%s\t%s\t%s\n' "$1" "$2" "${3:-}" >> "$MT_MFILE"; }
-mt_service() { printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "${3:-}" "${4:-na}" "${5:-}" "${6:--1}" >> "$MT_SFILE"; }
+# Поля разделяем US (\x1f), а НЕ табом: таб — IFS-пробельный, и пустое поле
+# (например, отсутствующий slug или slug у строк-шкал) при read «схлопывается»,
+# сдвигая остальные поля. \x1f непробельный — пустые поля сохраняются.
+mt_metric() { printf '%s\x1f%s\x1f%s\n' "$1" "$2" "${3:-}" >> "$MT_MFILE"; }
+mt_service() { printf '%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\n' "$1" "$2" "${3:-}" "${4:-na}" "${5:-}" "${6:--1}" >> "$MT_SFILE"; }
 
 parse_ipregion() {
     local txt="$1" rows consensus asn cnt match
@@ -841,7 +860,7 @@ parse_ipregion() {
         [[ -z "$name" ]] && continue
         local st val code
         case "$v4" in
-            -1|N/A|n/a|null|null*|"") st="na"; val="—" ;;
+            -1|N/A|n/a|null|null*|"") st="na"; val="N/A" ;;
             Yes|yes) st="ok"; val="да" ;;
             No|no)   st="bad"; val="нет" ;;
             Denied|Rate-limit|"Server error") st="bad"; val="$v4" ;;
@@ -872,7 +891,7 @@ parse_censorcheck() {
         if printf '%s' "$rest" | grep -qiE 'Available|\bOK\b'; then st="ok"; val="доступен"
         elif printf '%s' "$rest" | grep -qiE 'Redirect'; then st="warn"; val="редирект"
         elif printf '%s' "$rest" | grep -qiE 'Blocked|Denied|timeout|reset|BLOCKED'; then st="bad"; val="блок"
-        else st="na"; val="—"; fi
+        else st="na"; val="N/A"; fi
         mt_service chip "$dom" "$(brand_slug_for "$dom")" "$st" "$val" "-1"
     done
 }
@@ -1223,7 +1242,7 @@ build_summary_svg() {
         # метрики -> позиции чипов (предварительный проход)
         local -a ML=(); local nmet=0
         if [[ "$sstate" == "done" && -s "$mfile" ]]; then
-            while IFS=$'\t' read -r l v ck; do [[ -z "$l" ]] && continue; ML+=( "$l|$v|$ck" ); done < "$mfile"
+            while IFS=$'\x1f' read -r l v ck; do [[ -z "$l" ]] && continue; ML+=( "$l|$v|$ck" ); done < "$mfile"
             nmet=${#ML[@]}
         fi
         local chip_rows=0 cx=$IPAD
@@ -1279,7 +1298,7 @@ build_summary_svg() {
         # строки сервисов (2 колонки)
         if [[ $nsvc -gt 0 ]]; then
             local sy=$(( Y + 74 + chips_h + (chips_h>0?4:0) )); local r=0 j=0 kind name slug stt val frac bx
-            while IFS=$'\t' read -r kind name slug stt val frac; do
+            while IFS=$'\x1f' read -r kind name slug stt val frac; do
                 [[ -z "$kind" ]] && continue
                 if ((j%2==0)); then bx=$sx1; else bx=$sx2; fi
                 local ry=$((sy + r*40))
@@ -1297,7 +1316,7 @@ build_summary_svg() {
 
     local SVGH=$Y
     cat <<HEAD
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 $W $SVGH" font-family="Roboto, 'Noto Sans', 'DejaVu Sans', sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 $W $SVGH" font-family="Manrope, Roboto, 'Noto Sans', 'DejaVu Sans', sans-serif">
 <defs><linearGradient id="hdr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#76D4E6"/><stop offset="1" stop-color="#C9BFFF"/></linearGradient></defs>
 <rect width="$W" height="$SVGH" fill="#0E1116"/>
 HEAD
