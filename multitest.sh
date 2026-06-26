@@ -863,7 +863,8 @@ parse_ipregion() {
             -1|N/A|n/a|null|null*|"") st="na"; val="N/A" ;;
             Yes|yes) st="ok"; val="да" ;;
             No|no)   st="bad"; val="нет" ;;
-            Denied|Rate-limit|"Server error") st="bad"; val="$v4" ;;
+            Denied|"Server error") st="bad"; val="$v4" ;;
+            Rate-limit|Rate-Limit) st="warn"; val="$v4" ;;
             *)
                 code="${v4%% *}"   # ведущий код из "FR (CDG)"
                 if [[ "$code" =~ ^[A-Z]{2}$ ]]; then
@@ -1171,7 +1172,14 @@ build_summary_svg() {
     local Y=$PAD
 
     local date_e; date_e=$(date '+%Y-%m-%d %H:%M' | xml_escape)
-    local host_e ip_e; host_e=$(sv_esc "$SYS_HOST"); ip_e=$(sv_esc "$SYS_IP")
+    # маскируем IP: оставляем 1-2 октет, 3-4 -> звёздочки (IPv6 -> первые 2 группы)
+    local ip_disp="$SYS_IP"
+    if [[ "$SYS_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        ip_disp=$(printf '%s' "$SYS_IP" | awk -F. '{print $1"."$2".*.*"}')
+    elif [[ "$SYS_IP" == *:* ]]; then
+        ip_disp=$(printf '%s' "$SYS_IP" | awk -F: '{print $1":"$2"::*"}')
+    fi
+    local host_e ip_e; host_e=$(sv_esc "$SYS_HOST"); ip_e=$(sv_esc "$ip_disp")
 
     # счётчики для пончика (только выбранные тесты)
     local d=0 s=0 e=0 tot=0 fn st
@@ -1201,7 +1209,7 @@ build_summary_svg() {
     Y=$((Y+HH+18))
 
     # ---- SYSTEM CARD ----
-    local -a SF=( "CPU|$SYS_CPU · $SYS_CORES ядер" "RAM|$SYS_RAM" "Диск|$SYS_DISK" "ОС|$SYS_OS" "Ядро|$SYS_KERNEL" "Virt|$SYS_VIRT" "IP|$SYS_IP" "Гео|$SYS_COUNTRY / $SYS_CITY" "ASN|$SYS_ASN" "BBR / qdisc|$SYS_CC / $SYS_QDISC" "Uptime|$SYS_UPTIME" "Load avg|$SYS_LOAD" )
+    local -a SF=( "CPU|$SYS_CPU · $SYS_CORES ядер" "RAM|$SYS_RAM" "Диск|$SYS_DISK" "ОС|$SYS_OS" "Ядро|$SYS_KERNEL" "Virt|$SYS_VIRT" "IP|$ip_disp" "Гео|$SYS_COUNTRY / $SYS_CITY" "ASN|$SYS_ASN" "BBR / qdisc|$SYS_CC / $SYS_QDISC" "Uptime|$SYS_UPTIME" "Load avg|$SYS_LOAD" )
     local SR=$(( (${#SF[@]}+1)/2 )); local SH=$(( 60 + SR*36 ))
     sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$SH\" rx=\"24\" fill=\"$C_SCL\"/>"
     sv "<rect x=\"$((PAD+IPAD))\" y=\"$((Y+22))\" width=\"4\" height=\"18\" rx=\"2\" fill=\"$C_PRI\"/>"
