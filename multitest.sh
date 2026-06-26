@@ -605,18 +605,39 @@ ensure_rsvg() {
     return 1
 }
 
-# Best-effort: ставит шрифт DejaVu (кириллица в PNG). Никогда не фатальна.
+# Best-effort: ставит шрифт Roboto (Material You) + Noto/DejaVu как запас.
+# Кириллица есть во всех трёх. Никогда не фатальна. Пакеты ставятся по одному,
+# чтобы отсутствие одного имени не валило остальные.
 ensure_fonts() {
-    fc-list 2>/dev/null | grep -qi dejavu && return 0
+    fc-list 2>/dev/null | grep -qiE 'roboto' && return 0
+    command -v fc-list &>/dev/null || install_package fontconfig >/dev/null 2>&1
+    echo -e "${YELLOW}Устанавливаю шрифт Roboto для сводки...${NC}"
     local pm
     pm=$(detect_pkg_manager)
     case "$pm" in
-        apt)     install_package fonts-dejavu-core ;;
-        dnf|yum) install_package dejavu-sans-fonts ;;
-        apk)     install_package font-dejavu ;;
-        pacman)  install_package ttf-dejavu ;;
+        apt)
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fonts-roboto >/dev/null 2>&1 \
+                || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fonts-roboto-unhinted >/dev/null 2>&1
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fonts-noto-core >/dev/null 2>&1
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fonts-dejavu-core >/dev/null 2>&1
+            ;;
+        dnf|yum)
+            $pm install -y -q google-roboto-fonts >/dev/null 2>&1
+            $pm install -y -q google-noto-sans-fonts >/dev/null 2>&1
+            $pm install -y -q dejavu-sans-fonts >/dev/null 2>&1
+            ;;
+        apk)
+            apk add --quiet font-roboto >/dev/null 2>&1
+            apk add --quiet font-noto >/dev/null 2>&1
+            apk add --quiet font-dejavu >/dev/null 2>&1
+            ;;
+        pacman)
+            pacman -S --noconfirm --quiet ttf-roboto >/dev/null 2>&1
+            pacman -S --noconfirm --quiet noto-fonts >/dev/null 2>&1
+            pacman -S --noconfirm --quiet ttf-dejavu >/dev/null 2>&1
+            ;;
     esac
-    command -v fc-list &>/dev/null || install_package fontconfig >/dev/null 2>&1
+    command -v fc-cache &>/dev/null && fc-cache -f >/dev/null 2>&1
     return 0
 }
 
@@ -788,6 +809,7 @@ brand_slug_for() {
         intel) echo intel ;;
         amd) echo amd ;;
         github) echo github ;;
+        gemini|"gemini supported"|"google gemini") echo googlegemini ;;
         *) echo "" ;;
     esac
 }
@@ -803,23 +825,35 @@ mt_service() { printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "${3:-}" "${4:-na}" "
 
 parse_ipregion() {
     local txt="$1" rows consensus asn cnt match
-    # нормализуем разделители: табы и серии пробелов -> один таб
+    # нормализуем разделители (табы/серии пробелов -> таб) и отсеиваем строки-спиннеры
+    # ("Checking: ...") и прочий не-табличный мусор: имя сервиса короткое, без : / \
     rows=$(printf '%s\n' "$txt" | sed -E 's/\t/  /g; s/  +/\t/g' \
-        | awk -F'\t' 'NF>=2 && $2!="" && $1!="Service"' || true)
+        | awk -F'\t' 'NF>=2 && $2!="" && $1!="Service" && length($1)<=30 && $1 !~ /[:\/\\]/ && tolower($1) !~ /checking|made with/' || true)
     consensus=$(printf '%s\n' "$rows" | awk -F'\t' '$2 ~ /^[A-Z]{2}$/ {c[$2]++} END{m="";x=0;for(k in c)if(c[k]>x){x=c[k];m=k};print m}')
     asn=$(printf '%s\n' "$txt" | grep -m1 -iE '^ASN:' | sed -E 's/^ASN:[[:space:]]*//I' | cut -c1-22)
-    cnt=$(printf '%s\n' "$rows" | grep -c . )
-    match=$(printf '%s\n' "$rows" | awk -F'\t' -v cc="$consensus" '$2~/^[A-Z]{2,3}$/{t++; if($2==cc)h++} END{if(t)printf "%d/%d",h+0,t}')
+    cnt=$(printf '%s\n' "$rows" | grep -c .)
+    match=$(printf '%s\n' "$rows" | awk -F'\t' -v cc="$consensus" '$2~/^[A-Z]{2}$/{t++; if($2==cc)h++} END{if(t)printf "%d/%d",h+0,t}')
     [[ -n "$consensus" ]] && mt_metric "Консенсус IPv4" "$consensus" "pri"
     [[ -n "$asn" ]] && mt_metric "ASN" "$asn" ""
     [[ -n "$cnt" && "$cnt" -gt 0 ]] && mt_metric "Сервисов" "$cnt" ""
     [[ -n "$match" ]] && mt_metric "Совпадений" "$match" "ok"
     printf '%s\n' "$rows" | while IFS=$'\t' read -r name v4 _; do
-        [[ -z "$name" || -z "$v4" ]] && continue
-        local st val; val="$v4"
-        if [[ "$v4" =~ ^[A-Z]{2}$ || "$v4" =~ ^[A-Z]{3}$ || "$v4" == "Yes" ]]; then
-            if [[ -n "$consensus" && "$v4" =~ ^[A-Z]{2}$ && "$v4" != "$consensus" ]]; then st="warn"; else st="ok"; fi
-        else st="bad"; fi
+        [[ -z "$name" ]] && continue
+        local st val code
+        case "$v4" in
+            -1|N/A|n/a|null|null*|"") st="na"; val="—" ;;
+            Yes|yes) st="ok"; val="да" ;;
+            No|no)   st="bad"; val="нет" ;;
+            Denied|Rate-limit|"Server error") st="bad"; val="$v4" ;;
+            *)
+                code="${v4%% *}"   # ведущий код из "FR (CDG)"
+                if [[ "$code" =~ ^[A-Z]{2}$ ]]; then
+                    if [[ -n "$consensus" && "$code" != "$consensus" ]]; then st="warn"; else st="ok"; fi
+                    val="$v4"
+                elif [[ "$code" =~ ^[A-Z]{3}$ ]]; then st="ok"; val="$v4"
+                else st="na"; val="$v4"; fi
+                ;;
+        esac
         mt_service chip "$name" "$(brand_slug_for "$name")" "$st" "$val" "-1"
     done
 }
@@ -1041,7 +1075,9 @@ sv_tile() {
         sv "<g transform=\"translate($(awk "BEGIN{print $x+$off}"),$(awk "BEGIN{print $y+$off}")) scale($scl)\"><path d=\"$d\" fill=\"$col\"/></g>"
     else
         local h c ini; h=$(sv_hash "$name"); c="${C_MONO[$((h % ${#C_MONO[@]}))]}"
-        ini=$(printf '%s' "$name" | sed 's/[^A-Za-zА-Яа-я0-9 ]//g' | tr -d ' ' | cut -c1-2 | tr '[:lower:]' '[:upper:]')
+        # только ASCII-буквы/цифры — локале-безопасно (кириллический диапазон в sed ломается в C/POSIX)
+        ini=$(printf '%s' "$name" | tr -cd 'A-Za-z0-9' | cut -c1-2 | tr '[:lower:]' '[:upper:]')
+        [[ -z "$ini" ]] && ini="?"
         sv "<text x=\"$((x+sz/2))\" y=\"$(awk "BEGIN{print $y+$sz/2+5}")\" text-anchor=\"middle\" fill=\"$c\" font-size=\"$(awk "BEGIN{print int($sz*0.42)}")\" font-weight=\"700\">$(sv_esc "$ini")</text>"
     fi
 }
@@ -1261,7 +1297,7 @@ build_summary_svg() {
 
     local SVGH=$Y
     cat <<HEAD
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 $W $SVGH" font-family="Roboto, 'Segoe UI', DejaVu Sans, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 $W $SVGH" font-family="Roboto, 'Noto Sans', 'DejaVu Sans', sans-serif">
 <defs><linearGradient id="hdr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#76D4E6"/><stop offset="1" stop-color="#C9BFFF"/></linearGradient></defs>
 <rect width="$W" height="$SVGH" fill="#0E1116"/>
 HEAD
