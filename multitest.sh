@@ -20,6 +20,7 @@ SUMMARY_DIR=""             # /tmp/multitest-summary-<ts>
 SUMMARY_TS=""
 SCRIPT_CAPTURE="util"      # util | busybox
 MT_UA="Mozilla/5.0 (X11; Linux x86_64) multitest/${SCRIPT_VERSION}"  # User-Agent для хостингов
+CATBOX_USERHASH="${CATBOX_USERHASH:-}"  # userhash аккаунта catbox -> постоянные ссылки с VPS
 
 # ============================================================
 #  Установка (--install)
@@ -528,7 +529,17 @@ capture_test() {
 # UA важен: 0x0.st и часть хостов отдают 403 на дефолтный User-Agent curl.
 # -4 на случай сломанного IPv6 (частая причина таймаутов на VPS).
 
-up_catbox()  { curl -fsS -4 -A "$MT_UA" --max-time 45 -F "reqtype=fileupload" -F "fileToUpload=@$1" https://catbox.moe/user/api.php 2>/dev/null; }
+# catbox блокирует АНОНИМНУЮ загрузку файлов с хостинг/VPS-IP -> HTTP 412
+# "Invalid uploader". Постоянные ссылки с VPS возможны только с userhash аккаунта:
+#   CATBOX_USERHASH=xxxx multitest   (или впишите в переменную ниже).
+up_catbox() {
+    local uh=()
+    [[ -n "$CATBOX_USERHASH" ]] && uh=(-F "userhash=$CATBOX_USERHASH")
+    curl -fsS -4 -A "$MT_UA" --max-time 60 -F "reqtype=fileupload" "${uh[@]}" -F "fileToUpload=@$1" https://catbox.moe/user/api.php 2>/dev/null
+}
+# litterbox — временный хостинг того же семейства catbox (litter.catbox.moe).
+# Работает с VPS без аккаунта, но ссылка живёт максимум 72 часа.
+up_litterbox() { curl -fsS -4 -A "$MT_UA" --max-time 60 -F "reqtype=fileupload" -F "time=72h" -F "fileToUpload=@$1" https://litterbox.catbox.moe/resources/internals/api.php 2>/dev/null; }
 up_0x0()     { curl -fsS -4 -A "$MT_UA" --max-time 45 -F "file=@$1" https://0x0.st 2>/dev/null; }
 up_x0()      { curl -fsS -4 -A "$MT_UA" --max-time 45 -F "file=@$1" https://x0.at 2>/dev/null; }
 up_uguu()    { curl -fsS -4 -A "$MT_UA" --max-time 45 -F "files[]=@$1" "https://uguu.se/upload?output=text" 2>/dev/null | grep -oE 'https://[^[:space:]"]+' | head -1; }
@@ -561,31 +572,22 @@ up_fileio() {
 
 # Перебирает хостинги по очереди; первый успешный URL -> stdout, статус -> stderr.
 upload_report() {
-    local file="$1" url name attempt
-    # Заливаем именно на catbox: 3 настойчивые попытки.
-    for attempt in 1 2 3; do
-        echo -ne "${CYAN}Загружаю на catbox (попытка ${attempt}/3)...${NC} " >&2
-        url=$(up_catbox "$file" 2>/dev/null)
-        url=$(printf '%s' "$url" | tr -d '\r\n[:space:]')
-        if [[ "$url" == https://* ]]; then
-            echo -e "${GREEN}✓${NC}" >&2
-            printf '%s\n' "$url"
-            return 0
-        fi
+    local file="$1" url name attempt tries=1
+    # С userhash анонимный лимит снят -> настойчиво (3 попытки), иначе 1 (быстро 412).
+    [[ -n "$CATBOX_USERHASH" ]] && tries=3
+    for ((attempt=1; attempt<=tries; attempt++)); do
+        echo -ne "${CYAN}Загружаю на catbox${CATBOX_USERHASH:+ (аккаунт)} (попытка ${attempt}/${tries})...${NC} " >&2
+        url=$(up_catbox "$file" 2>/dev/null); url=$(printf '%s' "$url" | tr -d '\r\n[:space:]')
+        if [[ "$url" == https://* ]]; then echo -e "${GREEN}✓${NC}" >&2; printf '%s\n' "$url"; return 0; fi
         echo -e "${YELLOW}нет${NC}" >&2
-        [[ $attempt -lt 3 ]] && sleep 2
+        [[ $attempt -lt $tries ]] && sleep 2
     done
-    # Запасные хостинги — только если catbox совсем недоступен.
-    echo -e "${YELLOW}catbox недоступен, пробую запасные хостинги...${NC}" >&2
-    for name in tmpfiles uguu pixeldrain x0 0x0 fileio telegraph; do
+    [[ -z "$CATBOX_USERHASH" ]] && echo -e "${YELLOW}catbox отклоняет анонимную загрузку с этого IP (412). Для постоянных ссылок: ${BOLD}CATBOX_USERHASH=<хэш> multitest${NC}" >&2
+    # litterbox — то же семейство catbox, работает с VPS (ссылка до 72ч); затем прочие.
+    for name in litterbox tmpfiles uguu pixeldrain x0 0x0 fileio telegraph; do
         echo -ne "${CYAN}Загружаю на ${name}...${NC} " >&2
-        url=$("up_${name}" "$file" 2>/dev/null)
-        url=$(printf '%s' "$url" | tr -d '\r\n[:space:]')
-        if [[ "$url" == https://* ]]; then
-            echo -e "${GREEN}✓${NC}" >&2
-            printf '%s\n' "$url"
-            return 0
-        fi
+        url=$("up_${name}" "$file" 2>/dev/null); url=$(printf '%s' "$url" | tr -d '\r\n[:space:]')
+        if [[ "$url" == https://* ]]; then echo -e "${GREEN}✓${NC}" >&2; printf '%s\n' "$url"; return 0; fi
         echo -e "${YELLOW}нет${NC}" >&2
     done
     echo -e "${RED}✗ ни один хостинг недоступен${NC}" >&2
