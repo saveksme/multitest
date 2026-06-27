@@ -1503,9 +1503,21 @@ render_and_upload_summary() {
 
     local url
     if url=$(upload_report "$out"); then
+        local life="временная"
+        case "$url" in
+            *x0.at*)             life="≈100 дней" ;;
+            *files.catbox.moe*)  life="постоянная" ;;
+            *litter.catbox.moe*) life="до 72 часов" ;;
+            *uguu.se*)           life="3 часа" ;;
+            *tmpfiles.org*)      life="1 час" ;;
+        esac
         echo ""
         echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         echo -e "  ${BOLD}${GREEN}Ссылка на сводку:${NC} ${BOLD}${url}${NC}"
+        echo -e "  ${YELLOW}Ссылка ${life} — потом файл удалится с хостинга.${NC}"
+        echo -e "  ${YELLOW}Чтобы переслать надёжно/навсегда — ОБЯЗАТЕЛЬНО скачайте сам файл:${NC}"
+        echo -e "    ${BOLD}${out}${NC}"
+        echo -e "    ${YELLOW}например: ${BOLD}scp root@<host>:${out} .${NC}"
         echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     else
         echo -e "  ${YELLOW}Загрузка не удалась — файл сохранён локально: ${out}${NC}"
