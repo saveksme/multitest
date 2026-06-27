@@ -20,7 +20,6 @@ SUMMARY_DIR=""             # /tmp/multitest-summary-<ts>
 SUMMARY_TS=""
 SCRIPT_CAPTURE="util"      # util | busybox
 MT_UA="Mozilla/5.0 (X11; Linux x86_64) multitest/${SCRIPT_VERSION}"  # User-Agent для хостингов
-CATBOX_USERHASH="${CATBOX_USERHASH:-}"  # userhash аккаунта catbox -> постоянные ссылки с VPS
 
 # ============================================================
 #  Установка (--install)
@@ -529,19 +528,13 @@ capture_test() {
 # UA важен: 0x0.st и часть хостов отдают 403 на дефолтный User-Agent curl.
 # -4 на случай сломанного IPv6 (частая причина таймаутов на VPS).
 
-# catbox блокирует АНОНИМНУЮ загрузку файлов с хостинг/VPS-IP -> HTTP 412
-# "Invalid uploader". Постоянные ссылки с VPS возможны только с userhash аккаунта:
-#   CATBOX_USERHASH=xxxx multitest   (или впишите в переменную ниже).
-up_catbox() {
-    local uh=()
-    [[ -n "$CATBOX_USERHASH" ]] && uh=(-F "userhash=$CATBOX_USERHASH")
-    curl -fsS -4 -A "$MT_UA" --max-time 60 -F "reqtype=fileupload" "${uh[@]}" -F "fileToUpload=@$1" https://catbox.moe/user/api.php 2>/dev/null
-}
-# litterbox — временный хостинг того же семейства catbox (litter.catbox.moe).
-# Работает с VPS без аккаунта, но ссылка живёт максимум 72 часа.
+# x0.at — основной: анонимно, работает с VPS, ссылка живёт ~100 дней.
+up_x0()      { curl -fsS -4 -A "$MT_UA" --max-time 60 -F "file=@$1" https://x0.at 2>/dev/null; }
+# catbox: постоянные ссылки, но анонимную загрузку файлов с хостинг/VPS-IP отдаёт
+# 412 "Invalid uploader" (работает только с домашних IP / с аккаунтом).
+up_catbox()  { curl -fsS -4 -A "$MT_UA" --max-time 60 -F "reqtype=fileupload" -F "fileToUpload=@$1" https://catbox.moe/user/api.php 2>/dev/null; }
+# litterbox — временный хостинг семейства catbox (до 72 ч), работает с VPS.
 up_litterbox() { curl -fsS -4 -A "$MT_UA" --max-time 60 -F "reqtype=fileupload" -F "time=72h" -F "fileToUpload=@$1" https://litterbox.catbox.moe/resources/internals/api.php 2>/dev/null; }
-up_0x0()     { curl -fsS -4 -A "$MT_UA" --max-time 45 -F "file=@$1" https://0x0.st 2>/dev/null; }
-up_x0()      { curl -fsS -4 -A "$MT_UA" --max-time 45 -F "file=@$1" https://x0.at 2>/dev/null; }
 up_uguu()    { curl -fsS -4 -A "$MT_UA" --max-time 45 -F "files[]=@$1" "https://uguu.se/upload?output=text" 2>/dev/null | grep -oE 'https://[^[:space:]"]+' | head -1; }
 
 up_tmpfiles() {
@@ -572,19 +565,9 @@ up_fileio() {
 
 # Перебирает хостинги по очереди; первый успешный URL -> stdout, статус -> stderr.
 upload_report() {
-    local file="$1" url name attempt tries=1
-    # С userhash анонимный лимит снят -> настойчиво (3 попытки), иначе 1 (быстро 412).
-    [[ -n "$CATBOX_USERHASH" ]] && tries=3
-    for ((attempt=1; attempt<=tries; attempt++)); do
-        echo -ne "${CYAN}Загружаю на catbox${CATBOX_USERHASH:+ (аккаунт)} (попытка ${attempt}/${tries})...${NC} " >&2
-        url=$(up_catbox "$file" 2>/dev/null); url=$(printf '%s' "$url" | tr -d '\r\n[:space:]')
-        if [[ "$url" == https://* ]]; then echo -e "${GREEN}✓${NC}" >&2; printf '%s\n' "$url"; return 0; fi
-        echo -e "${YELLOW}нет${NC}" >&2
-        [[ $attempt -lt $tries ]] && sleep 2
-    done
-    [[ -z "$CATBOX_USERHASH" ]] && echo -e "${YELLOW}catbox отклоняет анонимную загрузку с этого IP (412). Для постоянных ссылок: ${BOLD}CATBOX_USERHASH=<хэш> multitest${NC}" >&2
-    # litterbox — то же семейство catbox, работает с VPS (ссылка до 72ч); затем прочие.
-    for name in litterbox tmpfiles uguu pixeldrain x0 0x0 fileio telegraph; do
+    local file="$1" url name
+    # x0.at — основной (анонимно, работает с VPS, ссылка ~100 дней). Остальные — запас.
+    for name in x0 catbox litterbox uguu tmpfiles pixeldrain fileio telegraph; do
         echo -ne "${CYAN}Загружаю на ${name}...${NC} " >&2
         url=$("up_${name}" "$file" 2>/dev/null); url=$(printf '%s' "$url" | tr -d '\r\n[:space:]')
         if [[ "$url" == https://* ]]; then echo -e "${GREEN}✓${NC}" >&2; printf '%s\n' "$url"; return 0; fi
@@ -695,8 +678,8 @@ gather_system_facts() {
     SYS_RAM=$(awk '/MemTotal/ {printf "%.1f GiB", $2/1048576}' /proc/meminfo 2>/dev/null)
     [[ -z "$SYS_RAM" ]] && SYS_RAM=$(free -h 2>/dev/null | awk '/Mem:/ {print $2}')
     [[ -z "$SYS_RAM" ]] && SYS_RAM="—"
-    SYS_DISK=$(df -h --total 2>/dev/null | awk '/^total/ {print $2}')
-    [[ -z "$SYS_DISK" ]] && SYS_DISK=$(df -h / 2>/dev/null | awk 'NR==2 {print $2}')
+    # размер именно корневого ФС (df --total раздувал цифру за счёт tmpfs/overlay/devtmpfs)
+    SYS_DISK=$(df -h / 2>/dev/null | awk 'NR==2 {print $2" · "$5}')
     [[ -z "$SYS_DISK" ]] && SYS_DISK="—"
     SYS_VIRT=$(systemd-detect-virt 2>/dev/null || echo "unknown")
     [[ -z "$SYS_VIRT" ]] && SYS_VIRT="unknown"
@@ -1390,14 +1373,14 @@ build_summary_svg() {
         local glyph; glyph=$(test_glyph "$fn")
 
         if [[ -z "$st" ]]; then
-            # не выбран
-            local H=70
+            # не выбран — короткая карточка, шапка по центру
+            local H=72
             sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$H\" rx=\"24\" fill=\"$C_SCL\" opacity=\"0.5\"/>"
             sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$H\" rx=\"24\" fill=\"none\" stroke=\"$C_OUT\" stroke-width=\"1.5\" stroke-dasharray=\"7 5\"/>"
-            sv "<rect x=\"$((PAD+IPAD))\" y=\"$((Y+20))\" width=\"40\" height=\"40\" rx=\"12\" fill=\"$C_PRIC\"/><g transform=\"translate($((PAD+IPAD+8)),$((Y+28)))\">$glyph</g>"
-            sv "<text x=\"$((PAD+IPAD+54))\" y=\"$((Y+39))\" fill=\"$C_ONSV\" font-size=\"16\" font-weight=\"600\">$(sv_esc "$nm")</text>"
-            sv "<text x=\"$((PAD+IPAD+54))\" y=\"$((Y+57))\" fill=\"$C_NEUF\" font-size=\"13\">Не выбран в этом запуске.</text>"
-            sv_status_chip $((PAD+CARDW-IPAD)) $((Y+25)) "off"
+            sv "<rect x=\"$((PAD+IPAD))\" y=\"$((Y+16))\" width=\"40\" height=\"40\" rx=\"12\" fill=\"$C_PRIC\"/><g transform=\"translate($((PAD+IPAD+8)),$((Y+24)))\">$glyph</g>"
+            sv "<text x=\"$((PAD+IPAD+54))\" y=\"$((Y+30))\" fill=\"$C_ONSV\" font-size=\"16\" font-weight=\"600\">$(sv_esc "$nm")</text>"
+            sv "<text x=\"$((PAD+IPAD+54))\" y=\"$((Y+50))\" fill=\"$C_NEUF\" font-size=\"13\">Не выбран в этом запуске.</text>"
+            sv_status_chip $((PAD+CARDW-IPAD)) $((Y+21)) "off"
             Y=$((Y+H+20)); continue
         fi
 
@@ -1431,19 +1414,22 @@ build_summary_svg() {
             H=$(( 74 + chips_h + (svc_h>0?svc_h+4:0) + 12 ))
             [[ $H -lt 96 ]] && H=96
         else
-            H=70
+            H=72
         fi
 
         sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$H\" rx=\"24\" fill=\"$C_SCL\"/>"
         sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"1\" rx=\"0.5\" fill=\"#FFFFFF\" opacity=\"0.05\"/>"
-        sv "<rect x=\"$((PAD+IPAD))\" y=\"$((Y+20))\" width=\"40\" height=\"40\" rx=\"12\" fill=\"$C_PRIC\"/><g transform=\"translate($((PAD+IPAD+8)),$((Y+28)))\">$glyph</g>"
-        sv "<text x=\"$((PAD+IPAD+54))\" y=\"$((Y+45))\" fill=\"$C_ONS\" font-size=\"17\" font-weight=\"700\">$(sv_esc "$nm")</text>"
-        sv_status_chip $((PAD+CARDW-IPAD)) $((Y+25)) "$sstate"
+        # шапка: у выполненных — вверху (под ней тело), у коротких — по центру карточки
+        local hty htg htt hts
+        if [[ "$sstate" == "done" ]]; then hty=20; htg=28; htt=45; hts=25; else hty=16; htg=24; htt=30; hts=21; fi
+        sv "<rect x=\"$((PAD+IPAD))\" y=\"$((Y+hty))\" width=\"40\" height=\"40\" rx=\"12\" fill=\"$C_PRIC\"/><g transform=\"translate($((PAD+IPAD+8)),$((Y+htg)))\">$glyph</g>"
+        sv "<text x=\"$((PAD+IPAD+54))\" y=\"$((Y+htt))\" fill=\"$C_ONS\" font-size=\"17\" font-weight=\"700\">$(sv_esc "$nm")</text>"
+        sv_status_chip $((PAD+CARDW-IPAD)) $((Y+hts)) "$sstate"
 
         if [[ "$sstate" != "done" ]]; then
             local note="Пропущен пользователем во время прогона."
             [[ "$sstate" == "err" ]] && note="Тест завершился с ошибкой или без вывода."
-            sv "<text x=\"$((PAD+IPAD+54))\" y=\"$((Y+57))\" fill=\"$C_ONSV\" font-size=\"13.5\">$note</text>"
+            sv "<text x=\"$((PAD+IPAD+54))\" y=\"$((Y+50))\" fill=\"$C_ONSV\" font-size=\"13\">$note</text>"
             Y=$((Y+H+20)); continue
         fi
 
