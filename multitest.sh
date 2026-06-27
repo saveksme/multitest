@@ -201,7 +201,9 @@ run_yabs() {
 run_ip_check_place() {
     print_separator "IP Check Place — блокировки зарубежными сервисами"
     check_and_install curl
-    bash <(curl -Ls IP.Check.Place) -l en
+    # -E: английский + полный прогон без меню; -n: не ставить зависимости молча;
+    # </dev/null: под псевдо-TTY от `script` тулза иначе может зависнуть на read
+    bash <(curl -Ls https://IP.Check.Place) -E -n </dev/null
 }
 
 run_bench_sh() {
@@ -213,7 +215,9 @@ run_bench_sh() {
 run_ip_quality() {
     print_separator "IPQuality"
     check_and_install curl
-    bash <(curl -Ls https://Check.Place) -EI
+    # БЫЛО -EI: флаг -I = интерактивное меню, которое зависало под `script`.
+    # -E -n + </dev/null — полный отчёт без меню и без запросов ввода.
+    bash <(curl -Ls https://IP.Check.Place) -E -n </dev/null
 }
 
 run_sysbench_cpu() {
@@ -496,7 +500,10 @@ detect_script_flavor() {
 }
 
 strip_ansi() {
-    sed -r 's/\x1B\[[0-9;]*[a-zA-Z]//g; s/\x1B\][^\x07]*\x07//g; s/\r$//'
+    # 1) убираем ANSI; 2) хвостовой \r (из \r\n); 3) \r-перезаписи: оставляем только
+    # текст после последнего \r в строке — как показывает терминал (иначе прогресс-
+    # строки вида "Performing iperf3..." слипались с результатом "Clouvider | London ...").
+    sed -r 's/\x1B\[[0-9;]*[a-zA-Z]//g; s/\x1B\][^\x07]*\x07//g; s/\r$//; s/.*\r//'
 }
 
 # Запуск теста с захватом вывода в лог (для парсинга метрик).
@@ -994,7 +1001,8 @@ parse_benchsh() {
     done
 }
 
-parse_ipquality() {
+# IP.Check.Place: акцент на медиа-разблокировке (с логотипами) + общий риск/DNSBL.
+parse_ipcheck() {
     local txt="$1" risk media dnsbl port25 dbs
     risk=$(printf '%s\n' "$txt" | grep -m1 -iE 'Scamalytics' | grep -oiE 'VeryLow|Low|Medium|High|VeryHigh' | head -1)
     [[ -z "$risk" ]] && risk=$(printf '%s\n' "$txt" | grep -oiE 'VeryLow|Low|Medium|High|VeryHigh' | head -1)
@@ -1022,6 +1030,37 @@ parse_ipquality() {
             mt_service chip "$nm" "$(brand_slug_for "$nm")" "$state" "$reg" "-1"
         done
     fi
+}
+
+# Check.Place / IPQuality: акцент на типе IP (Usage/Company) и Risk Score по базам.
+parse_ipquality() {
+    local txt="$1" usage company geo overall
+    # Тип IP: доминирующее значение в транспонированных строках Usage:/Company:
+    usage=$(printf '%s\n' "$txt" | grep -m1 -iE '^[[:space:]]*Usage:' | sed -E 's/^[[:space:]]*Usage:[[:space:]]*//' \
+        | sed -E 's/[[:space:]]{2,}/\n/g' | grep -vE '^[[:space:]]*$' | sort | uniq -c | sort -rn | head -1 | sed -E 's/^[[:space:]]*[0-9]+[[:space:]]*//')
+    company=$(printf '%s\n' "$txt" | grep -m1 -iE '^[[:space:]]*Company:' | sed -E 's/^[[:space:]]*Company:[[:space:]]*//' \
+        | sed -E 's/[[:space:]]{2,}/\n/g' | grep -vE '^[[:space:]]*$' | sort | uniq -c | sort -rn | head -1 | sed -E 's/^[[:space:]]*[0-9]+[[:space:]]*//')
+    geo=$(printf '%s\n' "$txt" | grep -m1 -oE 'Geo-(consistent|discrepant)')
+    # Худший уровень риска по всем базам -> общий «Риск»
+    overall=$(printf '%s\n' "$txt" | grep -E '^[[:space:]]*(IP2Location|Scamalytics|ipapi|AbuseIPDB|DB-?IP|IPQS):' \
+        | grep -oE 'VeryLow|VeryHigh|Medium|High|Low' \
+        | awk 'BEGIN{r["VeryLow"]=0;r["Low"]=1;r["Medium"]=2;r["High"]=3;r["VeryHigh"]=4} {if(r[$0]>=m){m=r[$0];w=$0}} END{print w}')
+    [[ -n "$overall" ]] && mt_metric "Риск" "$overall" "$(case "$overall" in High|VeryHigh) echo bad;; Medium) echo warn;; *) echo ok;; esac)"
+    [[ -n "$usage" ]] && mt_metric "Usage" "$usage" ""
+    [[ -n "$company" ]] && mt_metric "Company" "$company" ""
+    [[ -n "$geo" ]] && mt_metric "Гео" "${geo#Geo-}" "$([[ "$geo" == *consistent ]] && echo ok || echo warn)"
+    # Risk Score по базам -> строки-сервисы (значение «score · level», цвет по уровню)
+    printf '%s\n' "$txt" | grep -E '^[[:space:]]*(IP2Location|Scamalytics|ipapi|AbuseIPDB|DB-?IP|IPQS):' | while read -r line; do
+        local db rest score level st v
+        db=$(printf '%s' "$line" | sed -E 's/^[[:space:]]*([A-Za-z0-9-]+):.*/\1/')
+        rest=$(printf '%s' "$line" | sed -E 's/^[[:space:]]*[A-Za-z0-9-]+:[[:space:]]*//')  # после имени базы (в имени бывают цифры: IP2Location)
+        score=$(printf '%s' "$rest" | grep -oE '[0-9]+(\.[0-9]+)?%?' | head -1)
+        level=$(printf '%s' "$rest" | grep -oE 'VeryLow|VeryHigh|Medium|High|Low' | tail -1)
+        [[ -z "$level" && -z "$score" ]] && continue
+        case "$level" in VeryLow|Low) st="ok";; Medium) st="warn";; High|VeryHigh) st="bad";; *) st="na";; esac
+        v="$level"; [[ -n "$score" && -n "$level" ]] && v="$score · $level"; [[ -z "$level" ]] && v="$score"
+        mt_service chip "$db" "" "$st" "$v" "-1"
+    done
 }
 
 parse_sysbench() {
@@ -1052,7 +1091,8 @@ parse_test_output() {
         run_iperf3_ru|run_iperf3_tlab)      parse_iperf3 "$txt" ;;
         run_yabs)                           parse_yabs "$txt" ;;
         run_bench_sh)                       parse_benchsh "$txt" ;;
-        run_ip_check_place|run_ip_quality)  parse_ipquality "$txt" ;;
+        run_ip_check_place)                 parse_ipcheck "$txt" ;;
+        run_ip_quality)                     parse_ipquality "$txt" ;;
         run_sysbench_cpu)                   parse_sysbench "$txt" ;;
     esac
 }
