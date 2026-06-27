@@ -561,8 +561,23 @@ up_fileio() {
 
 # Перебирает хостинги по очереди; первый успешный URL -> stdout, статус -> stderr.
 upload_report() {
-    local file="$1" url name
-    for name in catbox telegraph tmpfiles uguu pixeldrain x0 0x0 fileio; do
+    local file="$1" url name attempt
+    # Заливаем именно на catbox: 3 настойчивые попытки.
+    for attempt in 1 2 3; do
+        echo -ne "${CYAN}Загружаю на catbox (попытка ${attempt}/3)...${NC} " >&2
+        url=$(up_catbox "$file" 2>/dev/null)
+        url=$(printf '%s' "$url" | tr -d '\r\n[:space:]')
+        if [[ "$url" == https://* ]]; then
+            echo -e "${GREEN}✓${NC}" >&2
+            printf '%s\n' "$url"
+            return 0
+        fi
+        echo -e "${YELLOW}нет${NC}" >&2
+        [[ $attempt -lt 3 ]] && sleep 2
+    done
+    # Запасные хостинги — только если catbox совсем недоступен.
+    echo -e "${YELLOW}catbox недоступен, пробую запасные хостинги...${NC}" >&2
+    for name in tmpfiles uguu pixeldrain x0 0x0 fileio telegraph; do
         echo -ne "${CYAN}Загружаю на ${name}...${NC} " >&2
         url=$("up_${name}" "$file" 2>/dev/null)
         url=$(printf '%s' "$url" | tr -d '\r\n[:space:]')
@@ -1005,24 +1020,34 @@ parse_benchsh() {
 # матрица Service:/Status:/Region:) и пишет строки-сервисы с логотипами.
 # Скоупим на медиа-блок, иначе Region: подхватится из секции Risk Factors.
 emit_media_services() {
-    local txt="$1" mb svc_line st_line reg_line
+    local txt="$1" mb
     mb=$(printf '%s\n' "$txt" | awk '/[Mm]edia and AI|Accessibility check/{f=1} f')
-    [[ -z "$mb" ]] && mb="$txt"
-    svc_line=$(printf '%s\n' "$mb" | grep -m1 -iE '^[[:space:]]*Service:' | sed -E 's/^[[:space:]]*Service:[[:space:]]*//')
-    st_line=$(printf '%s\n' "$mb" | grep -m1 -iE '^[[:space:]]*Status:' | sed -E 's/^[[:space:]]*Status:[[:space:]]*//')
-    reg_line=$(printf '%s\n' "$mb" | grep -m1 -iE '^[[:space:]]*Region:' | sed -E 's/^[[:space:]]*Region:[[:space:]]*//')
-    [[ -z "$svc_line" || -z "$st_line" ]] && return 1
-    local -a S ST RG; read -r -a S <<<"$svc_line"; read -r -a ST <<<"$st_line"; read -r -a RG <<<"$reg_line"
-    local i nm stt state reg
-    for i in "${!S[@]}"; do
-        nm="${S[$i]}"; stt="${ST[$i]:-}"; reg="${RG[$i]:-}"
+    [[ -z "$mb" ]] && return 1
+    printf '%s\n' "$mb" | grep -qiE '^[[:space:]]*Service:' || return 1
+    # Позиционное выравнивание: колонки берём из строки Service: и ими же режем
+    # Status:/Region:. Устойчиво к пустым ячейкам (у заблокированных сервисов
+    # нет региона) — простой split по индексу их бы сместил.
+    printf '%s\n' "$mb" | awk '
+      function trim(s){ gsub(/^[ \t\[]+|[ \t\]]+$/,"",s); return s }
+      /^[[:space:]]*Service:/ && nsvc==0 {
+        p=index($0,":"); n=0; inw=0;
+        for(i=p+1;i<=length($0);i++){ c=substr($0,i,1);
+          if(c!=" "){ if(!inw){ n++; cs[n]=i; inw=1 } } else { if(inw){ ce[n]=i-1; inw=0 } } }
+        if(inw) ce[n]=length($0); nsvc=n;
+        for(i=1;i<=nsvc;i++) nm[i]=trim(substr($0,cs[i],ce[i]-cs[i]+1));
+      }
+      /^[[:space:]]*Status:/ { for(i=1;i<=nsvc;i++){ e=(i<nsvc?cs[i+1]-1:length($0)); st[i]=(cs[i]<=length($0))?trim(substr($0,cs[i],e-cs[i]+1)):"" } }
+      /^[[:space:]]*Region:/ { for(i=1;i<=nsvc;i++){ e=(i<nsvc?cs[i+1]-1:length($0)); rg[i]=(cs[i]<=length($0))?trim(substr($0,cs[i],e-cs[i]+1)):"" } }
+      END { for(i=1;i<=nsvc;i++) if(nm[i]!="") printf "%s\x1f%s\x1f%s\n", nm[i], st[i], rg[i] }
+    ' | while IFS=$'\x1f' read -r nm stt reg; do
         [[ -z "$nm" ]] && continue
+        local state val
         case "$stt" in
-            Yes|Native|Yes*|Native*) state="ok"; reg="${reg//[\[\]]/}"; [[ -z "$reg" || "$reg" == "-" ]] && reg="да" ;;
-            Block*|No*|Failed*|Restricted*) state="bad"; reg="блок" ;;
-            *) state="na"; reg="${reg//[\[\]]/}"; [[ -z "$reg" || "$reg" == "-" ]] && reg="?" ;;
+            Yes*|Native*|Unlock*) state="ok"; [[ -z "$reg" || "$reg" == "-" ]] && val="да" || val="$reg" ;;
+            Block*|No*|Failed*|Restricted*|Banned*) state="bad"; val="блок" ;;
+            *) state="na"; [[ -z "$reg" || "$reg" == "-" ]] && val="?" || val="$reg" ;;
         esac
-        mt_service chip "$nm" "$(brand_slug_for "$nm")" "$state" "$reg" "-1"
+        mt_service chip "$nm" "$(brand_slug_for "$nm")" "$state" "$val" "-1"
     done
     return 0
 }
@@ -1054,6 +1079,19 @@ parse_ipquality() {
     [[ -n "$usage" ]] && mt_metric "Usage" "$usage" ""
     [[ -n "$company" ]] && mt_metric "Company" "$company" ""
     [[ -n "$geo" ]] && mt_metric "Гео" "${geo#Geo-}" "$([[ "$geo" == *consistent ]] && echo ok || echo warn)"
+    # Risk Factors (секция 4): аноним-флаги, если хоть одна база отметила Yes
+    local fac flagged=""
+    for fac in Proxy VPN Tor; do
+        printf '%s\n' "$txt" | grep -m1 -iE "^[[:space:]]*${fac}:" | grep -qiE '\bYes\b' && flagged="${flagged:+$flagged/}$fac"
+    done
+    if [[ -n "$flagged" ]]; then mt_metric "Аноним" "$flagged" "warn"; else
+        printf '%s\n' "$txt" | grep -qiE '^[[:space:]]*(Proxy|VPN|Tor):' && mt_metric "Аноним" "нет" "ok"; fi
+    # Port 25 / DNSBL (секция 6)
+    local port25 dnsbl
+    port25=$(printf '%s\n' "$txt" | grep -m1 -iE 'Port 25' | grep -oiE 'Available|Blocked|Open|unreachable')
+    [[ -n "$port25" ]] && mt_metric "Port 25" "$([[ "$port25" =~ ^(Available|Open)$ ]] && echo открыт || echo закрыт)" "$([[ "$port25" =~ ^(Available|Open)$ ]] && echo ok || echo warn)"
+    dnsbl=$(printf '%s\n' "$txt" | grep -m1 -iE 'Blacklisted' | grep -oE 'Blacklisted[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | head -1)
+    [[ -n "$dnsbl" ]] && mt_metric "DNSBL" "$dnsbl" "$([[ "$dnsbl" == "0" ]] && echo ok || echo bad)"
     # Risk Score по базам -> строки-сервисы (значение «score · level», цвет по уровню)
     printf '%s\n' "$txt" | grep -E '^[[:space:]]*(IP2Location|Scamalytics|ipapi|AbuseIPDB|DB-?IP|IPQS):' | while read -r line; do
         local db rest score level st v
