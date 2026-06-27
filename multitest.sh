@@ -1001,6 +1001,32 @@ parse_benchsh() {
     done
 }
 
+# Парсит секцию «Accessibility check for media and AI services» (транспонированная
+# матрица Service:/Status:/Region:) и пишет строки-сервисы с логотипами.
+# Скоупим на медиа-блок, иначе Region: подхватится из секции Risk Factors.
+emit_media_services() {
+    local txt="$1" mb svc_line st_line reg_line
+    mb=$(printf '%s\n' "$txt" | awk '/[Mm]edia and AI|Accessibility check/{f=1} f')
+    [[ -z "$mb" ]] && mb="$txt"
+    svc_line=$(printf '%s\n' "$mb" | grep -m1 -iE '^[[:space:]]*Service:' | sed -E 's/^[[:space:]]*Service:[[:space:]]*//')
+    st_line=$(printf '%s\n' "$mb" | grep -m1 -iE '^[[:space:]]*Status:' | sed -E 's/^[[:space:]]*Status:[[:space:]]*//')
+    reg_line=$(printf '%s\n' "$mb" | grep -m1 -iE '^[[:space:]]*Region:' | sed -E 's/^[[:space:]]*Region:[[:space:]]*//')
+    [[ -z "$svc_line" || -z "$st_line" ]] && return 1
+    local -a S ST RG; read -r -a S <<<"$svc_line"; read -r -a ST <<<"$st_line"; read -r -a RG <<<"$reg_line"
+    local i nm stt state reg
+    for i in "${!S[@]}"; do
+        nm="${S[$i]}"; stt="${ST[$i]:-}"; reg="${RG[$i]:-}"
+        [[ -z "$nm" ]] && continue
+        case "$stt" in
+            Yes|Native|Yes*|Native*) state="ok"; reg="${reg//[\[\]]/}"; [[ -z "$reg" || "$reg" == "-" ]] && reg="да" ;;
+            Block*|No*|Failed*|Restricted*) state="bad"; reg="блок" ;;
+            *) state="na"; reg="${reg//[\[\]]/}"; [[ -z "$reg" || "$reg" == "-" ]] && reg="?" ;;
+        esac
+        mt_service chip "$nm" "$(brand_slug_for "$nm")" "$state" "$reg" "-1"
+    done
+    return 0
+}
+
 # IP.Check.Place: акцент на медиа-разблокировке (с логотипами) + общий риск/DNSBL.
 parse_ipcheck() {
     local txt="$1" risk media dnsbl port25 dbs
@@ -1013,39 +1039,18 @@ parse_ipcheck() {
     [[ -n "$dbs" && "$dbs" -gt 0 ]] && mt_metric "Баз" "$dbs" ""
     [[ -n "$dnsbl" ]] && mt_metric "DNSBL" "$dnsbl" "$([[ "$dnsbl" == "0" ]] && echo ok || echo warn)"
     [[ -n "$port25" ]] && mt_metric "Port 25" "$port25" "warn"
-    # медиа-разблокировка (транспонированная матрица Service:/Status:/Region:)
-    local svc_line st_line reg_line
-    svc_line=$(printf '%s\n' "$txt" | grep -m1 -iE '^Service:' | sed -E 's/^Service:[[:space:]]*//')
-    st_line=$(printf '%s\n' "$txt" | grep -m1 -iE '^Status:' | sed -E 's/^Status:[[:space:]]*//')
-    reg_line=$(printf '%s\n' "$txt" | grep -m1 -iE '^Region:' | sed -E 's/^Region:[[:space:]]*//')
-    if [[ -n "$svc_line" && -n "$st_line" ]]; then
-        local -a S ST RG; read -r -a S <<<"$svc_line"; read -r -a ST <<<"$st_line"; read -r -a RG <<<"$reg_line"
-        local i
-        for i in "${!S[@]}"; do
-            local nm stt state reg
-            nm="${S[$i]}"; stt="${ST[$i]:-}"; reg="${RG[$i]:-}"
-            [[ -z "$nm" ]] && continue
-            case "$stt" in Yes|Native|Yes*|Native*) state="ok"; reg="${reg//[\[\]]/}"; [[ -z "$reg" ]] && reg="да";;
-                Block*|No*|Failed*) state="bad"; reg="блок";; *) state="na"; reg="${reg//[\[\]]/}"; [[ -z "$reg" ]] && reg="?";; esac
-            mt_service chip "$nm" "$(brand_slug_for "$nm")" "$state" "$reg" "-1"
-        done
-    fi
+    emit_media_services "$txt"
 }
 
 # Check.Place / IPQuality: акцент на типе IP (Usage/Company) и Risk Score по базам.
 parse_ipquality() {
-    local txt="$1" usage company geo overall
+    local txt="$1" usage company geo
     # Тип IP: доминирующее значение в транспонированных строках Usage:/Company:
     usage=$(printf '%s\n' "$txt" | grep -m1 -iE '^[[:space:]]*Usage:' | sed -E 's/^[[:space:]]*Usage:[[:space:]]*//' \
         | sed -E 's/[[:space:]]{2,}/\n/g' | grep -vE '^[[:space:]]*$' | sort | uniq -c | sort -rn | head -1 | sed -E 's/^[[:space:]]*[0-9]+[[:space:]]*//')
     company=$(printf '%s\n' "$txt" | grep -m1 -iE '^[[:space:]]*Company:' | sed -E 's/^[[:space:]]*Company:[[:space:]]*//' \
         | sed -E 's/[[:space:]]{2,}/\n/g' | grep -vE '^[[:space:]]*$' | sort | uniq -c | sort -rn | head -1 | sed -E 's/^[[:space:]]*[0-9]+[[:space:]]*//')
     geo=$(printf '%s\n' "$txt" | grep -m1 -oE 'Geo-(consistent|discrepant)')
-    # Худший уровень риска по всем базам -> общий «Риск»
-    overall=$(printf '%s\n' "$txt" | grep -E '^[[:space:]]*(IP2Location|Scamalytics|ipapi|AbuseIPDB|DB-?IP|IPQS):' \
-        | grep -oE 'VeryLow|VeryHigh|Medium|High|Low' \
-        | awk 'BEGIN{r["VeryLow"]=0;r["Low"]=1;r["Medium"]=2;r["High"]=3;r["VeryHigh"]=4} {if(r[$0]>=m){m=r[$0];w=$0}} END{print w}')
-    [[ -n "$overall" ]] && mt_metric "Риск" "$overall" "$(case "$overall" in High|VeryHigh) echo bad;; Medium) echo warn;; *) echo ok;; esac)"
     [[ -n "$usage" ]] && mt_metric "Usage" "$usage" ""
     [[ -n "$company" ]] && mt_metric "Company" "$company" ""
     [[ -n "$geo" ]] && mt_metric "Гео" "${geo#Geo-}" "$([[ "$geo" == *consistent ]] && echo ok || echo warn)"
@@ -1055,12 +1060,17 @@ parse_ipquality() {
         db=$(printf '%s' "$line" | sed -E 's/^[[:space:]]*([A-Za-z0-9-]+):.*/\1/')
         rest=$(printf '%s' "$line" | sed -E 's/^[[:space:]]*[A-Za-z0-9-]+:[[:space:]]*//')  # после имени базы (в имени бывают цифры: IP2Location)
         score=$(printf '%s' "$rest" | grep -oE '[0-9]+(\.[0-9]+)?%?' | head -1)
-        level=$(printf '%s' "$rest" | grep -oE 'VeryLow|VeryHigh|Medium|High|Low' | tail -1)
+        level=$(printf '%s' "$rest" | grep -oE 'VeryLow|VeryHigh|HighRisk|Elevated|Suspicious|Risky|Medium|High|Low' | tail -1)
         [[ -z "$level" && -z "$score" ]] && continue
-        case "$level" in VeryLow|Low) st="ok";; Medium) st="warn";; High|VeryHigh) st="bad";; *) st="na";; esac
+        case "$level" in VeryLow|Low) st="ok";; Medium|Elevated) st="warn";; High|VeryHigh|HighRisk|Risky|Suspicious) st="bad";; *) st="na";; esac
         v="$level"; [[ -n "$score" && -n "$level" ]] && v="$score · $level"; [[ -z "$level" ]] && v="$score"
         mt_service chip "$db" "" "$st" "$v" "-1"
     done
+    # --- разделитель + доступ к медиа/AI сервисам (с логотипами) ---
+    if printf '%s\n' "$txt" | grep -qiE '^[[:space:]]*Service:'; then
+        mt_service sep "Доступ к сервисам и AI" "" "" "" "-1"
+        emit_media_services "$txt"
+    fi
 }
 
 parse_sysbench() {
@@ -1222,6 +1232,38 @@ sv_status_chip() {
     sv "<text x=\"$((w-14))\" y=\"20\" text-anchor=\"end\" fill=\"$cf\" font-size=\"13\" font-weight=\"700\">$t</text></g>"
 }
 
+# Раскладка строк-сервисов в 2 колонки с поддержкой разделителей (kind=sep).
+# Аргументы: sfile, sy(старт Y), draw(0|1). Возвращает итоговый Y (echo) —
+# одна и та же логика для предпрохода (высота) и отрисовки.
+render_services() {
+    local sfile="$1" sy="$2" draw="$3"
+    local cy=$sy col=0 kind name slug stt val frac bx ry
+    while IFS=$'\x1f' read -r kind name slug stt val frac; do
+        [[ -z "$kind" ]] && continue
+        if [[ "$kind" == "sep" ]]; then
+            (( col==1 )) && { cy=$((cy+40)); col=0; }
+            if [[ "$draw" == "1" ]]; then
+                cy=$((cy+12))
+                sv "<line x1=\"$sx1\" y1=\"$cy\" x2=\"$((PAD+CARDW-IPAD))\" y2=\"$cy\" stroke=\"$C_OUTV\" stroke-width=\"1\"/>"
+                [[ -n "$name" ]] && sv "<text x=\"$sx1\" y=\"$((cy+20))\" fill=\"$C_ONSV\" font-size=\"12\" font-weight=\"700\" letter-spacing=\"0.6\">$(sv_esc "$name")</text>"
+                cy=$((cy+30))
+            else
+                cy=$((cy+42))
+            fi
+            col=0; continue
+        fi
+        (( col==0 )) && bx=$sx1 || bx=$sx2
+        ry=$cy
+        if [[ "$draw" == "1" ]]; then
+            if [[ "$kind" == "bar" ]]; then sv_row_bar "$bx" "$ry" "$colw" "$slug" "$name" "${frac:-0}" "$val"
+            else sv_row_chip "$bx" "$ry" "$colw" "$slug" "$name" "$stt" "$val"; fi
+        fi
+        if (( col==1 )); then cy=$((cy+40)); col=0; else col=1; fi
+    done < "$sfile"
+    (( col==1 )) && cy=$((cy+40))
+    echo $cy
+}
+
 # Печатает SVG-карточку «Server Scorecard».
 build_summary_svg() {
     load_logos
@@ -1339,13 +1381,12 @@ build_summary_svg() {
         # сервисы
         local nsvc=0
         [[ -s "$sfile" ]] && nsvc=$(grep -c . "$sfile")
-        local svc_rows=$(( (nsvc+1)/2 ))
 
-        # высота карточки
+        # высота карточки (высоту блока сервисов меряем тем же кодом, что и рисуем)
         local H=64
         local chips_h=0 svc_h=0
         [[ $chip_rows -gt 0 ]] && chips_h=$(( chip_rows*44 ))
-        [[ $svc_rows -gt 0 ]] && svc_h=$(( svc_rows*40 ))
+        [[ $nsvc -gt 0 ]] && svc_h=$(render_services "$sfile" 0 0)
         if [[ "$sstate" == "done" ]]; then
             H=$(( 74 + chips_h + (svc_h>0?svc_h+4:0) + 12 ))
             [[ $H -lt 96 ]] && H=96
@@ -1378,17 +1419,10 @@ build_summary_svg() {
             done
         fi
 
-        # строки сервисов (2 колонки)
+        # строки сервисов (2 колонки + разделители)
         if [[ $nsvc -gt 0 ]]; then
-            local sy=$(( Y + 74 + chips_h + (chips_h>0?4:0) )); local r=0 j=0 kind name slug stt val frac bx
-            while IFS=$'\x1f' read -r kind name slug stt val frac; do
-                [[ -z "$kind" ]] && continue
-                if ((j%2==0)); then bx=$sx1; else bx=$sx2; fi
-                local ry=$((sy + r*40))
-                if [[ "$kind" == "bar" ]]; then sv_row_bar "$bx" "$ry" "$colw" "$slug" "$name" "${frac:-0}" "$val"
-                else sv_row_chip "$bx" "$ry" "$colw" "$slug" "$name" "$stt" "$val"; fi
-                ((j%2==1)) && r=$((r+1)); j=$((j+1))
-            done < "$sfile"
+            local sy=$(( Y + 74 + chips_h + (chips_h>0?4:0) ))
+            render_services "$sfile" "$sy" 1 >/dev/null
         fi
         Y=$((Y+H+20))
     done
