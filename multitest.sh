@@ -606,6 +606,279 @@ EOF
     fi
 }
 
+# ============================================================
+#  Beszel — подключение ноды к своему хабу
+#
+#  Схема «хаб + агент»: хаб (веб-интерфейс) стоит отдельно, здесь ставится
+#  только агент. Агент сам открывает исходящий WebSocket на хаб, поэтому
+#  входящих подключений не нужно.
+#
+#  Три вещи, которые здесь делаются сверх официального инсталлятора, и
+#  каждая — не косметика:
+#
+#  1. Проверка того, что вставил человек. Инсталлятор кладёт значения в
+#     systemd-юнит строками вида Environment="TOKEN=$TOKEN" и ничего не
+#     экранирует. Кавычка или перевод строки внутри значения дописали бы в
+#     юнит свою директиву — то есть выполнение произвольной команды от root
+#     при следующем старте. Значит, проверка формата здесь и есть граница
+#     безопасности, а не украшение.
+#  2. LISTEN в unix-сокет. Проверено на живом бинаре: агент поднимает
+#     SSH-сервер на *:45876 ДАЖЕ в WebSocket-режиме. На VPN-ноде лишний
+#     публичный порт не нужен, а сокет закрывает его полностью.
+#  3. Права на юнит. Инсталлятор создаёт его с 644, а внутри лежит токен.
+# ============================================================
+
+BESZEL_SOCK="/var/lib/beszel-agent/beszel.sock"
+BESZEL_UNIT="/etc/systemd/system/beszel-agent.service"
+
+# Разбирает команду, скопированную из хаба, НЕ выполняя её.
+# xargs разбирает кавычки по правилам шелла, но подстановок не делает:
+# что бы ни было в строке, оно останется аргументом printf, а не кодом.
+beszel_parse_cmd() {
+    local s="$1" i tok
+    local -a t=()
+    mapfile -t t < <(printf '%s' "$s" | xargs -n1 printf '%s\n' 2>/dev/null)
+    for i in "${!t[@]}"; do
+        tok="${t[$i]}"
+        case "$tok" in
+            -k|--key)   BZ_KEY="${t[$((i+1))]:-}" ;;
+            -t|--token) BZ_TOKEN="${t[$((i+1))]:-}" ;;
+            -url|--url) BZ_URL="${t[$((i+1))]:-}" ;;
+        esac
+    done
+}
+
+# Значения уезжают в systemd-юнит без экранирования, поэтому пропускаем
+# только заведомо безопасный набор символов. Всё сомнительное — отказ.
+beszel_valid_url() {
+    [[ "$1" =~ ^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?$ ]]
+}
+beszel_valid_token() {
+    [[ "$1" =~ ^[A-Za-z0-9._~+/=-]{8,256}$ ]]
+}
+# Комментарий у ключа отбрасываем целиком: агенту он не нужен, а это
+# единственное место, куда человек может занести пробел и кавычку.
+beszel_valid_key() {
+    [[ "$1" =~ ^ssh-(ed25519|rsa|dss|ecdsa[a-z0-9-]*)\ [A-Za-z0-9+/]+={0,3}$ ]]
+}
+
+beszel_have() { [[ -n "$1" ]] && printf '%bесть%b' "$GREEN" "$NC" || printf '%bнет%b' "$YELLOW" "$NC"; }
+
+# Инсталлятор кладёт бинарь в /opt на systemd-системах и в /usr/local/sbin на прочих.
+beszel_bin() {
+    local p
+    for p in /opt/beszel-agent/beszel-agent /usr/local/sbin/beszel-agent /usr/local/bin/beszel-agent; do
+        [[ -x "$p" ]] && { printf '%s' "$p"; return 0; }
+    done
+    command -v beszel-agent 2>/dev/null && return 0
+    return 1
+}
+
+beszel_installed() {
+    beszel_bin >/dev/null && return 0
+    systemctl list-unit-files 2>/dev/null | grep -q '^beszel-agent\.service'
+}
+
+beszel_status() {
+    echo ""
+    if ! beszel_installed; then
+        echo -e "  ${YELLOW}Агент не установлен.${NC}"
+        return 1
+    fi
+    local act; act=$(systemctl is-active beszel-agent.service 2>/dev/null)
+    if [[ "$act" == "active" ]]; then
+        echo -e "  Служба: ${GREEN}активна${NC}"
+    else
+        echo -e "  Служба: ${RED}${act:-не запущена}${NC}"
+    fi
+    # -p Environment печатает всё одной строкой с префиксом Environment=,
+    # поэтому первая переменная списка без снятия префикса не находилась.
+    # Забираем только адрес и точку прослушивания; токен отсюда не трогаем.
+    local envs; envs=$(systemctl show beszel-agent.service -p Environment 2>/dev/null | sed 's/^Environment=//')
+    local url lis
+    url=$(printf '%s' "$envs" | tr ' ' '\n' | sed -n 's/^HUB_URL=//p')
+    lis=$(printf '%s' "$envs" | tr ' ' '\n' | sed -n 's/^\(PORT\|LISTEN\)=//p' | tail -1)
+    [[ -n "$url" ]] && echo -e "  Хаб:     ${BOLD}${url}${NC}"
+    [[ -n "$lis" ]] && echo -e "  Слушает: ${BOLD}${lis}${NC}"
+    echo -e "  Порт 45876 наружу: ${BOLD}$(ss -ltn 2>/dev/null | grep -c ':45876')${NC} (ждём 0)"
+    echo ""
+    echo -e "  ${CYAN}Последние строки журнала:${NC}"
+    journalctl -u beszel-agent.service -n 6 --no-pager 2>/dev/null | sed 's/^/    /'
+    return 0
+}
+
+beszel_uninstall() {
+    print_separator "Удаление агента Beszel"
+    local tmp; tmp=$(mktemp) || return 1
+    if ! curl -fsSL --max-time 45 https://get.beszel.dev -o "$tmp"; then
+        echo -e "  ${RED}Не удалось скачать инсталлятор.${NC}"; rm -f "$tmp"; return 1
+    fi
+    head -1 "$tmp" | grep -q '^#!' || { echo -e "  ${RED}Скачан не скрипт — отменяю.${NC}"; rm -f "$tmp"; return 1; }
+    chmod 700 "$tmp"; "$tmp" -u; rm -f "$tmp"
+    echo -e "  ${GREEN}Готово.${NC}"
+}
+
+beszel_setup() {
+    print_separator "Beszel — подключить эту ноду к хабу"
+
+    echo -e "  Ставится ${BOLD}только агент${NC}. Хаб (веб-интерфейс) должен уже где-то работать —"
+    echo -e "  на этой же ноде его держать смысла нет: он умрёт вместе с ней."
+    echo ""
+    echo -e "  В хабе: ${BOLD}Add System${NC} или ${BOLD}Settings → Tokens${NC} — там показывают готовую"
+    echo -e "  команду установки. Скопируйте её целиком и вставьте сюда."
+    echo -e "  ${YELLOW}Команда НЕ выполняется${NC} — из неё только вынимаются адрес, токен и ключ."
+    echo ""
+
+    if beszel_installed; then
+        beszel_status
+        echo ""
+        echo -e "  Агент уже установлен. Что делаем?"
+        echo -e "    ${GREEN}1)${NC} переподключить к другому хабу (переустановка)"
+        echo -e "    ${GREEN}2)${NC} удалить агента"
+        echo -e "    ${RED}0)${NC} ничего"
+        echo -ne "  ${BOLD}Выбор: ${NC}"
+        local ch; read -r ch
+        case "$ch" in
+            1) beszel_uninstall || return 1 ;;
+            2) beszel_uninstall; return 0 ;;
+            *) return 0 ;;
+        esac
+        echo ""
+    fi
+
+    BZ_KEY=""; BZ_TOKEN=""; BZ_URL=""
+    echo -ne "  ${BOLD}Вставьте команду из хаба (или Enter, чтобы ввести по частям): ${NC}"
+    local pasted; read -r pasted
+    [[ -n "$pasted" ]] && beszel_parse_cmd "$pasted"
+
+    if [[ -n "$BZ_URL$BZ_TOKEN$BZ_KEY" ]]; then
+        # Только «есть/нет»: сами значения на экран не выводим — токен
+        # осел бы в скроллбеке терминала и в записи сессии.
+        echo -e "  Из команды разобрано: адрес $(beszel_have "$BZ_URL"), токен $(beszel_have "$BZ_TOKEN"), ключ $(beszel_have "$BZ_KEY")"
+    fi
+    while [[ -z "$BZ_URL" ]];   do echo -ne "  ${BOLD}URL хаба${NC} (https://…): "; read -r BZ_URL; done
+    while [[ -z "$BZ_TOKEN" ]]; do echo -ne "  ${BOLD}Токен${NC}: "; read -r BZ_TOKEN; done
+    while [[ -z "$BZ_KEY" ]];   do echo -ne "  ${BOLD}Публичный ключ${NC} (ssh-ed25519 …): "; read -r BZ_KEY; done
+
+    # У ключа отрезаем комментарий: агенту нужны только тип и тело.
+    BZ_KEY=$(printf '%s' "$BZ_KEY" | awk '{print $1" "$2}')
+    BZ_URL="${BZ_URL%/}"
+
+    local bad=0
+    beszel_valid_url   "$BZ_URL"   || { echo -e "  ${RED}Адрес хаба не похож на http(s)-URL.${NC}"; bad=1; }
+    beszel_valid_token "$BZ_TOKEN" || { echo -e "  ${RED}Токен содержит недопустимые символы.${NC}"; bad=1; }
+    beszel_valid_key   "$BZ_KEY"   || { echo -e "  ${RED}Ключ не похож на публичный SSH-ключ.${NC}"; bad=1; }
+    if [[ $bad -eq 1 ]]; then
+        echo -e "  ${YELLOW}Значения попадают в systemd-юнит без экранирования, поэтому всё,${NC}"
+        echo -e "  ${YELLOW}что выходит за безопасный набор символов, я не пропускаю.${NC}"
+        return 1
+    fi
+
+    # Токен уходит на хаб по этому адресу. По http его увидит любой на пути.
+    if [[ "$BZ_URL" == http://* ]]; then
+        local host="${BZ_URL#http://}"; host="${host%%[:/]*}"
+        if [[ ! "$host" =~ ^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.) ]]; then
+            echo ""
+            echo -e "  ${RED}Адрес по http, а не https.${NC} Токен уйдёт открытым текстом и будет"
+            echo -e "  виден всем на маршруте — включая вашего провайдера."
+            echo -ne "  ${BOLD}Всё равно продолжить? (введите ${RED}да${NC}${BOLD}): ${NC}"
+            local yn; read -r yn
+            [[ "$yn" == "да" || "$yn" == "da" || "$yn" == "yes" ]] || { echo -e "  ${YELLOW}Отменено.${NC}"; return 1; }
+        fi
+    fi
+
+    echo ""
+    echo -ne "  Включить автообновление агента? (${BOLD}Y${NC}/n): "
+    local au; read -r au
+    local au_flag="true"; [[ "$au" =~ ^[NnНн] ]] && au_flag="false"
+
+    local drop_docker=0
+    if getent group docker >/dev/null 2>&1; then
+        echo ""
+        echo -e "  ${YELLOW}На машине есть группа docker.${NC} Инсталлятор добавит в неё пользователя"
+        echo -e "  beszel — иначе не видно статистику контейнеров. Учтите: членство в этой"
+        echo -e "  группе равносильно root (через монтирование хостовой ФС в контейнер)."
+        echo -ne "  Оставить доступ к docker? (${BOLD}Y${NC}/n): "
+        local dk; read -r dk
+        [[ "$dk" =~ ^[NnНн] ]] && drop_docker=1
+    fi
+
+    # Скачиваем инсталлятор в файл и смотрим, что это скрипт, — вместо curl | sh.
+    local inst; inst=$(mktemp) || return 1
+    chmod 600 "$inst"
+    trap 'rm -f "$inst"' RETURN
+    echo ""
+    echo -e "  ${CYAN}Качаю официальный инсталлятор (get.beszel.dev)...${NC}"
+    if ! curl -fsSL --max-time 45 https://get.beszel.dev -o "$inst"; then
+        echo -e "  ${RED}Не удалось скачать.${NC}"; return 1
+    fi
+    head -1 "$inst" | grep -q '^#!' || { echo -e "  ${RED}Скачан не скрипт — отменяю.${NC}"; return 1; }
+    chmod 700 "$inst"
+
+    echo -e "  Запускаю:"
+    echo -e "    ${BOLD}install-agent.sh -url ${BZ_URL} -t <токен> -k \"<ключ>\" -p ${BESZEL_SOCK} --auto-update=${au_flag}${NC}"
+    echo ""
+    # Значения передаются отдельными аргументами: никакого eval и сборки строки.
+    "$inst" -url "$BZ_URL" -t "$BZ_TOKEN" -k "$BZ_KEY" -p "$BESZEL_SOCK" --auto-update="$au_flag"
+    local rc=$?
+    if [[ $rc -ne 0 ]]; then
+        echo -e "  ${RED}Инсталлятор завершился с кодом ${rc}.${NC}"
+        return 1
+    fi
+
+    if [[ $drop_docker -eq 1 ]] && id -nG beszel 2>/dev/null | tr ' ' '\n' | grep -qx docker; then
+        gpasswd -d beszel docker >/dev/null 2>&1 && echo -e "  ${GREEN}beszel убран из группы docker${NC} (статистики контейнеров не будет)."
+        systemctl restart beszel-agent.service 2>/dev/null
+    fi
+
+    # Юнит создаётся с 644, а внутри токен. Ужимаем до 600 и сразу проверяем,
+    # что служба поднимается: если вдруг нет — возвращаем как было.
+    if [[ -f "$BESZEL_UNIT" ]]; then
+        chmod 600 "$BESZEL_UNIT"
+        systemctl daemon-reload 2>/dev/null
+        systemctl restart beszel-agent.service 2>/dev/null
+        sleep 2
+        if [[ "$(systemctl is-active beszel-agent.service 2>/dev/null)" != "active" ]]; then
+            chmod 644 "$BESZEL_UNIT"
+            systemctl daemon-reload 2>/dev/null
+            systemctl restart beszel-agent.service 2>/dev/null
+            echo -e "  ${YELLOW}Права 600 на юнит не подошли — вернул 644.${NC}"
+        else
+            echo -e "  ${GREEN}Юнит с токеном закрыт от чтения (600).${NC}"
+        fi
+    fi
+
+    echo ""
+    print_separator "Проверка"
+    local ok=1
+    if [[ "$(systemctl is-active beszel-agent.service 2>/dev/null)" == "active" ]]; then
+        echo -e "  ${GREEN}✔${NC} служба запущена"
+    else
+        echo -e "  ${RED}✖${NC} служба не запущена"; ok=0
+    fi
+    local bin; bin=$(beszel_bin)
+    if [[ -n "$bin" ]] && LISTEN="$BESZEL_SOCK" "$bin" health >/dev/null 2>&1; then
+        echo -e "  ${GREEN}✔${NC} агент отвечает"
+    else
+        echo -e "  ${YELLOW}—${NC} health не ответил (не критично, смотрите журнал)"
+    fi
+    if ss -ltn 2>/dev/null | grep -q ':45876'; then
+        echo -e "  ${YELLOW}!${NC} порт 45876 всё же слушается — проверьте PORT в юните"
+    else
+        echo -e "  ${GREEN}✔${NC} наружу ничего не слушает (связь по unix-сокету)"
+    fi
+    if journalctl -u beszel-agent.service -n 40 --no-pager 2>/dev/null | grep -qiE 'websocket.*(connect|established)|connected to hub'; then
+        echo -e "  ${GREEN}✔${NC} соединение с хабом установлено"
+    else
+        echo -e "  ${YELLOW}—${NC} подтверждения связи в журнале пока нет"
+        echo -e "     Если нода не появилась в хабе: токен живёт около часа для"
+        echo -e "     ${BOLD}новых${NC} регистраций — возьмите свежий и повторите."
+    fi
+    echo ""
+    journalctl -u beszel-agent.service -n 8 --no-pager 2>/dev/null | sed 's/^/    /'
+    [[ $ok -eq 1 ]] && echo -e "\n  ${GREEN}${BOLD}Нода подключена — проверьте список систем в хабе.${NC}"
+}
+
 show_utilities_menu() {
     while true; do
         print_header
@@ -613,15 +886,17 @@ show_utilities_menu() {
         echo ""
         echo -e "  ${GREEN}1)${NC}  Включить BBR + Cake"
         echo -e "  ${GREEN}2)${NC}  Выключить IPv6"
+        echo -e "  ${GREEN}3)${NC}  Beszel — подключить ноду к своему хабу"
         echo ""
         echo -e "  ${RED}0)${NC}  Назад"
         echo ""
-        echo -ne "  ${BOLD}Выберите пункт [0-2]: ${NC}"
+        echo -ne "  ${BOLD}Выберите пункт [0-3]: ${NC}"
         read -r util_choice
 
         case "$util_choice" in
             1) enable_bbr_cake; pause_prompt ;;
             2) disable_ipv6; pause_prompt ;;
+            3) beszel_setup; pause_prompt ;;
             0) return ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; pause_prompt ;;
         esac
