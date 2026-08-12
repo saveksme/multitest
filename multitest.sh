@@ -816,17 +816,38 @@ gather_system_facts() {
     [[ -z "$SYS_UPTIME" ]] && SYS_UPTIME="—"
     SYS_LOAD=$(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null)
     [[ -z "$SYS_LOAD" ]] && SYS_LOAD="—"
-    SYS_IP=$(curl -s --max-time 6 https://ifconfig.me 2>/dev/null)
-    [[ -z "$SYS_IP" ]] && SYS_IP=$(curl -s --max-time 6 https://api.ipify.org 2>/dev/null)
-    [[ -z "$SYS_IP" ]] && SYS_IP="—"
+    # Адреса тянем порознь: без -4/-6 curl на dual-stack идёт по IPv6, и в сводке
+    # оставался только он — IPv4 сервера в отчёте не было вовсе.
+    SYS_IP4=$(curl -s4 --max-time 6 https://ifconfig.me 2>/dev/null)
+    [[ "$SYS_IP4" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || SYS_IP4=$(curl -s4 --max-time 6 https://api.ipify.org 2>/dev/null)
+    [[ "$SYS_IP4" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || SYS_IP4=""
+    SYS_IP6=$(curl -s6 --max-time 6 https://ifconfig.me 2>/dev/null)
+    [[ "$SYS_IP6" == *:* ]] || SYS_IP6=$(curl -s6 --max-time 6 https://api6.ipify.org 2>/dev/null)
+    [[ "$SYS_IP6" == *:* ]] || SYS_IP6=""
+    # Гео считаем по IPv4, если он есть: у туннельных брокеров и SLAAC-префиксов
+    # IPv6 нередко «прописан» в другой стране — это отдельный факт, а не гео сервера.
     local geo
-    geo=$(curl -s --max-time 6 https://ipinfo.io/json 2>/dev/null)
+    geo=$(curl -s4 --max-time 6 https://ipinfo.io/json 2>/dev/null)
+    [[ -n "$geo" ]] || geo=$(curl -s6 --max-time 6 https://ipinfo.io/json 2>/dev/null)
     SYS_COUNTRY=$(printf '%s' "$geo" | grep -oE '"country"[ ]*:[ ]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
     SYS_CITY=$(printf '%s' "$geo" | grep -oE '"city"[ ]*:[ ]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
     SYS_ASN=$(printf '%s' "$geo" | grep -oE '"org"[ ]*:[ ]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
     [[ -z "$SYS_COUNTRY" ]] && SYS_COUNTRY="—"
     [[ -z "$SYS_CITY" ]] && SYS_CITY="—"
     [[ -z "$SYS_ASN" ]] && SYS_ASN="—"
+}
+
+# Маскирует адрес: у IPv4 гасим 3-4 октет, у IPv6 — всё после второй группы.
+# Картинка уходит на публичный файлообменник, полный адрес там ни к чему.
+mask_ip() {
+    local ip="$1"
+    if [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        printf '%s' "$ip" | awk -F. '{print $1"."$2".*.*"}'
+    elif [[ "$ip" == *:* ]]; then
+        printf '%s' "$ip" | awk -F: '{print $1":"$2"::*"}'
+    else
+        printf '%s' "$ip"
+    fi
 }
 
 # Экранирование для вставки текста в SVG/XML.
@@ -1004,8 +1025,29 @@ brand_slug_for() {
 mt_metric() { printf '%s\x1f%s\x1f%s\n' "$1" "$2" "${3:-}" >> "$MT_MFILE"; }
 mt_service() { printf '%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\n' "$1" "$2" "${3:-}" "${4:-na}" "${5:-}" "${6:--1}" >> "$MT_SFILE"; }
 
+# Разбирает ячейку таблицы ipregion в «состояние<US>подпись».
+ipregion_cell() {
+    local v="$1" cons="$2" st val code
+    case "$v" in
+        -1|N/A|n/a|null|null*|"") st="na"; val="N/A" ;;
+        Yes|yes) st="ok"; val="да" ;;
+        No|no)   st="bad"; val="нет" ;;
+        Denied|"Server error") st="bad"; val="$v" ;;
+        Rate-limit|Rate-Limit) st="warn"; val="$v" ;;
+        *)
+            code="${v%% *}"   # ведущий код из "FR (CDG)"
+            if [[ "$code" =~ ^[A-Z]{2}$ ]]; then
+                if [[ -n "$cons" && "$code" != "$cons" ]]; then st="warn"; else st="ok"; fi
+                val="$v"
+            elif [[ "$code" =~ ^[A-Z]{3}$ ]]; then st="ok"; val="$v"
+            else st="na"; val="$v"; fi
+            ;;
+    esac
+    printf '%s\x1f%s' "$st" "$val"
+}
+
 parse_ipregion() {
-    local txt="$1" rows consensus asn cnt match
+    local txt="$1" rows cons4 cons6 asn cnt match4 match6 has6 split
     # нормализуем разделители (табы/серии пробелов -> таб) и отсеиваем строки-спиннеры
     # ("Checking: ...") и прочий не-табличный мусор: имя сервиса короткое, без : / \
     # $1 ~ /^[A-Za-z0-9]/ — имя сервиса всегда начинается с буквы или цифры;
@@ -1013,14 +1055,35 @@ parse_ipregion() {
     # которая иначе приезжала в таблицу отдельной строкой с N/A.
     rows=$(printf '%s\n' "$txt" | sed -E 's/\t/  /g; s/  +/\t/g' \
         | awk -F'\t' 'NF>=2 && $2!="" && $1!="Service" && $1 ~ /^[A-Za-z0-9]/ && length($1)<=30 && $1 !~ /[:\/\\]/ && tolower($1) !~ /checking|made with/' || true)
-    consensus=$(printf '%s\n' "$rows" | awk -F'\t' '$2 ~ /^[A-Z]{2}$/ {c[$2]++} END{m="";x=0;for(k in c)if(c[k]>x){x=c[k];m=k};print m}')
+
+    # Третья колонка появляется, только если у сервера есть IPv6. Пустая или
+    # сплошь N/A — значит стека нет, и всю v6-часть отчёта показывать незачем.
+    has6=0
+    printf '%s\n' "$rows" | awk -F'\t' 'NF>=3 && $3!="" && $3!="N/A" && $3!="-1" {f=1} END{exit !f}' && has6=1
+
+    cons4=$(printf '%s\n' "$rows" | awk -F'\t' '$2 ~ /^[A-Z]{2}$/ {c[$2]++} END{m="";x=0;for(k in c)if(c[k]>x){x=c[k];m=k};print m}')
+    cons6=$(printf '%s\n' "$rows" | awk -F'\t' '$3 ~ /^[A-Z]{2}$/ {c[$3]++} END{m="";x=0;for(k in c)if(c[k]>x){x=c[k];m=k};print m}')
     asn=$(printf '%s\n' "$txt" | grep -m1 -iE '^ASN:' | sed -E 's/^ASN:[[:space:]]*//I' | cut -c1-22)
     cnt=$(printf '%s\n' "$rows" | grep -c .)
-    match=$(printf '%s\n' "$rows" | awk -F'\t' -v cc="$consensus" '$2~/^[A-Z]{2}$/{t++; if($2==cc)h++} END{if(t)printf "%d/%d",h+0,t}')
-    [[ -n "$consensus" ]] && mt_metric "Консенсус IPv4" "$consensus" "pri"
+    match4=$(printf '%s\n' "$rows" | awk -F'\t' -v cc="$cons4" '$2~/^[A-Z]{2}$/{t++; if($2==cc)h++} END{if(t)printf "%d/%d",h+0,t}')
+    match6=$(printf '%s\n' "$rows" | awk -F'\t' -v cc="$cons6" '$3~/^[A-Z]{2}$/{t++; if($3==cc)h++} END{if(t)printf "%d/%d",h+0,t}')
+    # Сколько сервисов видят разные страны по v4 и по v6 — ради этого числа
+    # двойной стек и проверяют: именно оно ловит утечку не туда.
+    split=$(printf '%s\n' "$rows" | awk -F'\t' '$2~/^[A-Z]{2}/ && $3~/^[A-Z]{2}/ {
+        split($2,a," "); split($3,b," "); if(a[1]!=b[1]) n++ } END{print n+0}')
+
+    [[ -n "$cons4" ]] && mt_metric "Консенсус IPv4" "$cons4" "pri"
+    [[ $has6 -eq 1 && -n "$cons6" ]] && mt_metric "Консенсус IPv6" "$cons6" "pri"
     [[ -n "$asn" ]] && mt_metric "ASN" "$asn" ""
     [[ -n "$cnt" && "$cnt" -gt 0 ]] && mt_metric "Сервисов" "$cnt" ""
-    [[ -n "$match" ]] && mt_metric "Совпадений" "$match" "ok"
+    if [[ $has6 -eq 1 ]]; then
+        [[ -n "$match4" ]] && mt_metric "Совпадений v4" "$match4" "ok"
+        [[ -n "$match6" ]] && mt_metric "Совпадений v6" "$match6" "ok"
+        [[ "$split" -gt 0 ]] && mt_metric "v4≠v6" "$split" "bad"
+    else
+        [[ -n "$match4" ]] && mt_metric "Совпадений" "$match4" "ok"
+    fi
+
     # Сначала сервисы, потом отбивка и GeoIP-базы. Различаем по точке в имени:
     # у ipregion потребительские сервисы названы словами (Netflix, Cloudflare CDN),
     # а базы — доменами (maxmind.com, ipinfo.io). У баз логотипов нет ни в одном
@@ -1031,26 +1094,22 @@ parse_ipregion() {
     if [[ "$pass" == "geo" ]] && printf '%s\n' "$rows" | awk -F'\t' '$1 ~ /\./ {f=1} END{exit !f}'; then
         mt_service sep "GeoIP-базы" "" "" "" "-1"
     fi
-    printf '%s\n' "$rows" | while IFS=$'\t' read -r name v4 _; do
+    printf '%s\n' "$rows" | while IFS=$'\t' read -r name v4 v6 _; do
         [[ -z "$name" ]] && continue
         if [[ "$name" == *.* ]]; then [[ "$pass" == "geo" ]] || continue
         else [[ "$pass" == "services" ]] || continue; fi
-        local st val code
-        case "$v4" in
-            -1|N/A|n/a|null|null*|"") st="na"; val="N/A" ;;
-            Yes|yes) st="ok"; val="да" ;;
-            No|no)   st="bad"; val="нет" ;;
-            Denied|"Server error") st="bad"; val="$v4" ;;
-            Rate-limit|Rate-Limit) st="warn"; val="$v4" ;;
-            *)
-                code="${v4%% *}"   # ведущий код из "FR (CDG)"
-                if [[ "$code" =~ ^[A-Z]{2}$ ]]; then
-                    if [[ -n "$consensus" && "$code" != "$consensus" ]]; then st="warn"; else st="ok"; fi
-                    val="$v4"
-                elif [[ "$code" =~ ^[A-Z]{3}$ ]]; then st="ok"; val="$v4"
-                else st="na"; val="$v4"; fi
-                ;;
-        esac
+        local st val st6 val6
+        IFS=$'\x1f' read -r st val <<< "$(ipregion_cell "$v4" "$cons4")"
+        if [[ $has6 -eq 1 ]]; then
+            IFS=$'\x1f' read -r st6 val6 <<< "$(ipregion_cell "$v6" "$cons6")"
+            # «N/A по v6» — обычное дело (у сервиса просто нет AAAA), это не
+            # повод шуметь. А вот разные ответы по стекам показываем оба.
+            if [[ "$st6" != "na" && "$val6" != "$val" ]]; then
+                val="$val · $val6"
+                if [[ "$st" == "bad" || "$st6" == "bad" ]]; then st="bad"
+                else st="warn"; fi
+            fi
+        fi
         mt_service chip "$name" "$(brand_slug_for "$name")" "$st" "$val" "-1"
     done
     done
@@ -1533,18 +1592,15 @@ build_summary_svg() {
     local Y=$PAD
 
     local date_e; date_e=$(date '+%Y-%m-%d %H:%M' | xml_escape)
-    # маскируем IP: оставляем 1-2 октет, 3-4 -> звёздочки (IPv6 -> первые 2 группы)
-    local ip_disp="$SYS_IP"
-    if [[ "$SYS_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        ip_disp=$(printf '%s' "$SYS_IP" | awk -F. '{print $1"."$2".*.*"}')
-    elif [[ "$SYS_IP" == *:* ]]; then
-        ip_disp=$(printf '%s' "$SYS_IP" | awk -F: '{print $1":"$2"::*"}')
-    fi
+    local ip4_disp ip6_disp
+    ip4_disp=$(mask_ip "$SYS_IP4"); ip6_disp=$(mask_ip "$SYS_IP6")
     # Имя хоста на карточку не выводим: у большинства VPS оно выдаёт панель или
     # провайдера целиком (вида vm17472.<панель>.wtf), а картинка уходит на публичный
     # файлообменник. IP там же маскируется по той же причине.
     local ip_e geo_e
-    ip_e=$(sv_esc "$ip_disp"); geo_e=$(sv_esc "$SYS_COUNTRY/$SYS_CITY")
+    ip_e=$(sv_esc "$ip4_disp${ip4_disp:+${ip6_disp:+ · }}$ip6_disp")
+    [[ -n "$ip_e" ]] || ip_e="—"
+    geo_e=$(sv_esc "$SYS_COUNTRY/$SYS_CITY")
 
     # счётчики прогона (только выбранные тесты)
     local d=0 s=0 e=0 tot=0 fn st
@@ -1571,8 +1627,9 @@ build_summary_svg() {
 
     # ---- КАРТОЧКА «СЕРВЕР» ---- (label|value; подписи сразу заглавными — локале-прочно)
     local -a SF=( "CPU|$SYS_CPU · $SYS_CORES ядер" "RAM|$SYS_RAM" "ДИСК|$SYS_DISK" \
-        "ОС|$SYS_OS" "ЯДРО|$SYS_KERNEL" "VIRT|$SYS_VIRT" "IP|$ip_disp" \
-        "ГЕО|$SYS_COUNTRY / $SYS_CITY" "ASN|$SYS_ASN" "BBR / QDISC|$SYS_CC / $SYS_QDISC" \
+        "ОС|$SYS_OS" "ЯДРО|$SYS_KERNEL" "VIRT|$SYS_VIRT" "IPv4|${ip4_disp:-—}" )
+    [[ -n "$ip6_disp" ]] && SF+=( "IPv6|$ip6_disp" )
+    SF+=( "ГЕО|$SYS_COUNTRY / $SYS_CITY" "ASN|$SYS_ASN" "BBR / QDISC|$SYS_CC / $SYS_QDISC" \
         "UPTIME|$SYS_UPTIME" "LOAD AVG|$SYS_LOAD" )
     local SR=$(( (${#SF[@]}+1)/2 )); local SH=$(( 66 + SR*30 + 14 ))
     sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$SH\" rx=\"6\" fill=\"$C_SC\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
