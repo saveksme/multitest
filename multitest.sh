@@ -140,13 +140,48 @@ check_and_install() {
     return 0
 }
 
-install_deps() {
-    echo -e "${CYAN}Проверка зависимостей...${NC}"
-    check_and_install curl
-    check_and_install wget
-    check_and_install sysbench
-    check_and_install iperf3
-    echo -e "${GREEN}Все зависимости в порядке.${NC}"
+# Что нужно конкретному тесту. Пустая строка — тест ничего сверх базы не требует.
+test_deps() {
+    case "$1" in
+        run_ip_region|run_censorcheck_geoblock|run_censorcheck_dpi|run_censorcheck_tlab|run_bench_sh)
+            echo "wget" ;;
+        run_iperf3_ru|run_iperf3_tlab)
+            echo "wget iperf3" ;;
+        run_yabs|run_ip_check_place|run_ip_quality)
+            echo "curl" ;;
+        run_sysbench_cpu)
+            echo "sysbench" ;;
+    esac
+}
+
+# Чего не хватает для перечисленных тестов (список команд через пробел, без повторов).
+# curl в базе всегда: на нём держится сама сводка — гео, аплоад картинки, шрифты.
+missing_deps_for() {
+    local fn d; local -a want=( curl ) out=()
+    for fn in "$@"; do
+        for d in $(test_deps "$fn"); do
+            [[ " ${want[*]} " == *" $d "* ]] || want+=( "$d" )
+        done
+    done
+    for d in "${want[@]}"; do
+        command -v "$d" &>/dev/null || out+=( "$d" )
+    done
+    printf '%s' "${out[*]}"
+}
+
+# Ставит только то, что нужно выбранным тестам. Раньше здесь безусловно тянулись
+# curl+wget+iperf3+sysbench — то есть sysbench приезжал на сервер, даже если из
+# всего мультитеста выбрали одну проверку блокировок.
+install_deps_for() {
+    local miss d
+    miss=$(missing_deps_for "$@")
+    if [[ -z "$miss" ]]; then
+        echo -e "${GREEN}Зависимости на месте — ставить нечего.${NC}"
+        echo ""
+        return 0
+    fi
+    echo -e "${CYAN}Ставлю недостающее для выбранных тестов: ${BOLD}${miss}${NC}"
+    for d in $miss; do check_and_install "$d"; done
     echo ""
 }
 
@@ -232,10 +267,86 @@ multitest_skip_handler() {
     MULTITEST_SKIPPED=1
 }
 
+# Секунды -> «≈40 c» / «≈12 мин».
+fmt_eta() {
+    local v=$1
+    if (( v < 90 )); then printf '≈%d c' "$v"; else printf '≈%d мин' $(( (v + 30) / 60 )); fi
+}
+
+# Дополняет строку пробелами до нужной ШИРИНЫ В СИМВОЛАХ. printf %-Ns тут не
+# годится: в C/POSIX-локали он считает байты, и кириллица разъезжает вдвое.
+pad_to() {
+    local s="$1" w="$2" l; l=$(vlen "$s")
+    printf '%s' "$s"
+    while (( l < w )); do printf ' '; l=$((l+1)); done
+}
+
+# Интерактивный выбор тестов: стрелки — навигация, пробел — отметить.
+# Заполняет MT_SEL (1 на выбранный тест). Возврат 1 — пользователь отменил.
+# Читает all_funcs/all_names/all_secs из вызывающей run_all.
+mt_select_tests() {
+    local n=${#all_funcs[@]} cur=0 i key rest need eta total selected
+    MT_SEL=(); for ((i=0;i<n;i++)); do MT_SEL[$i]=1; done
+
+    trap 'printf "\033[?25h\n"; exit 130' INT
+    printf '\033[?25l'
+    while true; do
+        printf '\033[H\033[J'
+        echo -e "${CYAN}${BOLD}  МУЛЬТИТЕСТ — что запускать${NC}"
+        echo ""
+        echo -e "  ${BOLD}↑↓${NC} выбор  ${BOLD}ПРОБЕЛ${NC} отметить  ${BOLD}A${NC} все  ${BOLD}N${NC} снять все  ${BOLD}F${NC} только быстрые  ${BOLD}ENTER${NC} запуск  ${BOLD}Q${NC} выход"
+        echo ""
+        for ((i=0;i<n;i++)); do
+            need=$(missing_deps_for "${all_funcs[$i]}")
+            if (( i == cur )); then printf "  ${CYAN}▸${NC} "; else printf "    "; fi
+            if [[ "${MT_SEL[$i]}" == "1" ]]; then printf "${GREEN}[×]${NC}"; else printf "[ ]"; fi
+            printf " %2d  " "$((i+1))"
+            if (( i == cur )); then printf "${BOLD}"; fi
+            pad_to "$(vcut "${all_names[$i]}" 46)" 47
+            if (( i == cur )); then printf "${NC}"; fi
+            printf "%s" "$(pad_to "$(fmt_eta "${all_secs[$i]}")" 9)"
+            [[ -n "$need" ]] && printf "${YELLOW}доставит %s${NC}" "${need// /, }"
+            printf "\n"
+        done
+
+        total=0; selected=0
+        for ((i=0;i<n;i++)); do
+            [[ "${MT_SEL[$i]}" == "1" ]] || continue
+            selected=$((selected+1)); total=$((total + all_secs[i]))
+        done
+        need=$(missing_deps_for $(for ((i=0;i<n;i++)); do [[ "${MT_SEL[$i]}" == "1" ]] && printf '%s ' "${all_funcs[$i]}"; done))
+        echo ""
+        echo -e "  Выбрано ${BOLD}${selected}${NC} из ${n} · всего $(fmt_eta $total)${need:+ · доставим: ${YELLOW}${need// /, }${NC}}"
+        echo -e "  ${CYAN}Время примерное${NC} — зависит от канала и соседей по ноде."
+
+        IFS= read -rsn1 key
+        case "$key" in
+            $'\e')
+                IFS= read -rsn2 -t 0.05 rest
+                case "$rest" in
+                    '[A') (( cur = (cur - 1 + n) % n )) ;;
+                    '[B') (( cur = (cur + 1) % n )) ;;
+                    '')   trap - INT; printf '\033[?25h'; return 1 ;;
+                esac ;;
+            ' ')  MT_SEL[$cur]=$(( 1 - MT_SEL[$cur] )) ;;
+            k|K)  (( cur = (cur - 1 + n) % n )) ;;
+            j|J)  (( cur = (cur + 1) % n )) ;;
+            a|A)  for ((i=0;i<n;i++)); do MT_SEL[$i]=1; done ;;
+            n|N)  for ((i=0;i<n;i++)); do MT_SEL[$i]=0; done ;;
+            f|F)  for ((i=0;i<n;i++)); do
+                      if (( all_secs[i] <= 60 )); then MT_SEL[$i]=1; else MT_SEL[$i]=0; fi
+                  done ;;
+            q|Q)  trap - INT; printf '\033[?25h'; return 1 ;;
+            '')   (( selected > 0 )) && { trap - INT; printf '\033[?25h'; return 0; } ;;
+        esac
+    done
+}
+
 run_all() {
     print_separator "МУЛЬТИТЕСТ — выбор тестов"
 
-    # --- Полный каталог тестов (порядок = нумерация в меню выбора) ---
+    # --- Полный каталог тестов (порядок = нумерация в главном меню) ---
+    # Оценки времени грубые, порядок величины: нужны, чтобы прикинуть цену выбора.
     local all_funcs=( "run_ip_region" "run_censorcheck_geoblock" "run_censorcheck_dpi" \
                       "run_censorcheck_tlab" "run_iperf3_ru" "run_iperf3_tlab" "run_yabs" \
                       "run_ip_check_place" "run_bench_sh" "run_ip_quality" "run_sysbench_cpu" )
@@ -250,60 +361,76 @@ run_all() {
                       "bench.sh — параметры сервера и скорость" \
                       "IPQuality" \
                       "sysbench CPU — тест процессора" )
+    local all_secs=(  40 120 180 120 180 120 720 180 300 180 15 )
     local catalog_total=${#all_funcs[@]}
 
-    # --- Выбор тестов (Enter = все) ---
-    local selection=""
-    if [[ -t 0 ]]; then
-        echo -e "  ${CYAN}${BOLD}Какие тесты включить в мультитест?${NC}"
-        echo ""
-        local k
-        for k in $(seq 0 $((catalog_total - 1))); do
-            printf "    ${GREEN}%2d)${NC} %s\n" "$((k + 1))" "${all_names[$k]}"
-        done
-        echo ""
-        echo -e "  Номера через пробел или запятую (например: ${BOLD}1 3 5${NC}); диапазоны: ${BOLD}4-7${NC}"
-        echo -ne "  ${BOLD}Выбор (Enter = все тесты): ${NC}"
-        read -r selection
-    fi
-
-    # --- Построение списка выбранных тестов (глобальные массивы для сводки) ---
-    test_funcs=()
-    test_names=()
-    if [[ -z "$selection" || "$selection" =~ ^([Aa][Ll][Ll]|[Вв]се)$ ]]; then
-        test_funcs=( "${all_funcs[@]}" )
-        test_names=( "${all_names[@]}" )
+    # --- Выбор тестов ---
+    local -a MT_SEL=()
+    local k idx
+    if [[ -t 0 && -t 1 && "${TERM:-dumb}" != "dumb" ]]; then
+        if ! mt_select_tests; then
+            echo -e "\n  ${YELLOW}Мультитест отменён.${NC}"
+            return 0
+        fi
     else
-        local tok start end idx
-        local -a seen=()
-        for tok in $(printf '%s' "$selection" | tr ',' ' '); do
-            if [[ "$tok" =~ ^([0-9]+)-([0-9]+)$ ]]; then
-                start="${BASH_REMATCH[1]}"; end="${BASH_REMATCH[2]}"
-            elif [[ "$tok" =~ ^[0-9]+$ ]]; then
-                start="$tok"; end="$tok"
-            else
-                continue
-            fi
-            for idx in $(seq "$start" "$end"); do
-                if (( idx >= 1 && idx <= catalog_total )) && [[ -z "${seen[$idx]}" ]]; then
-                    seen[$idx]=1
-                    test_funcs+=( "${all_funcs[$((idx - 1))]}" )
-                    test_names+=( "${all_names[$((idx - 1))]}" )
-                fi
+        # Запасной путь для не-TTY и dumb-терминалов (`wget -qO- ... | bash`):
+        # интерактивный список там нарисовать нечем, остаётся ввод номеров.
+        local selection=""
+        if [[ -t 0 ]]; then
+            echo -e "  ${CYAN}${BOLD}Какие тесты включить в мультитест?${NC}"
+            echo ""
+            for k in $(seq 0 $((catalog_total - 1))); do
+                printf "    ${GREEN}%2d)${NC} %s\n" "$((k + 1))" "${all_names[$k]}"
             done
-        done
-        if [[ ${#test_funcs[@]} -eq 0 ]]; then
-            echo -e "  ${YELLOW}Ничего корректного не выбрано — запускаю все тесты.${NC}"
-            test_funcs=( "${all_funcs[@]}" )
-            test_names=( "${all_names[@]}" )
+            echo ""
+            echo -e "  Номера через пробел или запятую (например: ${BOLD}1 3 5${NC}); диапазоны: ${BOLD}4-7${NC}"
+            echo -ne "  ${BOLD}Выбор (Enter = все тесты): ${NC}"
+            read -r selection
+        fi
+        for k in $(seq 0 $((catalog_total - 1))); do MT_SEL[$k]=0; done
+        if [[ -z "$selection" || "$selection" =~ ^([Aa][Ll][Ll]|[Вв]се)$ ]]; then
+            for k in $(seq 0 $((catalog_total - 1))); do MT_SEL[$k]=1; done
+        else
+            local tok start end
+            for tok in $(printf '%s' "$selection" | tr ',' ' '); do
+                if [[ "$tok" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+                    start="${BASH_REMATCH[1]}"; end="${BASH_REMATCH[2]}"
+                elif [[ "$tok" =~ ^[0-9]+$ ]]; then
+                    start="$tok"; end="$tok"
+                else
+                    continue
+                fi
+                for idx in $(seq "$start" "$end"); do
+                    (( idx >= 1 && idx <= catalog_total )) && MT_SEL[$((idx-1))]=1
+                done
+            done
+            local any=0
+            for k in $(seq 0 $((catalog_total - 1))); do [[ "${MT_SEL[$k]}" == "1" ]] && any=1; done
+            if [[ $any -eq 0 ]]; then
+                echo -e "  ${YELLOW}Ничего корректного не выбрано — запускаю все тесты.${NC}"
+                for k in $(seq 0 $((catalog_total - 1))); do MT_SEL[$k]=1; done
+            fi
         fi
     fi
 
+    # --- Список выбранных тестов (глобальные массивы для сводки) ---
+    test_funcs=()
+    test_names=()
+    for k in $(seq 0 $((catalog_total - 1))); do
+        [[ "${MT_SEL[$k]}" == "1" ]] || continue
+        test_funcs+=( "${all_funcs[$k]}" )
+        test_names+=( "${all_names[$k]}" )
+    done
+
     print_separator "МУЛЬТИТЕСТ — запуск (${#test_funcs[@]} тест(ов))"
+    for k in "${!test_names[@]}"; do
+        printf "    ${GREEN}%2d.${NC} %s\n" "$((k + 1))" "${test_names[$k]}"
+    done
+    echo ""
     echo -e "  ${YELLOW}Ctrl+C${NC} во время теста — пропустить текущий"
     echo -e "  Тесты идут автоматически; нажмите любую клавишу, чтобы выбрать вручную."
     echo ""
-    install_deps
+    install_deps_for "${test_funcs[@]}"
 
     # Каталог + статусы для сводки (в картинке показываем и невыбранные тесты)
     MT_CAT_FUNCS=( "${all_funcs[@]}" )
@@ -666,7 +793,6 @@ ensure_fonts() {
 
 # Собирает характеристики сервера в SYS_* (надёжно, не парсит вывод тестов).
 gather_system_facts() {
-    SYS_HOST=$(hostname 2>/dev/null || echo "unknown")
     SYS_OS=$(grep -E '^PRETTY_NAME=' /etc/os-release 2>/dev/null | cut -d= -f2- | tr -d '"')
     [[ -z "$SYS_OS" ]] && SYS_OS=$(uname -o 2>/dev/null || echo "unknown")
     SYS_KERNEL=$(uname -r 2>/dev/null || echo "unknown")
@@ -1308,8 +1434,11 @@ build_summary_svg() {
     elif [[ "$SYS_IP" == *:* ]]; then
         ip_disp=$(printf '%s' "$SYS_IP" | awk -F: '{print $1":"$2"::*"}')
     fi
-    local host_e ip_e geo_e
-    host_e=$(sv_esc "$SYS_HOST"); ip_e=$(sv_esc "$ip_disp"); geo_e=$(sv_esc "$SYS_COUNTRY/$SYS_CITY")
+    # Имя хоста на карточку не выводим: у большинства VPS оно выдаёт панель или
+    # провайдера целиком (вида vm17472.<панель>.wtf), а картинка уходит на публичный
+    # файлообменник. IP там же маскируется по той же причине.
+    local ip_e geo_e
+    ip_e=$(sv_esc "$ip_disp"); geo_e=$(sv_esc "$SYS_COUNTRY/$SYS_CITY")
 
     # счётчики прогона (только выбранные тесты)
     local d=0 s=0 e=0 tot=0 fn st
@@ -1323,7 +1452,7 @@ build_summary_svg() {
     local xr=$((PAD+CARDW))
     sv "<text x=\"$PAD\" y=\"$((Y+28))\" fill=\"$C_TXT\" font-size=\"26\" font-weight=\"600\" letter-spacing=\"3\">MULTITEST</text>"
     sv "<text x=\"$PAD\" y=\"$((Y+52))\" fill=\"$C_TXT2\" font-size=\"13\">Сводка диагностики сервера · v${SCRIPT_VERSION}</text>"
-    sv "<text x=\"$PAD\" y=\"$((Y+74))\" fill=\"$C_TXT3\" font-size=\"12.5\">${host_e} · ${ip_e} · ${geo_e} · ${date_e}</text>"
+    sv "<text x=\"$PAD\" y=\"$((Y+74))\" fill=\"$C_TXT3\" font-size=\"12.5\">${ip_e} · ${geo_e} · ${date_e}</text>"
     # главное число сводки — крупнее логотипа: это и есть результат прогона
     sv "<text x=\"$xr\" y=\"$((Y+38))\" text-anchor=\"end\" fill=\"$C_TXT\" font-size=\"40\" font-weight=\"700\">${d}/${tot}</text>"
     sv "<text x=\"$xr\" y=\"$((Y+58))\" text-anchor=\"end\" fill=\"$C_TXT3\" font-size=\"10.5\" letter-spacing=\"1.4\">ВЫПОЛНЕНО</text>"
