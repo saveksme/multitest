@@ -1692,6 +1692,90 @@ HEAD
     echo "</svg>"
 }
 
+# Крутилка: команда уходит в фоновый процесс, её вывод — в лог, а в терминале
+# держится одна живая строка со счётчиком секунд. Иначе шаги сборки картинки
+# (apt, скачивание шрифта, рендер, аплоад) выглядят как зависший терминал.
+# Без TTY — просто строка и тихое ожидание: под `| bash` рисовать нечего.
+spin_run() {
+    local msg="$1"; shift
+    local log="${SUMMARY_DIR:-/tmp}/step.log" rc t0 t
+    t0=$SECONDS
+
+    if [[ ! -t 1 ]]; then
+        echo -e "  ${msg}..."
+        "$@" >"$log" 2>&1; rc=$?
+        t=$((SECONDS-t0))
+        [[ $rc -eq 0 ]] && echo -e "  ${GREEN}готово${NC} (${t} c)" || echo -e "  ${RED}не вышло${NC} (${t} c)"
+        return $rc
+    fi
+
+    "$@" >"$log" 2>&1 &
+    local pid=$! i=0
+    local -a fr; local gok='✔' gbad='✖'
+    # Брайлевские точки и галочка требуют UTF-8; в C/POSIX-локали консоль
+    # (особенно голая VGA на VPS) покажет вместо них мусор.
+    if [[ "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" == *[Uu][Tt][Ff]* ]]; then
+        fr=( '⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏' )
+    else
+        fr=( '-' '\' '|' '/' ); gok='+'; gbad='x'
+    fi
+    local n=${#fr[@]} delay=0.09
+    sleep "$delay" 2>/dev/null || delay=1
+
+    printf '\033[?25l'
+    while kill -0 "$pid" 2>/dev/null; do
+        printf '\r\033[K  %b%s%b %s %b%d c%b' "$CYAN" "${fr[i%n]}" "$NC" "$msg" "$YELLOW" "$((SECONDS-t0))" "$NC"
+        i=$((i+1)); sleep "$delay" 2>/dev/null || sleep 1
+    done
+    wait "$pid"; rc=$?
+    t=$((SECONDS-t0))
+    printf '\r\033[K'
+    printf '\033[?25h'
+
+    if [[ $rc -eq 0 ]]; then
+        echo -e "  ${GREEN}${gok}${NC} ${msg} ${YELLOW}${t} c${NC}"
+    else
+        echo -e "  ${RED}${gbad}${NC} ${msg} ${YELLOW}${t} c${NC}"
+        [[ -s "$log" ]] && sed -e 's/^/      /' "$log" | tail -4
+    fi
+    return $rc
+}
+
+# --- шаги сборки сводки (каждый под своей крутилкой) ---
+# Результаты передаём файлами: шаг уходит в фоновый процесс, и переменные,
+# выставленные внутри него, до родителя не доживут.
+
+step_render_deps() {
+    ensure_rsvg; ensure_fonts
+    # Успех шага — не «apt отработал», а «есть чем рендерить». Иначе строка
+    # рапортовала бы «готово» там, где картинка уже обречена уехать как SVG.
+    command -v rsvg-convert &>/dev/null || command -v convert &>/dev/null || command -v magick &>/dev/null
+}
+
+step_build_svg() {
+    gather_system_facts
+    build_summary_svg > "$SUMMARY_DIR/summary.svg"
+    [[ -s "$SUMMARY_DIR/summary.svg" ]]
+}
+
+step_render_png() {
+    local svg="$SUMMARY_DIR/summary.svg" png="$SUMMARY_DIR/summary.png"
+    printf '%s' "$svg" > "$SUMMARY_DIR/out.path"
+    if   command -v rsvg-convert &>/dev/null; then rsvg-convert -w 2200 -o "$png" "$svg" 2>/dev/null
+    elif command -v convert      &>/dev/null; then convert -density 220 -background none "$svg" "$png" 2>/dev/null
+    elif command -v magick       &>/dev/null; then magick  -density 220 -background none "$svg" "$png" 2>/dev/null
+    fi
+    [[ -s "$png" ]] || return 1
+    printf '%s' "$png" > "$SUMMARY_DIR/out.path"
+}
+
+step_upload() {
+    local url
+    url=$(upload_report "$(cat "$SUMMARY_DIR/out.path")") || return 1
+    [[ -n "$url" ]] || return 1
+    printf '%s' "$url" > "$SUMMARY_DIR/url.txt"
+}
+
 # Строит картинку-сводку, рендерит в PNG (2x) и заливает на хостинг.
 render_and_upload_summary() {
     print_separator "Формирую сводку (изображение)"
@@ -1702,33 +1786,26 @@ render_and_upload_summary() {
             return 0
         }
     fi
+    rm -f "$SUMMARY_DIR/url.txt" "$SUMMARY_DIR/out.path"
 
-    gather_system_facts
-    ensure_fonts
+    spin_run "Устанавливаю зависимости для картинки" step_render_deps
 
-    local svg="$SUMMARY_DIR/summary.svg"
-    local png="$SUMMARY_DIR/summary.png"
-    build_summary_svg > "$svg"
-
-    local out="$svg"
-    if ensure_rsvg; then
-        if command -v rsvg-convert &>/dev/null; then
-            rsvg-convert -w 2200 -o "$png" "$svg" 2>/dev/null && out="$png"
-        elif command -v convert &>/dev/null; then
-            convert -density 220 -background none "$svg" "$png" 2>/dev/null && out="$png"
-        elif command -v magick &>/dev/null; then
-            magick -density 220 -background none "$svg" "$png" 2>/dev/null && out="$png"
-        fi
+    if ! spin_run "Собираю карточку" step_build_svg; then
+        echo -e "  ${YELLOW}Не удалось собрать карточку — сводки не будет.${NC}"
+        return 0
     fi
-    if [[ "$out" == "$svg" ]]; then
-        echo -e "${YELLOW}Не удалось отрендерить PNG — загружаю SVG (откроется в браузере).${NC}"
+
+    if ! spin_run "Рендерю PNG" step_render_png; then
+        echo -e "  ${YELLOW}PNG не отрендерился — загружу SVG (откроется в браузере).${NC}"
     fi
+    local out; out=$(cat "$SUMMARY_DIR/out.path" 2>/dev/null)
+    [[ -n "$out" ]] || out="$SUMMARY_DIR/summary.svg"
 
     echo -e "  Локально: ${BOLD}${out}${NC}"
 
-    local url
-    if url=$(upload_report "$out"); then
-        local life="временная"
+    if spin_run "Загружаю на хостинг" step_upload; then
+        local url life="временная"
+        url=$(cat "$SUMMARY_DIR/url.txt")
         case "$url" in
             *x0.at*)             life="≈100 дней" ;;
             *files.catbox.moe*)  life="постоянная" ;;
