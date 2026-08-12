@@ -1333,17 +1333,82 @@ vcut() {
         (( cnt > n )) && break
         out+="$c"
     done
-    printf '%s…' "$out"
+    printf '%s…' "${out%.}"
 }
 
 # Марка сервиса (Simple Icons) — монохромом и без плашки-подложки.
 # Пути нет — не рисуем ничего: имя стоит рядом и говорит всё само.
 sv_mark() {
-    local x="$1" y="$2" sz="$3" slug="$4" d=""
+    local x="$1" y="$2" sz="$3" slug="$4" col="${5:-$C_MARK}" d=""
     [[ -n "$slug" ]] && d="${LOGO_PATH[$slug]:-}"
     [[ -z "$d" ]] && return 0
     local scl; scl=$(awk "BEGIN{printf \"%.4f\", $sz/24}")
-    sv "<g transform=\"translate($x,$y) scale($scl)\"><path d=\"$d\" fill=\"$C_MARK\"/></g>"
+    sv "<g transform=\"translate($x,$y) scale($scl)\"><path d=\"$d\" fill=\"$col\"/></g>"
+}
+
+# --- ЭКСПЕРИМЕНТ: «стена марок» -----------------------------------------
+# Сервисы, у которых есть фирменная марка, выкладываются плитками вместо
+# строк: знак крупнее, состояние читается заливкой плитки, и глаз находит
+# заблокированное одним движением. Остальные (GeoIP-базы, шкалы скорости)
+# остаются строками. MT_BRAND_WALL=0 возвращает прежний вид целиком.
+MT_BRAND_WALL="${MT_BRAND_WALL:-1}"
+WALL_COLS=6
+
+# Плитка бренда: x y w h slug name state value
+sv_brand_tile() {
+    local x="$1" y="$2" w="$3" h="$4" slug="$5" nm="$6" st="$7" val="$8"
+    local fill="$C_SCH" stroke="" mark="$C_MARK" tx="$C_TXT" vx="$C_TXT2"
+    case "$st" in
+        bad)  fill="$C_INV"; mark="$C_INK"; tx="$C_INK"; vx="#4A4A4A" ;;
+        warn) stroke=" stroke=\"$C_LINE2\" stroke-width=\"1\"" ;;
+        na)   fill="none"; stroke=" stroke=\"$C_LINE\" stroke-width=\"1\""
+              mark="$C_TXT3"; tx="$C_TXT3"; vx="$C_TXT3" ;;
+    esac
+    sv "<rect x=\"$x\" y=\"$y\" width=\"$w\" height=\"$h\" rx=\"2\" fill=\"$fill\"$stroke/>"
+    sv_mark "$((x + w/2 - 13))" "$((y+15))" 26 "$slug" "$mark"
+    sv "<text x=\"$((x+w/2))\" y=\"$((y+62))\" text-anchor=\"middle\" fill=\"$tx\" font-size=\"11\">$(sv_esc "$(vcut "$nm" 23)")</text>"
+    sv "<text x=\"$((x+w/2))\" y=\"$((y+80))\" text-anchor=\"middle\" fill=\"$vx\" font-size=\"11.5\" font-weight=\"600\">$(sv_esc "$val")</text>"
+}
+
+# Выкладывает накопленный сегмент: сперва стена плиток, затем строки.
+# Работает через RS_* — один и тот же код меряет высоту и рисует.
+rs_flush() {
+    local n=${#RS_WALL[@]} i col row bx TW TH=92
+    local kind name slug stt val frac
+    TW=$(( (CARDW - 2*IPAD - (WALL_COLS-1)*8) / WALL_COLS ))
+    # Стена из одной-двух плиток — не стена, а сирота посреди списка
+    # (так выглядел cloudflare.com среди GeoIP-баз). Меньше четырёх — строками.
+    if (( n > 0 && n < 4 )); then
+        local -a demoted=()
+        for ((i=0; i<n; i++)); do
+            IFS=$'\x1f' read -r slug name stt val <<< "${RS_WALL[$i]}"
+            demoted+=( "chip"$'\x1f'"$name"$'\x1f'"$slug"$'\x1f'"$stt"$'\x1f'"$val"$'\x1f'"-1" )
+        done
+        RS_ROWS=( "${demoted[@]}" ${RS_ROWS[@]+"${RS_ROWS[@]}"} )
+        RS_WALL=(); n=0
+    fi
+    if (( n > 0 )); then
+        for ((i=0; i<n; i++)); do
+            [[ "$RS_DRAW" == "1" ]] || break
+            col=$(( i % WALL_COLS )); row=$(( i / WALL_COLS ))
+            IFS=$'\x1f' read -r slug name stt val <<< "${RS_WALL[$i]}"
+            sv_brand_tile $(( PAD+IPAD + col*(TW+8) )) $(( RS_CY + row*(TH+8) )) "$TW" "$TH" "$slug" "$name" "$stt" "$val"
+        done
+        RS_CY=$(( RS_CY + ((n + WALL_COLS - 1)/WALL_COLS)*(TH+8) ))
+        (( ${#RS_ROWS[@]} > 0 )) && RS_CY=$(( RS_CY + 6 ))
+    fi
+    col=0
+    for ((i=0; i<${#RS_ROWS[@]}; i++)); do
+        IFS=$'\x1f' read -r kind name slug stt val frac <<< "${RS_ROWS[$i]}"
+        (( col==0 )) && bx=$sx1 || bx=$sx2
+        if [[ "$RS_DRAW" == "1" ]]; then
+            if [[ "$kind" == "bar" ]]; then sv_row_bar "$bx" "$RS_CY" "$colw" "$name" "${frac:-0}" "$val"
+            else sv_row_chip "$bx" "$RS_CY" "$colw" "$slug" "$name" "$stt" "$val"; fi
+        fi
+        if (( col==1 )); then RS_CY=$((RS_CY+32)); col=0; else col=1; fi
+    done
+    (( col==1 )) && RS_CY=$((RS_CY+32))
+    RS_WALL=(); RS_ROWS=()
 }
 
 # Вердикт у правого края xr: xr y state text
@@ -1429,31 +1494,30 @@ sv_status_chip() {
 # одна и та же логика для предпрохода (высота) и отрисовки.
 render_services() {
     local sfile="$1" sy="$2" draw="$3"
-    local cy=$sy col=0 kind name slug stt val frac bx ry
+    local kind name slug stt val frac
+    RS_CY=$sy; RS_DRAW="$draw"; RS_WALL=(); RS_ROWS=()
     while IFS=$'\x1f' read -r kind name slug stt val frac; do
         [[ -z "$kind" ]] && continue
         if [[ "$kind" == "sep" ]]; then
-            (( col==1 )) && { cy=$((cy+32)); col=0; }
+            rs_flush          # sep режет сегменты: перенос марок через него сломал бы смысл
             if [[ "$draw" == "1" ]]; then
-                cy=$((cy+16))
-                sv "<line x1=\"$sx1\" y1=\"$cy\" x2=\"$((PAD+CARDW-IPAD))\" y2=\"$cy\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
-                [[ -n "$name" ]] && sv "<text x=\"$sx1\" y=\"$((cy+24))\" fill=\"$C_TXT2\" font-size=\"11\" letter-spacing=\"1\">$(sv_esc "$name")</text>"
-                cy=$((cy+34))
+                RS_CY=$((RS_CY+16))
+                sv "<line x1=\"$sx1\" y1=\"$RS_CY\" x2=\"$((PAD+CARDW-IPAD))\" y2=\"$RS_CY\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
+                [[ -n "$name" ]] && sv "<text x=\"$sx1\" y=\"$((RS_CY+24))\" fill=\"$C_TXT2\" font-size=\"11\" letter-spacing=\"1\">$(sv_esc "$name")</text>"
+                RS_CY=$((RS_CY+34))
             else
-                cy=$((cy+50))
+                RS_CY=$((RS_CY+50))
             fi
-            col=0; continue
+            continue
         fi
-        (( col==0 )) && bx=$sx1 || bx=$sx2
-        ry=$cy
-        if [[ "$draw" == "1" ]]; then
-            if [[ "$kind" == "bar" ]]; then sv_row_bar "$bx" "$ry" "$colw" "$name" "${frac:-0}" "$val"
-            else sv_row_chip "$bx" "$ry" "$colw" "$slug" "$name" "$stt" "$val"; fi
+        if [[ "$MT_BRAND_WALL" == "1" && "$kind" == "chip" && -n "$slug" && -n "${LOGO_PATH[$slug]:-}" ]]; then
+            RS_WALL+=( "$slug"$'\x1f'"$name"$'\x1f'"$stt"$'\x1f'"$val" )
+        else
+            RS_ROWS+=( "$kind"$'\x1f'"$name"$'\x1f'"$slug"$'\x1f'"$stt"$'\x1f'"$val"$'\x1f'"$frac" )
         fi
-        if (( col==1 )); then cy=$((cy+32)); col=0; else col=1; fi
     done < "$sfile"
-    (( col==1 )) && cy=$((cy+32))
-    echo $cy
+    rs_flush
+    echo "$RS_CY"
 }
 
 # Печатает SVG-карточку «Server Scorecard».
