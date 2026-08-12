@@ -612,43 +612,43 @@ ensure_rsvg() {
     return 1
 }
 
-# Best-effort: ставит шрифт Roboto (Material You) + Noto/DejaVu как запас.
-# Кириллица есть во всех трёх. Никогда не фатальна. Пакеты ставятся по одному,
-# чтобы отсутствие одного имени не валило остальные.
-# Best-effort: ставит шрифт для сводки. Приоритет — Manrope (геометричный шрифт
-# в духе Google Sans, с полной кириллицей; статические начертания качаем с CDN,
-# т.к. в пакетных репозиториях его нет). Запас — Roboto/Noto/DejaVu из пакетов.
+# Best-effort: ставит шрифт для сводки. Приоритет — IBM Plex Sans: рисовался под
+# технические интерфейсы, у него полная кириллица и ровные цифры, которые удобно
+# сканировать в столбик. Статические начертания качаем с CDN, в репозиториях
+# дистрибутивов его обычно нет. Запас — Roboto/Noto/DejaVu из пакетов; кириллица
+# есть во всех трёх. Никогда не фатальна: пакеты ставятся по одному, чтобы
+# отсутствие одного имени не валило остальные.
 # librsvg игнорирует @font-face, поэтому шрифт обязан попасть в fontconfig.
 ensure_fonts() {
     command -v fc-list &>/dev/null || install_package fontconfig >/dev/null 2>&1
 
-    local got_manrope=0
-    if fc-list 2>/dev/null | grep -qi 'manrope'; then
-        got_manrope=1
+    local got_plex=0
+    if fc-list 2>/dev/null | grep -qi 'IBM *Plex *Sans'; then
+        got_plex=1
     else
-        echo -e "${YELLOW}Загружаю шрифт Manrope для сводки...${NC}"
-        local fdir="/usr/share/fonts/truetype/manrope"
-        mkdir -p "$fdir" 2>/dev/null || { fdir="$HOME/.local/share/fonts/manrope"; mkdir -p "$fdir" 2>/dev/null; }
-        local base="https://cdn.jsdelivr.net/npm/@expo-google-fonts/manrope" w f
-        for w in 400Regular 500Medium 600SemiBold 700Bold 800ExtraBold; do
-            f="$fdir/Manrope_${w}.ttf"
+        echo -e "${YELLOW}Загружаю шрифт IBM Plex Sans для сводки...${NC}"
+        local fdir="/usr/share/fonts/truetype/ibm-plex-sans"
+        mkdir -p "$fdir" 2>/dev/null || { fdir="$HOME/.local/share/fonts/ibm-plex-sans"; mkdir -p "$fdir" 2>/dev/null; }
+        local base="https://cdn.jsdelivr.net/npm/@expo-google-fonts/ibm-plex-sans" w f
+        for w in 400Regular 600SemiBold 700Bold; do
+            f="$fdir/IBMPlexSans_${w}.ttf"
             if command -v curl &>/dev/null; then
-                curl -fsSL --max-time 30 "$base/Manrope_${w}.ttf" -o "$f" 2>/dev/null
+                curl -fsSL --max-time 30 "$base/IBMPlexSans_${w}.ttf" -o "$f" 2>/dev/null
             else
-                wget -qO "$f" "$base/Manrope_${w}.ttf" 2>/dev/null
+                wget -qO "$f" "$base/IBMPlexSans_${w}.ttf" 2>/dev/null
             fi
             # держим только валидные TTF (магия 00 01 00 00), битые удаляем
             if [[ -s "$f" ]] && [[ "$(head -c4 "$f" 2>/dev/null | od -An -tx1 | tr -d ' \n')" == "00010000" ]]; then
-                got_manrope=1
+                got_plex=1
             else
                 rm -f "$f"
             fi
         done
-        [[ $got_manrope -eq 1 ]] || echo -e "${YELLOW}Manrope недоступен — использую запасной шрифт.${NC}"
+        [[ $got_plex -eq 1 ]] || echo -e "${YELLOW}IBM Plex Sans недоступен — использую запасной шрифт.${NC}"
     fi
 
-    # Запасные шрифты ставим только если Manrope не получен и Roboto ещё нет.
-    if [[ $got_manrope -eq 0 ]] && ! fc-list 2>/dev/null | grep -qi 'roboto'; then
+    # Запасные шрифты ставим только если Plex не получен и Roboto ещё нет.
+    if [[ $got_plex -eq 0 ]] && ! fc-list 2>/dev/null | grep -qi 'roboto'; then
         local pm; pm=$(detect_pkg_manager)
         case "$pm" in
             apt)
@@ -710,15 +710,18 @@ xml_escape() {
 
 # ============================================================
 #  Логотипы сервисов (Simple Icons, CC0). Встроены в скрипт.
+#  Таблица: слаг / фирменный цвет / контур. Цвет хранится как есть —
+#  это запись из апстрима, по ней удобно сверяться при обновлении, —
+#  но карточка рисует марки одним серым: она черно-белая целиком.
 # ============================================================
-declare -A LOGO_COLOR LOGO_PATH
+declare -A LOGO_PATH
 
 load_logos() {
     [[ ${#LOGO_PATH[@]} -gt 0 ]] && return 0
     local s c d
     while IFS=$'\t' read -r s c d; do
         [[ -z "$s" ]] && continue
-        LOGO_COLOR["$s"]="$c"; LOGO_PATH["$s"]="$d"
+        LOGO_PATH["$s"]="$d"
     done <<'LOGOEOF'
 netflix	#E50914	m5.398 0 8.348 23.602c2.346.059 4.856.398 4.856.398L10.113 0H5.398zm8.489 0v9.172l4.715 13.33V0h-4.715zM5.398 1.5V24c1.873-.225 2.81-.312 4.715-.398V14.83L5.398 1.5z
 youtube	#FF0000	M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z
@@ -1131,128 +1134,126 @@ parse_test_output() {
 }
 
 # ============================================================
-#  Рендер Material You SVG («Server Scorecard»)
+#  Рендер SVG-сводки («Server Scorecard»)
+#
+#  Оформление монохромное: один фон, одна поверхность карточки,
+#  один волосяной контур, четыре ступени серого для текста.
+#  Цвета нет вовсе — состояние несут слово и контраст:
+#    норма    — приглушённый текст без плашки (не шумит);
+#    внимание — текст в рамке;
+#    ошибка   — инверсия (светлая плашка, тёмный текст): самое
+#               заметное пятно на карточке достаётся тому
+#               единственному, что требует реакции.
 # ============================================================
-
-# Иконка теста в шапке карточки (viewBox 24, обводка onPrimaryContainer).
-test_glyph() {
-    local st='stroke="#A8EDF7" stroke-width="2" fill="none"'
-    case "$1" in
-        run_ip_region) printf '<circle cx="13" cy="13" r="10" %s/><path d="M3 13H23 M13 3V23 M5 7a16 9 0 0 0 16 0 M5 19a16 9 0 0 1 16 0" stroke="#A8EDF7" stroke-width="1.4" fill="none"/>' "$st" ;;
-        run_censorcheck_geoblock|run_censorcheck_dpi|run_censorcheck_tlab) printf '<path d="M13 3 l9 3 v6 c0 6-4 9-9 11 c-5-2-9-5-9-11 v-6 z" %s/>' "$st" ;;
-        run_iperf3_ru|run_iperf3_tlab) printf '<path d="M3 17 a10 10 0 1 1 20 0" %s/><line x1="13" y1="17" x2="19" y2="9" stroke="#A8EDF7" stroke-width="2"/><circle cx="13" cy="17" r="2" fill="#A8EDF7"/>' "$st" ;;
-        run_yabs) printf '<rect x="5" y="4" width="16" height="16" rx="2" %s/><path d="M9 2v3 M17 2v3 M9 21v3 M17 21v3" stroke="#A8EDF7" stroke-width="1.5"/>' "$st" ;;
-        run_ip_check_place) printf '<rect x="5" y="11" width="14" height="10" rx="2" %s/><path d="M8 11 V8 a5 5 0 0 1 10 0 v3" %s/>' "$st" "$st" ;;
-        run_bench_sh) printf '<ellipse cx="13" cy="6" rx="8" ry="3" %s/><path d="M5 6 v11 c0 1.6 16 1.6 16 0 V6" %s/>' "$st" "$st" ;;
-        run_ip_quality) printf '<path d="M13 3 l2.7 5.7 6.3 .8 -4.6 4.3 1.2 6.2 -5.6 -3.1 -5.6 3.1 1.2 -6.2 -4.6 -4.3 6.3 -.8 z" %s/>' "$st" ;;
-        run_sysbench_cpu) printf '<rect x="6" y="6" width="14" height="14" rx="2" %s/><rect x="10" y="10" width="6" height="6" rx="1" fill="#A8EDF7"/><path d="M9 2v3 M17 2v3 M9 21v3 M17 21v3 M2 9h3 M2 16h3 M21 9h3 M21 16h3" stroke="#A8EDF7" stroke-width="1.4"/>' "$st" ;;
-        *) printf '<circle cx="13" cy="13" r="9" %s/>' "$st" ;;
-    esac
-}
-
-# Иконка для подписи в карточке «Сервер» (viewBox 24, обводка C_PRI=#5FD4E8).
-sys_glyph() {
-    case "$1" in
-        cpu)  printf '%s' '<rect x="7" y="7" width="10" height="10" rx="1.5" stroke="#5FD4E8" stroke-width="1.8" fill="none"/><rect x="10" y="10" width="4" height="4" rx="0.6" stroke="#5FD4E8" stroke-width="1.4" fill="none"/><path d="M9.5 7V4.5 M14.5 7V4.5 M9.5 19.5V17 M14.5 19.5V17 M7 9.5H4.5 M7 14.5H4.5 M19.5 9.5H17 M19.5 14.5H17" stroke="#5FD4E8" stroke-width="1.6" stroke-linecap="round"/>' ;;
-        ram)  printf '%s' '<rect x="3" y="8" width="18" height="9" rx="1.5" stroke="#5FD4E8" stroke-width="1.8" fill="none"/><path d="M7 8v9 M12 8v9 M17 8v9" stroke="#5FD4E8" stroke-width="1.5" stroke-linecap="round"/><path d="M6 20v-3 M10 20v-3 M14 20v-3 M18 20v-3" stroke="#5FD4E8" stroke-width="1.6" stroke-linecap="round"/>' ;;
-        disk) printf '%s' '<ellipse cx="12" cy="6.5" rx="8" ry="3" stroke="#5FD4E8" stroke-width="1.8" fill="none"/><path d="M4 6.5v5c0 1.66 3.58 3 8 3s8-1.34 8-3v-5" stroke="#5FD4E8" stroke-width="1.8" fill="none"/><path d="M4 11.5v5c0 1.66 3.58 3 8 3s8-1.34 8-3v-5" stroke="#5FD4E8" stroke-width="1.8" fill="none"/>' ;;
-        os)   printf '%s' '<path d="M12 3c2.4 0 3.6 2 3.6 4.6 0 2 1.2 3 2.4 5 1.5 2.5 2 4.8 1 6.3-1 1.5-3 1.1-3.6.2-.6.9-2.2 1.3-3.4 1.3s-2.8-.4-3.4-1.3c-.6.9-2.6 1.3-3.6-.2-1-1.5-.5-3.8 1-6.3 1.2-2 2.4-3 2.4-5C8.4 5 9.6 3 12 3z" stroke="#5FD4E8" stroke-width="1.8" fill="none"/><circle cx="10.4" cy="7.2" r="0.9" fill="#5FD4E8"/><circle cx="13.6" cy="7.2" r="0.9" fill="#5FD4E8"/><path d="M10.8 9.4c.7.7 1.7.7 2.4 0" stroke="#5FD4E8" stroke-width="1.4" stroke-linecap="round" fill="none"/>' ;;
-        kernel) printf '%s' '<rect x="3" y="4.5" width="18" height="15" rx="2" stroke="#5FD4E8" stroke-width="1.8" fill="none"/><path d="M7 9.5l3 2.5-3 2.5" stroke="#5FD4E8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M12.5 15h4" stroke="#5FD4E8" stroke-width="1.8" stroke-linecap="round"/>' ;;
-        virt) printf '%s' '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" stroke="#5FD4E8" stroke-width="1.8" fill="none" stroke-linejoin="round"/><path d="M12 21V12 M12 12l8-4.5 M12 12L4 7.5" stroke="#5FD4E8" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>' ;;
-        ip)   printf '%s' '<circle cx="12" cy="12" r="9" stroke="#5FD4E8" stroke-width="1.8" fill="none"/><path d="M3 12h18 M12 3v18" stroke="#5FD4E8" stroke-width="1.5" stroke-linecap="round"/><path d="M12 3c3 2.5 4.5 5.7 4.5 9S15 18.5 12 21c-3-2.5-4.5-5.7-4.5-9S9 5.5 12 3z" stroke="#5FD4E8" stroke-width="1.5" fill="none"/>' ;;
-        geo)  printf '%s' '<path d="M12 21.5c4-4.5 7-7.8 7-11.5a7 7 0 1 0-14 0c0 3.7 3 7 7 11.5z" stroke="#5FD4E8" stroke-width="1.8" fill="none" stroke-linejoin="round"/><circle cx="12" cy="10" r="2.6" stroke="#5FD4E8" stroke-width="1.6" fill="none"/>' ;;
-        asn)  printf '%s' '<rect x="5" y="3.5" width="14" height="17" rx="1.5" stroke="#5FD4E8" stroke-width="1.8" fill="none"/><path d="M9 7.5h2 M13 7.5h2 M9 11h2 M13 11h2 M9 14.5h2 M13 14.5h2" stroke="#5FD4E8" stroke-width="1.6" stroke-linecap="round"/><path d="M10.5 20.5v-3h3v3" stroke="#5FD4E8" stroke-width="1.6" stroke-linejoin="round" fill="none"/>' ;;
-        bbr)  printf '%s' '<path d="M3.5 17a8.5 8.5 0 0 1 17 0" stroke="#5FD4E8" stroke-width="1.8" stroke-linecap="round" fill="none"/><path d="M12 17l5-4" stroke="#5FD4E8" stroke-width="1.8" stroke-linecap="round" fill="none"/><circle cx="12" cy="17" r="1.6" fill="#5FD4E8"/>' ;;
-        uptime) printf '%s' '<circle cx="12" cy="12" r="8.5" stroke="#5FD4E8" stroke-width="1.8" fill="none"/><path d="M12 7v5l3.5 2" stroke="#5FD4E8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>' ;;
-        load) printf '%s' '<path d="M3 12h4l2.5-6 4 13 2.5-7H21" stroke="#5FD4E8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>' ;;
-        *)    printf '%s' '<circle cx="12" cy="12" r="3" fill="#5FD4E8"/>' ;;
-    esac
-}
 
 sv() { SVG_BODY="${SVG_BODY}$1"$'\n'; }
 sv_esc() { printf '%s' "$1" | xml_escape; }
-sv_is_dark() { local h="${1#\#}"; [[ ${#h} -lt 6 ]] && { echo 0; return; }
-    local r=$((16#${h:0:2})) g=$((16#${h:2:2})) b=$((16#${h:4:2})); [[ $(((r*299+g*587+b*114)/1000)) -lt 70 ]] && echo 1 || echo 0; }
-sv_hash() { local s="$1" sum=0 i c; for ((i=0;i<${#s};i++)); do printf -v c '%d' "'${s:$i:1}" 2>/dev/null; sum=$((sum+c)); done; echo $sum; }
-sv_state_col() { case "$1" in ok) echo "$C_OKF";; bad) echo "$C_ERRF";; warn) echo "$C_WARNF";; pri) echo "$C_PRI";; *) echo "$C_ONS";; esac; }
-
-# плитка логотипа/монограммы: x y sz slug name
-sv_tile() {
-    local x="$1" y="$2" sz="$3" slug="$4" name="$5"
-    sv "<rect x=\"$x\" y=\"$y\" width=\"$sz\" height=\"$sz\" rx=\"9\" fill=\"$C_SCHX\"/>"
-    local d=""; [[ -n "$slug" ]] && d="${LOGO_PATH[$slug]:-}"
-    if [[ -n "$d" ]]; then
-        local col="${LOGO_COLOR[$slug]}"; [[ "$(sv_is_dark "$col")" == "1" ]] && col="#ECEFF3"
-        local scl off; scl=$(awk "BEGIN{print $sz*0.62/24}"); off=$(awk "BEGIN{print $sz*0.19}")
-        sv "<g transform=\"translate($(awk "BEGIN{print $x+$off}"),$(awk "BEGIN{print $y+$off}")) scale($scl)\"><path d=\"$d\" fill=\"$col\"/></g>"
-    else
-        local h c ini; h=$(sv_hash "$name"); c="${C_MONO[$((h % ${#C_MONO[@]}))]}"
-        # только ASCII-буквы/цифры — локале-безопасно (кириллический диапазон в sed ломается в C/POSIX)
-        ini=$(printf '%s' "$name" | tr -cd 'A-Za-z0-9' | cut -c1-2 | tr '[:lower:]' '[:upper:]')
-        [[ -z "$ini" ]] && ini="?"
-        sv "<text x=\"$((x+sz/2))\" y=\"$(awk "BEGIN{print $y+$sz/2+5}")\" text-anchor=\"middle\" fill=\"$c\" font-size=\"$(awk "BEGIN{print int($sz*0.42)}")\" font-weight=\"700\">$(sv_esc "$ini")</text>"
-    fi
-}
 
 # Длина строки В СИМВОЛАХ независимо от локали. В C/POSIX (а это типичная локаль
 # для `wget|bash`) ${#s} считает БАЙТЫ, и кириллица меряется ×2 — отсюда «съезжал»
 # весь текст. Убираем UTF-8 continuation-байты (0x80-0xBF) — остаётся по байту на символ.
 vlen() { local c="${1//[$'\x80'-$'\xbf']/}"; echo "${#c}"; }
 
-# чип-вердикт у правого края xr
-sv_vchip() {
-    local xr="$1" y="$2" st="$3" t="$4" cf cb; cf=$(sv_state_col "$st")
-    case "$st" in ok) cb="$C_OKC";; bad) cb="$C_ERRC";; warn) cb="$C_WARNC";; *) cb="$C_SCH";; esac
-    local w=$(( $(vlen "$t")*8 + 22 )); [[ $w -lt 42 ]] && w=42
-    sv "<rect x=\"$((xr-w))\" y=\"$y\" width=\"$w\" height=\"24\" rx=\"12\" fill=\"$cb\"/>"
-    sv "<text x=\"$((xr-w/2))\" y=\"$((y+16))\" text-anchor=\"middle\" fill=\"$cf\" font-size=\"12\" font-weight=\"700\">$(sv_esc "$t")</text>"
+# Обрезка до N символов. По той же причине `cut -c` не годится: он режет байты
+# и рвёт кириллическую букву пополам. Считаем ведущие байты вручную.
+vcut() {
+    local s="$1" n="$2" out="" i c cnt=0
+    (( $(vlen "$s") <= n )) && { printf '%s' "$s"; return; }
+    for (( i=0; i<${#s}; i++ )); do
+        c="${s:$i:1}"
+        [[ "$c" == [$'\x80'-$'\xbf'] ]] || cnt=$((cnt+1))
+        (( cnt > n )) && break
+        out+="$c"
+    done
+    printf '%s…' "$out"
 }
 
-# строка-сервис с чипом: x y colw slug name state value
+# Марка сервиса (Simple Icons) — монохромом и без плашки-подложки.
+# Пути нет — не рисуем ничего: имя стоит рядом и говорит всё само.
+sv_mark() {
+    local x="$1" y="$2" sz="$3" slug="$4" d=""
+    [[ -n "$slug" ]] && d="${LOGO_PATH[$slug]:-}"
+    [[ -z "$d" ]] && return 0
+    local scl; scl=$(awk "BEGIN{printf \"%.4f\", $sz/24}")
+    sv "<g transform=\"translate($x,$y) scale($scl)\"><path d=\"$d\" fill=\"$C_MARK\"/></g>"
+}
+
+# Вердикт у правого края xr: xr y state text
+sv_vchip() {
+    local xr="$1" y="$2" st="$3" t="$4" w
+    case "$st" in
+        bad)
+            w=$(( ($(vlen "$t")*72)/10 + 22 ))
+            sv "<rect x=\"$((xr-w))\" y=\"$y\" width=\"$w\" height=\"20\" rx=\"2\" fill=\"$C_INV\"/>"
+            sv "<text x=\"$((xr-w/2))\" y=\"$((y+14))\" text-anchor=\"middle\" fill=\"$C_INK\" font-size=\"11.5\" font-weight=\"600\">$(sv_esc "$t")</text>" ;;
+        warn)
+            w=$(( ($(vlen "$t")*72)/10 + 22 ))
+            sv "<rect x=\"$((xr-w))\" y=\"$y\" width=\"$w\" height=\"20\" rx=\"2\" fill=\"none\" stroke=\"$C_LINE2\" stroke-width=\"1\"/>"
+            sv "<text x=\"$((xr-w/2))\" y=\"$((y+14))\" text-anchor=\"middle\" fill=\"$C_TXT\" font-size=\"11.5\">$(sv_esc "$t")</text>" ;;
+        ok)
+            sv "<text x=\"$xr\" y=\"$((y+14))\" text-anchor=\"end\" fill=\"$C_TXT2\" font-size=\"12\">$(sv_esc "$t")</text>" ;;
+        *)
+            sv "<text x=\"$xr\" y=\"$((y+14))\" text-anchor=\"end\" fill=\"$C_TXT3\" font-size=\"12\">$(sv_esc "$t")</text>" ;;
+    esac
+}
+
+# строка-сервис с вердиктом: x y colw slug name state value (высота строки 32)
 sv_row_chip() {
     local x="$1" y="$2" cw="$3" slug="$4" nm="$5" st="$6" val="$7"
-    sv_tile "$x" "$y" 34 "$slug" "$nm"
-    sv "<text x=\"$((x+46))\" y=\"$((y+22))\" fill=\"$C_ONS\" font-size=\"14.5\">$(sv_esc "$nm")</text>"
-    sv_vchip $((x+cw)) $((y+5)) "$st" "$val"
+    sv_mark "$x" "$((y+7))" 16 "$slug"
+    sv "<text x=\"$((x+26))\" y=\"$((y+20))\" fill=\"$C_TXT\" font-size=\"13.5\">$(sv_esc "$nm")</text>"
+    sv_vchip $((x+cw)) $((y+6)) "$st" "$val"
 }
 
-# строка-сервис со шкалой: x y colw slug name frac value
+# строка-сервис со шкалой: x y colw name frac value (высота строки 32).
+# Длина полосы и есть данные — красить её нечем и незачем.
 sv_row_bar() {
-    local x="$1" y="$2" cw="$3" slug="$4" nm="$5" fr="$6" val="$7"
-    local col="$C_OKF"; awk "BEGIN{exit !($fr<0.5)}" && col="$C_WARNF"; awk "BEGIN{exit !($fr<0.25)}" && col="$C_ERRF"
-    sv_tile "$x" "$y" 34 "$slug" "$nm"
-    sv "<text x=\"$((x+46))\" y=\"$((y+15))\" fill=\"$C_ONS\" font-size=\"13.5\">$(sv_esc "$nm")</text>"
-    local bx=$((x+46)) bw=$((cw-46-86)); local fw; fw=$(awk "BEGIN{w=$bw*$fr; if(w<3)w=3; if(w>$bw)w=$bw; print int(w)}")
-    sv "<rect x=\"$bx\" y=\"$((y+22))\" width=\"$bw\" height=\"6\" rx=\"3\" fill=\"$C_SCH\"/>"
-    sv "<rect x=\"$bx\" y=\"$((y+22))\" width=\"$fw\" height=\"6\" rx=\"3\" fill=\"$col\"/>"
-    sv "<text x=\"$((x+cw))\" y=\"$((y+19))\" text-anchor=\"end\" fill=\"$col\" font-size=\"12.5\" font-weight=\"700\">$(sv_esc "$val")</text>"
+    local x="$1" y="$2" cw="$3" nm="$4" fr="$5" val="$6"
+    sv "<text x=\"$x\" y=\"$((y+13))\" fill=\"$C_TXT\" font-size=\"13\">$(sv_esc "$nm")</text>"
+    sv "<text x=\"$((x+cw))\" y=\"$((y+13))\" text-anchor=\"end\" fill=\"$C_TXT2\" font-size=\"12.5\">$(sv_esc "$val")</text>"
+    local fw; fw=$(awk "BEGIN{w=$cw*$fr; if(w<2)w=2; if(w>$cw)w=$cw; print int(w)}")
+    sv "<rect x=\"$x\" y=\"$((y+20))\" width=\"$cw\" height=\"4\" fill=\"$C_TRACK\"/>"
+    sv "<rect x=\"$x\" y=\"$((y+20))\" width=\"$fw\" height=\"4\" fill=\"$C_MARK\"/>"
 }
 
-sv_chipw() { echo $(( $(vlen "$1")*8 + 18 + $(vlen "$2")*8 + 20 )); }
+# Ширина половинок метрики-чипа: подпись 11px, значение 13px.
+mc_lw() { echo $(( ($(vlen "$1")*67)/10 + 22 )); }
+mc_vw() { echo $(( ($(vlen "$1")*76)/10 + 24 )); }
+sv_chipw() { echo $(( $(mc_lw "$1") + $(mc_vw "$2") )); }
 
-# метрика-чип: x y label value colorkey ; ширина -> MCW
+# метрика-чип: x y label value colorkey
 sv_mchip() {
-    local x="$1" y="$2" l="$3" v="$4" ck="$5"; local c; c=$(sv_state_col "$ck")
-    local lw=$(( $(vlen "$l")*8 + 18 )) vw=$(( $(vlen "$v")*8 + 20 )); local cw=$((lw+vw))
-    sv "<rect x=\"$x\" y=\"$y\" width=\"$cw\" height=\"36\" rx=\"12\" fill=\"$C_SCH\"/>"
-    sv "<path d=\"M$((x+12)) $y h$((lw-12)) v36 h-$((lw-12)) a12 12 0 0 1 -12 -12 v-12 a12 12 0 0 1 12 -12 z\" fill=\"$C_SCHX\"/>"
-    sv "<text x=\"$((x+lw/2))\" y=\"$((y+23))\" text-anchor=\"middle\" fill=\"$C_ONSV\" font-size=\"12\" font-weight=\"600\">$(sv_esc "$l")</text>"
-    sv "<text x=\"$((x+lw+vw/2))\" y=\"$((y+23))\" text-anchor=\"middle\" fill=\"$c\" font-size=\"13.5\" font-weight=\"700\">$(sv_esc "$v")</text>"
-    MCW=$cw
+    local x="$1" y="$2" l="$3" v="$4" ck="$5"
+    local lw vw cw; lw=$(mc_lw "$l"); vw=$(mc_vw "$v"); cw=$((lw+vw))
+    local bg="$C_SCH" lc="$C_TXT2" vc="$C_TXT" dv="$C_LINE2" so=""
+    case "$ck" in
+        bad)  bg="$C_INV"; lc="#4A4A4A"; vc="$C_INK"; dv="#B8B8B8" ;;
+        warn) so=" stroke=\"$C_LINE2\" stroke-width=\"1\"" ;;
+    esac
+    sv "<rect x=\"$x\" y=\"$y\" width=\"$cw\" height=\"30\" rx=\"2\" fill=\"$bg\"$so/>"
+    sv "<line x1=\"$((x+lw))\" y1=\"$((y+6))\" x2=\"$((x+lw))\" y2=\"$((y+24))\" stroke=\"$dv\" stroke-width=\"1\"/>"
+    sv "<text x=\"$((x+lw/2))\" y=\"$((y+19))\" text-anchor=\"middle\" fill=\"$lc\" font-size=\"11\">$(sv_esc "$l")</text>"
+    sv "<text x=\"$((x+lw+vw/2))\" y=\"$((y+19))\" text-anchor=\"middle\" fill=\"$vc\" font-size=\"13\" font-weight=\"600\">$(sv_esc "$v")</text>"
 }
 
+# Статус теста у правого края. «Выполнен» — ожидаемый исход, ему хватает
+# приглушённой подписи; рамка и инверсия достаются тому, что пошло не так.
 sv_status_chip() {
-    local xr="$1" y="$2" st="$3" cb cf t
-    case "$st" in done) cb="$C_OKC";cf="$C_OKF";t="выполнен";; skip) cb="$C_WARNC";cf="$C_WARNF";t="пропущен";; err) cb="$C_ERRC";cf="$C_ERRF";t="ошибка";; *) cb="$C_NEUC";cf="$C_NEUF";t="не запускался";; esac
-    local w=$(( $(vlen "$t")*8 + 48 ))
-    sv "<g transform=\"translate($((xr-w)),$y)\"><rect width=\"$w\" height=\"30\" rx=\"15\" fill=\"$cb\"/>"
+    local xr="$1" y="$2" st="$3" t w
     case "$st" in
-        done) sv "<path d=\"M17 15 l4 4 8 -9\" fill=\"none\" stroke=\"$cf\" stroke-width=\"2.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>";;
-        skip) sv "<line x1=\"17\" y1=\"15\" x2=\"28\" y2=\"15\" stroke=\"$cf\" stroke-width=\"2.6\" stroke-linecap=\"round\"/>";;
-        err)  sv "<path d=\"M18 10 l9 10 M27 10 l-9 10\" fill=\"none\" stroke=\"$cf\" stroke-width=\"2.6\" stroke-linecap=\"round\"/>";;
-        *)    sv "<circle cx=\"22\" cy=\"15\" r=\"5\" fill=\"none\" stroke=\"$cf\" stroke-width=\"2\" stroke-dasharray=\"2.2 2.2\"/>";;
+        done) sv "<text x=\"$xr\" y=\"$((y+15))\" text-anchor=\"end\" fill=\"$C_TXT3\" font-size=\"12\">выполнен</text>"; return ;;
+        skip) t="пропущен" ;;
+        err)  t="ошибка" ;;
+        *)    t="не запускался" ;;
     esac
-    sv "<text x=\"$((w-14))\" y=\"20\" text-anchor=\"end\" fill=\"$cf\" font-size=\"13\" font-weight=\"700\">$t</text></g>"
+    w=$(( ($(vlen "$t")*72)/10 + 24 ))
+    if [[ "$st" == "err" ]]; then
+        sv "<rect x=\"$((xr-w))\" y=\"$y\" width=\"$w\" height=\"22\" rx=\"2\" fill=\"$C_INV\"/>"
+        sv "<text x=\"$((xr-w/2))\" y=\"$((y+15))\" text-anchor=\"middle\" fill=\"$C_INK\" font-size=\"12\" font-weight=\"600\">$t</text>"
+    else
+        sv "<rect x=\"$((xr-w))\" y=\"$y\" width=\"$w\" height=\"22\" rx=\"2\" fill=\"none\" stroke=\"$C_LINE2\" stroke-width=\"1\"/>"
+        sv "<text x=\"$((xr-w/2))\" y=\"$((y+15))\" text-anchor=\"middle\" fill=\"$C_TXT2\" font-size=\"12\">$t</text>"
+    fi
 }
 
 # Раскладка строк-сервисов в 2 колонки с поддержкой разделителей (kind=sep).
@@ -1264,40 +1265,38 @@ render_services() {
     while IFS=$'\x1f' read -r kind name slug stt val frac; do
         [[ -z "$kind" ]] && continue
         if [[ "$kind" == "sep" ]]; then
-            (( col==1 )) && { cy=$((cy+40)); col=0; }
+            (( col==1 )) && { cy=$((cy+32)); col=0; }
             if [[ "$draw" == "1" ]]; then
-                cy=$((cy+12))
-                sv "<line x1=\"$sx1\" y1=\"$cy\" x2=\"$((PAD+CARDW-IPAD))\" y2=\"$cy\" stroke=\"$C_OUTV\" stroke-width=\"1\"/>"
-                [[ -n "$name" ]] && sv "<text x=\"$sx1\" y=\"$((cy+20))\" fill=\"$C_ONSV\" font-size=\"12\" font-weight=\"700\" letter-spacing=\"0.6\">$(sv_esc "$name")</text>"
-                cy=$((cy+30))
+                cy=$((cy+16))
+                sv "<line x1=\"$sx1\" y1=\"$cy\" x2=\"$((PAD+CARDW-IPAD))\" y2=\"$cy\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
+                [[ -n "$name" ]] && sv "<text x=\"$sx1\" y=\"$((cy+24))\" fill=\"$C_TXT2\" font-size=\"11\" letter-spacing=\"1\">$(sv_esc "$name")</text>"
+                cy=$((cy+34))
             else
-                cy=$((cy+42))
+                cy=$((cy+50))
             fi
             col=0; continue
         fi
         (( col==0 )) && bx=$sx1 || bx=$sx2
         ry=$cy
         if [[ "$draw" == "1" ]]; then
-            if [[ "$kind" == "bar" ]]; then sv_row_bar "$bx" "$ry" "$colw" "$slug" "$name" "${frac:-0}" "$val"
+            if [[ "$kind" == "bar" ]]; then sv_row_bar "$bx" "$ry" "$colw" "$name" "${frac:-0}" "$val"
             else sv_row_chip "$bx" "$ry" "$colw" "$slug" "$name" "$stt" "$val"; fi
         fi
-        if (( col==1 )); then cy=$((cy+40)); col=0; else col=1; fi
+        if (( col==1 )); then cy=$((cy+32)); col=0; else col=1; fi
     done < "$sfile"
-    (( col==1 )) && cy=$((cy+40))
+    (( col==1 )) && cy=$((cy+32))
     echo $cy
 }
 
 # Печатает SVG-карточку «Server Scorecard».
 build_summary_svg() {
     load_logos
-    # --- Material 3 dark tokens ---
-    local C_BG="#0D1014" C_SCL="#14181E" C_SC="#191E25" C_SCH="#212730" C_SCHX="#2B323C"
-    local C_ONS="#E6E9EF" C_ONSV="#AAB2C0" C_OUT="#5A6473" C_OUTV="#363D47"
-    local C_PRI="#5FD4E8" C_ONPRI="#00363F" C_PRIC="#114049" C_ONPRIC="#9CEFFB" C_TER="#CBBFFF"
-    local C_OKC="#0E3A22" C_OKF="#7CE0A0" C_WARNC="#3E330F" C_WARNF="#F4CE6E" C_ERRC="#561E1A" C_ERRF="#FFB4AB"
-    local C_NEUC="#262C35" C_NEUF="#C2CAD8" C_FOOT="#6B7480"
-    local C_MONO=( "#8AB4F8" "#F2A6B0" "#FBD267" "#86D89A" "#C9A4FB" "#FF9FD0" "#6FD6E6" "#FBB874" "#A8DD8A" "#9CA8FF" "#7FD8C8" "#E59ACB" )
-    local W=1100 PAD=28 IPAD=26; local CARDW=$((W-2*PAD)); local MCW=0
+    # --- монохромная шкала ---
+    local C_BG="#0A0A0A" C_SC="#131313" C_SCH="#202020" C_TRACK="#2E2E2E"
+    local C_LINE="#262626" C_LINE2="#3D3D3D"
+    local C_TXT="#F2F2F2" C_TXT2="#9C9C9C" C_TXT3="#757575" C_FOOT="#545454"
+    local C_INV="#E6E6E6" C_INK="#0A0A0A" C_MARK="#C6C6C6"
+    local W=1100 PAD=32 IPAD=28; local CARDW=$((W-2*PAD))
     SVG_BODY=""
     local Y=$PAD
 
@@ -1309,9 +1308,10 @@ build_summary_svg() {
     elif [[ "$SYS_IP" == *:* ]]; then
         ip_disp=$(printf '%s' "$SYS_IP" | awk -F: '{print $1":"$2"::*"}')
     fi
-    local host_e ip_e; host_e=$(sv_esc "$SYS_HOST"); ip_e=$(sv_esc "$ip_disp")
+    local host_e ip_e geo_e
+    host_e=$(sv_esc "$SYS_HOST"); ip_e=$(sv_esc "$ip_disp"); geo_e=$(sv_esc "$SYS_COUNTRY/$SYS_CITY")
 
-    # счётчики для пончика (только выбранные тесты)
+    # счётчики прогона (только выбранные тесты)
     local d=0 s=0 e=0 tot=0 fn st
     for fn in "${MT_CAT_FUNCS[@]}"; do
         st="${MT_STATUS[$fn]:-}"; [[ -z "$st" ]] && continue
@@ -1319,71 +1319,51 @@ build_summary_svg() {
     done
     [[ $tot -eq 0 ]] && tot=1
 
-    # ---- HEADER ----
-    local HH=152
-    sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$HH\" rx=\"28\" fill=\"$C_SC\"/>"
-    sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"1\" rx=\"0.5\" fill=\"#FFFFFF\" opacity=\"0.05\"/>"
-    sv "<rect x=\"$PAD\" y=\"$Y\" width=\"6\" height=\"$HH\" rx=\"3\" fill=\"url(#hdr)\"/>"
-    sv "<rect x=\"$((PAD+28))\" y=\"$((Y+32))\" width=\"66\" height=\"66\" rx=\"19\" fill=\"url(#hdr)\"/>"
-    sv "<g transform=\"translate($((PAD+44)),$((Y+49))) scale(1.45)\"><rect x=\"0\" y=\"0\" width=\"22\" height=\"7\" rx=\"2\" fill=\"$C_ONPRI\"/><rect x=\"0\" y=\"10\" width=\"22\" height=\"7\" rx=\"2\" fill=\"$C_ONPRI\"/><circle cx=\"5\" cy=\"3.5\" r=\"1.5\" fill=\"$C_PRI\"/><circle cx=\"5\" cy=\"13.5\" r=\"1.5\" fill=\"$C_PRI\"/></g>"
-    sv "<text x=\"$((PAD+116))\" y=\"$((Y+60))\" fill=\"#FFFFFF\" font-size=\"36\" font-weight=\"800\" letter-spacing=\"1.5\">MULTITEST</text>"
-    sv "<text x=\"$((PAD+118))\" y=\"$((Y+88))\" fill=\"$C_ONPRIC\" font-size=\"15\" font-weight=\"600\">Сводка диагностики сервера · v${SCRIPT_VERSION}</text>"
-    sv "<text x=\"$((PAD+118))\" y=\"$((Y+114))\" fill=\"#B7C4D0\" font-size=\"13.5\">${host_e} · ${ip_e} · ${SYS_COUNTRY}/${SYS_CITY} · ${date_e}</text>"
-    local DCX=$((PAD+CARDW-92)) DCY=$((Y+HH/2)) DR=46
-    sv "<circle cx=\"$DCX\" cy=\"$DCY\" r=\"$DR\" fill=\"none\" stroke=\"$C_OUTV\" stroke-width=\"11\"/>"
-    sv "$(awk -v cx=$DCX -v cy=$DCY -v r=$DR -v d=$d -v s=$s -v e=$e -v tot=$tot -v ok="$C_OKF" -v wf="$C_WARNF" -v ef="$C_ERRF" 'BEGIN{
-        C=2*3.14159265*r; cum=0; split("d s e",ks," "); v["d"]=d;v["s"]=s;v["e"]=e; col["d"]=ok;col["s"]=wf;col["e"]=ef;
-        for(i=1;i<=3;i++){k=ks[i]; if(v[k]<=0)continue; seg=v[k]/tot*C; rot=cum/tot*360-90;
-        printf "<circle cx=\"%d\" cy=\"%d\" r=\"%d\" fill=\"none\" stroke=\"%s\" stroke-width=\"11\" stroke-linecap=\"round\" stroke-dasharray=\"%.2f %.2f\" transform=\"rotate(%.2f %d %d)\"/>",cx,cy,r,col[k],(seg-4>0?seg-4:0.5),C-seg+4,rot,cx,cy; cum+=v[k];}}')"
-    sv "<text x=\"$DCX\" y=\"$((DCY-1))\" text-anchor=\"middle\" fill=\"#FFFFFF\" font-size=\"30\" font-weight=\"800\">$d</text>"
-    sv "<text x=\"$DCX\" y=\"$((DCY+20))\" text-anchor=\"middle\" fill=\"$C_ONPRIC\" font-size=\"12.5\" font-weight=\"600\">из $tot</text>"
-    Y=$((Y+HH+20))
+    # ---- ШАПКА ---- (без плашки: это колонтитул страницы, а не карточка)
+    local xr=$((PAD+CARDW))
+    sv "<text x=\"$PAD\" y=\"$((Y+28))\" fill=\"$C_TXT\" font-size=\"26\" font-weight=\"600\" letter-spacing=\"3\">MULTITEST</text>"
+    sv "<text x=\"$PAD\" y=\"$((Y+52))\" fill=\"$C_TXT2\" font-size=\"13\">Сводка диагностики сервера · v${SCRIPT_VERSION}</text>"
+    sv "<text x=\"$PAD\" y=\"$((Y+74))\" fill=\"$C_TXT3\" font-size=\"12.5\">${host_e} · ${ip_e} · ${geo_e} · ${date_e}</text>"
+    # главное число сводки — крупнее логотипа: это и есть результат прогона
+    sv "<text x=\"$xr\" y=\"$((Y+38))\" text-anchor=\"end\" fill=\"$C_TXT\" font-size=\"40\" font-weight=\"700\">${d}/${tot}</text>"
+    sv "<text x=\"$xr\" y=\"$((Y+58))\" text-anchor=\"end\" fill=\"$C_TXT3\" font-size=\"10.5\" letter-spacing=\"1.4\">ВЫПОЛНЕНО</text>"
+    local extra=""
+    [[ $s -gt 0 ]] && extra="пропущено: $s"
+    [[ $e -gt 0 ]] && extra="${extra:+$extra · }с ошибкой: $e"
+    [[ -n "$extra" ]] && sv "<text x=\"$xr\" y=\"$((Y+80))\" text-anchor=\"end\" fill=\"$C_TXT3\" font-size=\"12\">$extra</text>"
+    sv "<line x1=\"$PAD\" y1=\"$((Y+100))\" x2=\"$xr\" y2=\"$((Y+100))\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
+    Y=$((Y+130))
 
-    # ---- SYSTEM CARD ---- (label|value|iconkey; подписи сразу заглавными — локале-проч)
-    local -a SF=( "CPU|$SYS_CPU · $SYS_CORES ядер|cpu" "RAM|$SYS_RAM|ram" "ДИСК|$SYS_DISK|disk" \
-        "ОС|$SYS_OS|os" "ЯДРО|$SYS_KERNEL|kernel" "VIRT|$SYS_VIRT|virt" "IP|$ip_disp|ip" \
-        "ГЕО|$SYS_COUNTRY / $SYS_CITY|geo" "ASN|$SYS_ASN|asn" "BBR / QDISC|$SYS_CC / $SYS_QDISC|bbr" \
-        "UPTIME|$SYS_UPTIME|uptime" "LOAD AVG|$SYS_LOAD|load" )
-    local SR=$(( (${#SF[@]}+1)/2 )); local SH=$(( 58 + SR*48 + 16 ))
-    sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$SH\" rx=\"24\" fill=\"$C_SCL\"/>"
-    sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"1\" rx=\"0.5\" fill=\"#FFFFFF\" opacity=\"0.05\"/>"
-    sv "<rect x=\"$((PAD+IPAD))\" y=\"$((Y+22))\" width=\"4\" height=\"18\" rx=\"2\" fill=\"$C_PRI\"/>"
-    sv "<text x=\"$((PAD+IPAD+16))\" y=\"$((Y+37))\" fill=\"$C_ONS\" font-size=\"18\" font-weight=\"700\">Сервер</text>"
-    sv "<line x1=\"$((PAD+IPAD))\" y1=\"$((Y+50))\" x2=\"$((PAD+CARDW-IPAD))\" y2=\"$((Y+50))\" stroke=\"$C_OUTV\" stroke-width=\"1\"/>"
-    local c1=$((PAD+IPAD)) c2=$((PAD+CARDW/2+8)) ry=$((Y+58)) i lbl val ik cx
+    # ---- КАРТОЧКА «СЕРВЕР» ---- (label|value; подписи сразу заглавными — локале-прочно)
+    local -a SF=( "CPU|$SYS_CPU · $SYS_CORES ядер" "RAM|$SYS_RAM" "ДИСК|$SYS_DISK" \
+        "ОС|$SYS_OS" "ЯДРО|$SYS_KERNEL" "VIRT|$SYS_VIRT" "IP|$ip_disp" \
+        "ГЕО|$SYS_COUNTRY / $SYS_CITY" "ASN|$SYS_ASN" "BBR / QDISC|$SYS_CC / $SYS_QDISC" \
+        "UPTIME|$SYS_UPTIME" "LOAD AVG|$SYS_LOAD" )
+    local SR=$(( (${#SF[@]}+1)/2 )); local SH=$(( 66 + SR*30 + 14 ))
+    sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$SH\" rx=\"6\" fill=\"$C_SC\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
+    sv "<text x=\"$((PAD+IPAD))\" y=\"$((Y+34))\" fill=\"$C_TXT\" font-size=\"19\" font-weight=\"700\">Сервер</text>"
+    sv "<line x1=\"$((PAD+IPAD))\" y1=\"$((Y+52))\" x2=\"$((PAD+CARDW-IPAD))\" y2=\"$((Y+52))\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
+    local c1=$((PAD+IPAD)) c2=$((PAD+IPAD+(CARDW-2*IPAD)/2)) ry=$((Y+66)) i lbl val cx
     for i in "${!SF[@]}"; do
-        lbl="${SF[$i]%%|*}"; ik="${SF[$i]##*|}"; val="${SF[$i]#*|}"; val="${val%|*}"
+        lbl="${SF[$i]%%|*}"; val="${SF[$i]#*|}"
         if ((i%2==0)); then cx=$c1; else cx=$c2; fi
-        sv "<rect x=\"$cx\" y=\"$((ry+4))\" width=\"28\" height=\"28\" rx=\"8\" fill=\"$C_SCH\"/>"
-        sv "<g transform=\"translate($((cx+5)),$((ry+9))) scale(0.75)\">$(sys_glyph "$ik")</g>"
-        sv "<text x=\"$((cx+38))\" y=\"$((ry+16))\" fill=\"$C_ONSV\" font-size=\"11\" font-weight=\"700\" letter-spacing=\"0.8\">$(sv_esc "$lbl")</text>"
-        sv "<text x=\"$((cx+38))\" y=\"$((ry+36))\" fill=\"$C_ONS\" font-size=\"14\" font-weight=\"500\">$(sv_esc "$(printf '%s' "$val" | cut -c1-56)")</text>"
-        ((i%2==1)) && ry=$((ry+48))
+        sv "<text x=\"$cx\" y=\"$((ry+20))\" fill=\"$C_TXT2\" font-size=\"11\" letter-spacing=\"0.7\">$(sv_esc "$lbl")</text>"
+        sv "<text x=\"$((cx+104))\" y=\"$((ry+20))\" fill=\"$C_TXT\" font-size=\"14\">$(sv_esc "$(vcut "$val" 46)")</text>"
+        ((i%2==1)) && ry=$((ry+30))
     done
-    Y=$((Y+SH+20))
+    Y=$((Y+SH+30))
 
-    local colw=$(( (CARDW-2*IPAD-22)/2 )) sx1=$((PAD+IPAD)) sx2=$((PAD+IPAD+ (CARDW-2*IPAD-22)/2 +22))
+    local colw=$(( (CARDW-2*IPAD-32)/2 )) sx1=$((PAD+IPAD)) sx2=$((PAD+IPAD+(CARDW-2*IPAD-32)/2+32))
 
-    # ---- TEST CARDS (полный каталог) ----
+    # ---- КАРТОЧКИ ТЕСТОВ ---- (невыбранные собираем в одну сноску внизу)
+    local -a OFFNAMES=()
     local idx
     for idx in "${!MT_CAT_FUNCS[@]}"; do
         fn="${MT_CAT_FUNCS[$idx]}"; local nm="${MT_CAT_NAMES[$idx]}"
         st="${MT_STATUS[$fn]:-}"
+        [[ -z "$st" ]] && { OFFNAMES+=( "$nm" ); continue; }
+
         local mfile="$SUMMARY_DIR/$fn.metrics" sfile="$SUMMARY_DIR/$fn.services"
-        local glyph; glyph=$(test_glyph "$fn")
-
-        if [[ -z "$st" ]]; then
-            # не выбран — короткая карточка, шапка по центру
-            local H=72
-            sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$H\" rx=\"24\" fill=\"$C_SCL\" opacity=\"0.5\"/>"
-            sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$H\" rx=\"24\" fill=\"none\" stroke=\"$C_OUT\" stroke-width=\"1.5\" stroke-dasharray=\"7 5\"/>"
-            sv "<rect x=\"$((PAD+IPAD))\" y=\"$((Y+16))\" width=\"40\" height=\"40\" rx=\"12\" fill=\"$C_PRIC\"/><g transform=\"translate($((PAD+IPAD+8)),$((Y+24)))\">$glyph</g>"
-            sv "<text x=\"$((PAD+IPAD+54))\" y=\"$((Y+30))\" fill=\"$C_ONSV\" font-size=\"16\" font-weight=\"600\">$(sv_esc "$nm")</text>"
-            sv "<text x=\"$((PAD+IPAD+54))\" y=\"$((Y+50))\" fill=\"$C_NEUF\" font-size=\"13\">Не выбран в этом запуске.</text>"
-            sv_status_chip $((PAD+CARDW-IPAD)) $((Y+21)) "off"
-            Y=$((Y+H+20)); continue
-        fi
-
         local sstate="done"; case "$st" in выполнен) sstate="done";; ошибка) sstate="err";; *) sstate="skip";; esac
 
         # метрики -> позиции чипов (предварительный проход)
@@ -1398,70 +1378,80 @@ build_summary_svg() {
             for kv in "${ML[@]}"; do l="${kv%%|*}"; local rest="${kv#*|}"; v="${rest%%|*}"
                 w=$(sv_chipw "$l" "$v")
                 if (( cx > IPAD && cx + w > CARDW - IPAD )); then chip_rows=$((chip_rows+1)); cx=$IPAD; fi
-                cx=$((cx + w + 10))
+                cx=$((cx + w + 8))
             done
         fi
-        # сервисы
         local nsvc=0
-        [[ -s "$sfile" ]] && nsvc=$(grep -c . "$sfile")
+        [[ "$sstate" == "done" && -s "$sfile" ]] && nsvc=$(grep -c . "$sfile")
 
         # высота карточки (высоту блока сервисов меряем тем же кодом, что и рисуем)
-        local H=64
-        local chips_h=0 svc_h=0
-        [[ $chip_rows -gt 0 ]] && chips_h=$(( chip_rows*44 ))
-        [[ $nsvc -gt 0 ]] && svc_h=$(render_services "$sfile" 0 0)
+        local H=78 chips_h=0 svc_h=0
         if [[ "$sstate" == "done" ]]; then
-            H=$(( 74 + chips_h + (svc_h>0?svc_h+4:0) + 12 ))
-            [[ $H -lt 96 ]] && H=96
-        else
-            H=72
+            [[ $chip_rows -gt 0 ]] && chips_h=$(( chip_rows*38 ))
+            [[ $nsvc -gt 0 ]] && svc_h=$(render_services "$sfile" 0 0)
+            # тест прошёл, но парсер ничего не выцепил — тогда карточка это только
+            # заголовок: линейка под ним ничего бы не отделяла
+            if (( chips_h==0 && svc_h==0 )); then H=58
+            else H=$(( 66 + chips_h + (chips_h>0?6:0) + svc_h + 16 )); fi
         fi
 
-        sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$H\" rx=\"24\" fill=\"$C_SCL\"/>"
-        sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"1\" rx=\"0.5\" fill=\"#FFFFFF\" opacity=\"0.05\"/>"
-        # шапка: у выполненных — вверху (под ней тело), у коротких — по центру карточки
-        local hty htg htt hts
-        if [[ "$sstate" == "done" ]]; then hty=20; htg=28; htt=45; hts=25; else hty=16; htg=24; htt=30; hts=21; fi
-        sv "<rect x=\"$((PAD+IPAD))\" y=\"$((Y+hty))\" width=\"40\" height=\"40\" rx=\"12\" fill=\"$C_PRIC\"/><g transform=\"translate($((PAD+IPAD+8)),$((Y+htg)))\">$glyph</g>"
-        sv "<text x=\"$((PAD+IPAD+54))\" y=\"$((Y+htt))\" fill=\"$C_ONS\" font-size=\"17\" font-weight=\"700\">$(sv_esc "$nm")</text>"
-        sv_status_chip $((PAD+CARDW-IPAD)) $((Y+hts)) "$sstate"
+        sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$H\" rx=\"6\" fill=\"$C_SC\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
+        sv "<text x=\"$((PAD+IPAD))\" y=\"$((Y+34))\" fill=\"$C_TXT\" font-size=\"19\" font-weight=\"700\">$(sv_esc "$nm")</text>"
+        sv_status_chip $((PAD+CARDW-IPAD)) $((Y+19)) "$sstate"
 
         if [[ "$sstate" != "done" ]]; then
             local note="Пропущен пользователем во время прогона."
             [[ "$sstate" == "err" ]] && note="Тест завершился с ошибкой или без вывода."
-            sv "<text x=\"$((PAD+IPAD+54))\" y=\"$((Y+50))\" fill=\"$C_ONSV\" font-size=\"13\">$note</text>"
-            Y=$((Y+H+20)); continue
+            sv "<text x=\"$((PAD+IPAD))\" y=\"$((Y+58))\" fill=\"$C_TXT3\" font-size=\"13\">$note</text>"
+            Y=$((Y+H+14)); continue
         fi
+
+        (( chips_h>0 || svc_h>0 )) && sv "<line x1=\"$((PAD+IPAD))\" y1=\"$((Y+52))\" x2=\"$((PAD+CARDW-IPAD))\" y2=\"$((Y+52))\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
 
         # чипы метрик
         if [[ $nmet -gt 0 ]]; then
-            cx=$IPAD; local cyy=$((Y+74)) row=0 kv l v ck w
+            cx=$IPAD; local cyy=$((Y+66)) row=0 kv l v ck w
             for kv in "${ML[@]}"; do
                 l="${kv%%|*}"; local rest="${kv#*|}"; v="${rest%%|*}"; ck="${rest#*|}"
                 w=$(sv_chipw "$l" "$v")
                 if (( cx > IPAD && cx + w > CARDW - IPAD )); then row=$((row+1)); cx=$IPAD; fi
-                sv_mchip $((PAD+cx)) $((cyy+row*44)) "$l" "$v" "$ck"
-                cx=$((cx + w + 10))
+                sv_mchip $((PAD+cx)) $((cyy+row*38)) "$l" "$v" "$ck"
+                cx=$((cx + w + 8))
             done
         fi
 
         # строки сервисов (2 колонки + разделители)
         if [[ $nsvc -gt 0 ]]; then
-            local sy=$(( Y + 74 + chips_h + (chips_h>0?4:0) ))
+            local sy=$(( Y + 66 + chips_h + (chips_h>0?6:0) ))
             render_services "$sfile" "$sy" 1 >/dev/null
         fi
-        Y=$((Y+H+20))
+        Y=$((Y+H+14))
     done
 
-    # ---- FOOTER ----
-    sv "<text x=\"$PAD\" y=\"$Y\" fill=\"$C_FOOT\" font-size=\"12.5\">Сгенерировано multitest v${SCRIPT_VERSION} · ${date_e} · ${#MT_CAT_FUNCS[@]} тестов в каталоге · логотипы Simple Icons (CC0)</text>"
-    Y=$((Y+22))
+    # ---- НЕ ЗАПУСКАЛИСЬ ---- (сноской: пустая карточка на каждый тест — трата места)
+    if [[ ${#OFFNAMES[@]} -gt 0 ]]; then
+        Y=$((Y+10))
+        sv "<line x1=\"$PAD\" y1=\"$Y\" x2=\"$((PAD+CARDW))\" y2=\"$Y\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
+        sv "<text x=\"$PAD\" y=\"$((Y+24))\" fill=\"$C_TXT3\" font-size=\"11\" letter-spacing=\"1.2\">НЕ ЗАПУСКАЛИСЬ</text>"
+        local oy=$((Y+50)) oi ox
+        for oi in "${!OFFNAMES[@]}"; do
+            ox=$PAD; ((oi%2==1)) && ox=$((PAD+CARDW/2))
+            sv "<text x=\"$ox\" y=\"$oy\" fill=\"$C_TXT3\" font-size=\"13\">$(sv_esc "${OFFNAMES[$oi]}")</text>"
+            ((oi%2==1)) && oy=$((oy+24))
+        done
+        (( ${#OFFNAMES[@]}%2==1 )) && oy=$((oy+24))
+        Y=$((oy-4))
+    fi
+
+    # ---- ПОДВАЛ ----
+    Y=$((Y+34))
+    sv "<text x=\"$PAD\" y=\"$Y\" fill=\"$C_FOOT\" font-size=\"12\">multitest v${SCRIPT_VERSION} · ${date_e} · логотипы Simple Icons (CC0)</text>"
+    Y=$((Y+24))
 
     local SVGH=$Y
     cat <<HEAD
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 $W $SVGH" text-rendering="geometricPrecision" font-family="Manrope, Roboto, 'Noto Sans', 'DejaVu Sans', sans-serif">
-<defs><linearGradient id="hdr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5FD4E8"/><stop offset="1" stop-color="#CBBFFF"/></linearGradient></defs>
-<rect width="$W" height="$SVGH" fill="#0D1014"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 $W $SVGH" text-rendering="geometricPrecision" font-family="'IBM Plex Sans', Roboto, 'Noto Sans', 'DejaVu Sans', sans-serif">
+<rect width="$W" height="$SVGH" fill="$C_BG"/>
 HEAD
     printf '%s' "$SVG_BODY"
     echo "</svg>"
