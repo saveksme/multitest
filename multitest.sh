@@ -1698,14 +1698,13 @@ HEAD
 # Без TTY — просто строка и тихое ожидание: под `| bash` рисовать нечего.
 spin_run() {
     local msg="$1"; shift
-    local log="${SUMMARY_DIR:-/tmp}/step.log" rc t0 t
+    local log="${SUMMARY_DIR:-/tmp}/step.log" rc t0
     t0=$SECONDS
 
     if [[ ! -t 1 ]]; then
         echo -e "  ${msg}..."
         "$@" >"$log" 2>&1; rc=$?
-        t=$((SECONDS-t0))
-        [[ $rc -eq 0 ]] && echo -e "  ${GREEN}готово${NC} (${t} c)" || echo -e "  ${RED}не вышло${NC} (${t} c)"
+        [[ $rc -eq 0 ]] && echo -e "  ${GREEN}готово${NC}" || echo -e "  ${RED}не вышло${NC}"
         return $rc
     fi
 
@@ -1728,14 +1727,13 @@ spin_run() {
         i=$((i+1)); sleep "$delay" 2>/dev/null || sleep 1
     done
     wait "$pid"; rc=$?
-    t=$((SECONDS-t0))
     printf '\r\033[K'
     printf '\033[?25h'
 
     if [[ $rc -eq 0 ]]; then
-        echo -e "  ${GREEN}${gok}${NC} ${msg} ${YELLOW}${t} c${NC}"
+        echo -e "  ${GREEN}${gok}${NC} ${msg}"
     else
-        echo -e "  ${RED}${gbad}${NC} ${msg} ${YELLOW}${t} c${NC}"
+        echo -e "  ${RED}${gbad}${NC} ${msg}"
         [[ -s "$log" ]] && sed -e 's/^/      /' "$log" | tail -4
     fi
     return $rc
