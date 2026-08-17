@@ -944,7 +944,30 @@ capture_test() {
 # UA важен: 0x0.st и часть хостов отдают 403 на дефолтный User-Agent curl.
 # -4 на случай сломанного IPv6 (частая причина таймаутов на VPS).
 
-# x0.at — основной: анонимно, работает с VPS, ссылка живёт ~100 дней.
+# imgdb.io — основной: анонимно (без ключа/регистрации), работает с VPS, срок
+# жизни ссылки задаётся параметром ttl (секунды). Допустимы только значения из
+# таблицы API: 3600 7200 18000 43200 86400 259200 604800 1209600 2592000 7776000
+# и 0 = бессрочно; любое другое хостинг молча превращает в 72 часа.
+# Ссылки дольше 72 ч он ужимает сильнее — карточку квантует до 9 цветов, но она
+# монохромная, так что фон, рамки и текст переживают это без потерь читаемости.
+MT_IMGDB_TTL="${MT_IMGDB_TTL:-0}"
+
+up_imgdb() {
+    local r url exp
+    # SVG хостинг не принимает (415) — не тратим на него запрос.
+    [[ "$1" == *.svg ]] && return 1
+    r=$(curl -fsS -4 -A "$MT_UA" --max-time 60 -F "file=@$1" \
+        "https://imgdb.io/api/v1/upload?ttl=${MT_IMGDB_TTL}" 2>/dev/null) || return 1
+    url=$(printf '%s' "$r" | grep -oE '"url"[[:space:]]*:[[:space:]]*"[^"]+"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+    [[ -n "$url" ]] || return 1
+    # expires — epoch или null; по нему потом показываем реальный срок жизни,
+    # а не тот, который мы попросили (сервер мог откатить ttl на дефолтные 72 ч).
+    exp=$(printf '%s' "$r" | grep -oE '"expires"[[:space:]]*:[[:space:]]*(null|[0-9]+)' | head -1 | grep -oE '(null|[0-9]+)$')
+    [[ -n "$exp" && -n "$SUMMARY_DIR" && -d "$SUMMARY_DIR" ]] && printf '%s' "$exp" > "$SUMMARY_DIR/expires.txt"
+    printf '%s' "$url"
+}
+
+# x0.at — запасной: анонимно, работает с VPS, ссылка живёт ~100 дней.
 up_x0()      { curl -fsS -4 -A "$MT_UA" --max-time 60 -F "file=@$1" https://x0.at 2>/dev/null; }
 # catbox: постоянные ссылки, но анонимную загрузку файлов с хостинг/VPS-IP отдаёт
 # 412 "Invalid uploader" (работает только с домашних IP / с аккаунтом).
@@ -982,8 +1005,8 @@ up_fileio() {
 # Перебирает хостинги по очереди; первый успешный URL -> stdout, статус -> stderr.
 upload_report() {
     local file="$1" url name
-    # x0.at — основной (анонимно, работает с VPS, ссылка ~100 дней). Остальные — запас.
-    for name in x0 catbox litterbox uguu tmpfiles pixeldrain fileio telegraph; do
+    # imgdb.io — основной (анонимно, работает с VPS, лайфтайм ссылки задаём сами). Остальные — запас.
+    for name in imgdb x0 catbox litterbox uguu tmpfiles pixeldrain fileio telegraph; do
         echo -ne "${CYAN}Загружаю на ${name}...${NC} " >&2
         url=$("up_${name}" "$file" 2>/dev/null); url=$(printf '%s' "$url" | tr -d '\r\n[:space:]')
         if [[ "$url" == https://* ]]; then echo -e "${GREEN}✓${NC}" >&2; printf '%s\n' "$url"; return 0; fi
@@ -2120,6 +2143,33 @@ step_upload() {
     printf '%s' "$url" > "$SUMMARY_DIR/url.txt"
 }
 
+# Русское склонение числительных: 1 день / 2 дня / 5 дней.
+ru_plural() {
+    local n=$1 one=$2 few=$3 many=$4
+    if   (( n % 100 >= 11 && n % 100 <= 14 )); then printf '%s' "$many"
+    elif (( n % 10 == 1 ));                    then printf '%s' "$one"
+    elif (( n % 10 >= 2 && n % 10 <= 4 ));     then printf '%s' "$few"
+    else                                            printf '%s' "$many"
+    fi
+}
+
+# Срок жизни ссылки imgdb — по полю expires из ответа API, а не по нашему ttl.
+imgdb_life() {
+    local exp now left h d
+    exp=$(cat "$SUMMARY_DIR/expires.txt" 2>/dev/null)
+    [[ "$exp" == "null" ]] && { printf 'постоянная'; return; }
+    [[ "$exp" =~ ^[0-9]+$ ]] || { printf 'временная'; return; }
+    now=$(date +%s); left=$(( exp - now ))
+    (( left <= 0 )) && { printf 'временная'; return; }
+    if (( left < 172800 )); then
+        h=$(( (left + 1799) / 3600 )); (( h < 1 )) && h=1
+        printf '≈%d %s' "$h" "$(ru_plural "$h" час часа часов)"
+    else
+        d=$(( left / 86400 ))
+        printf '≈%d %s' "$d" "$(ru_plural "$d" день дня дней)"
+    fi
+}
+
 # Строит картинку-сводку, рендерит в PNG (2x) и заливает на хостинг.
 render_and_upload_summary() {
     print_separator "Формирую сводку (изображение)"
@@ -2130,7 +2180,7 @@ render_and_upload_summary() {
             return 0
         }
     fi
-    rm -f "$SUMMARY_DIR/url.txt" "$SUMMARY_DIR/out.path"
+    rm -f "$SUMMARY_DIR/url.txt" "$SUMMARY_DIR/out.path" "$SUMMARY_DIR/expires.txt"
 
     spin_run "Устанавливаю зависимости для картинки" step_render_deps
 
@@ -2151,6 +2201,7 @@ render_and_upload_summary() {
         local url life="временная"
         url=$(cat "$SUMMARY_DIR/url.txt")
         case "$url" in
+            *imgdb.io*)          life=$(imgdb_life) ;;
             *x0.at*)             life="≈100 дней" ;;
             *files.catbox.moe*)  life="постоянная" ;;
             *litter.catbox.moe*) life="до 72 часов" ;;
@@ -2160,7 +2211,11 @@ render_and_upload_summary() {
         echo ""
         echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         echo -e "  ${BOLD}${GREEN}Ссылка на сводку:${NC} ${BOLD}${url}${NC}"
-        echo -e "  ${YELLOW}Ссылка ${life} — потом файл удалится с хостинга.${NC}"
+        if [[ "$life" == "постоянная" ]]; then
+            echo -e "  ${YELLOW}Ссылка ${life}, но хостинг бесплатный и без гарантий.${NC}"
+        else
+            echo -e "  ${YELLOW}Ссылка ${life} — потом файл удалится с хостинга.${NC}"
+        fi
         echo -e "  ${YELLOW}Чтобы переслать надёжно/навсегда — ОБЯЗАТЕЛЬНО скачайте сам файл:${NC}"
         echo -e "    ${BOLD}${out}${NC}"
         echo -e "    ${YELLOW}например: ${BOLD}scp root@<host>:${out} .${NC}"
