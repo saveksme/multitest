@@ -21,6 +21,9 @@ SUMMARY_TS=""
 SCRIPT_CAPTURE="util"      # util | busybox
 MT_UA="Mozilla/5.0 (X11; Linux x86_64) multitest/${SCRIPT_VERSION}"  # User-Agent для хостингов
 
+# Спонсор: строка баннера в сводке и блок в главном меню (см. print_stencloud_promo)
+AD_TEXT="STENCLOUD - CHEAP SERVERS IN NETHERLANDS AND ESTONIA | PROMO 20% — BEDOLAGA"
+
 # ============================================================
 #  Установка (--install)
 # ============================================================
@@ -67,6 +70,53 @@ print_header() {
     echo "  ║   Диагностика и тестирование сервера     ║"
     echo "  ╚══════════════════════════════════════════╝"
     echo -e "${NC}"
+}
+
+# Блок спонсора для терминала. Цвета берём кодами 256-палитры, а не truecolor:
+# часть профилей macOS Terminal ломает форму с точками с запятой.
+print_stencloud_promo() {
+    local reset white violet
+
+    if [[ -t 1 && "${NO_COLOR:-}" == "" ]]; then
+        reset=$'\033[0m'
+        white=$'\033[1;97m'
+        violet=$'\033[1;38;5;99m'
+    else
+        reset=''
+        white=''
+        violet=''
+    fi
+
+    printf '\n'
+    printf '%s%s%s\n' "$white"  '   ___ _____ ___ _  _ ' "$reset"
+    printf '%s%s%s\n' "$white"  '  / __|_   _| __| \| |' "$reset"
+    printf '%s%s%s\n' "$white"  '  \__ \ | | | _|| .` |' "$reset"
+    printf '%s%s%s\n' "$white"  '  |___/ |_| |___|_|\_|' "$reset"
+
+    printf '%s%s%s\n' "$violet" '   ___ _    ___  _   _ ___ ' "$reset"
+    printf '%s%s%s\n' "$violet" '  / __| |  / _ \| | | |   \' "$reset"
+    printf '%s%s%s\n' "$violet" ' | (__| |_| (_) | |_| | |) |' "$reset"
+    printf '%s%s%s\n' "$violet" '  \___|____\___/ \___/|___/ ' "$reset"
+
+    printf '\n'
+    printf '%s%s%s' "$violet" '  STENCLOUD' "$reset"
+    printf '%s%s%s\n' "$white" ' - CHEAP VIRTUAL/DEDICATED SERVERS IN NETHERLANDS AND ESTONIA' "$reset"
+
+    printf '%s%s%s' "$white" '  1 TB — ' "$reset"
+    printf '%s%s%s\n' "$violet" '1€' "$reset"
+
+    printf '%s%s%s' "$white" '  UP TO ' "$reset"
+    printf '%s%s%s' "$violet" '50G' "$reset"
+    printf '%s%s%s\n' "$white" ' UPLINKS' "$reset"
+
+    printf '%s%s%s' "$white" '  PROMO ' "$reset"
+    printf '%s%s%s' "$violet" '20%' "$reset"
+    printf '%s%s%s' "$white" ' - ' "$reset"
+    printf '%s%s%s\n' "$violet" 'BEDOLAGA' "$reset"
+
+    printf '%s%s%s' "$violet" '  @STENCLOUDBOT' "$reset"
+    printf '%s%s%s' "$white" ' / ' "$reset"
+    printf '%s%s%s\n\n' "$violet" 'STENCLOUD.NET' "$reset"
 }
 
 print_separator() {
@@ -1934,8 +1984,13 @@ build_summary_svg() {
     [[ $s -gt 0 ]] && extra="пропущено: $s"
     [[ $e -gt 0 ]] && extra="${extra:+$extra · }с ошибкой: $e"
     [[ -n "$extra" ]] && sv "<text x=\"$xr\" y=\"$((Y+80))\" text-anchor=\"end\" fill=\"$C_TXT3\" font-size=\"12\">$extra</text>"
-    sv "<line x1=\"$PAD\" y1=\"$((Y+100))\" x2=\"$xr\" y2=\"$((Y+100))\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
-    Y=$((Y+130))
+    # ---- БАННЕР СПОНСОРА ---- (встаёт на место линейки-разделителя шапки:
+    # рамка блока сама отбивает колонтитул от карточек, вторая линия рядом шумит)
+    local C_AD="#875FFF" ADH=42 ady=$((Y+96))
+    sv "<rect x=\"$PAD\" y=\"$ady\" width=\"$CARDW\" height=\"$ADH\" rx=\"6\" fill=\"$C_SC\" stroke=\"$C_AD\" stroke-width=\"2\"/>"
+    sv "<rect x=\"$((PAD+11))\" y=\"$((ady+10))\" width=\"4\" height=\"$((ADH-20))\" rx=\"2\" fill=\"$C_AD\"/>"
+    sv "<text x=\"$((PAD+CARDW/2))\" y=\"$((ady+27))\" text-anchor=\"middle\" fill=\"$C_TXT\" font-size=\"14\" font-weight=\"700\" letter-spacing=\"1.5\">$(sv_esc "$AD_TEXT")</text>"
+    Y=$((ady+ADH+26))
 
     # ---- КАРТОЧКА «СЕРВЕР» ---- (label|value; подписи сразу заглавными — локале-прочно)
     local -a SF=( "CPU|$SYS_CPU · $SYS_CORES ядер" "RAM|$SYS_RAM" "ДИСК|$SYS_DISK" \
@@ -2253,7 +2308,7 @@ show_menu() {
     echo -e "  ${GREEN}13)${NC}  Утилиты (BBR, IPv6...)"
     echo ""
     echo -e "  ${RED} 0)${NC}  Выход"
-    echo ""
+    print_stencloud_promo
     echo -ne "  ${BOLD}Выберите пункт [0-13]: ${NC}"
 }
 
