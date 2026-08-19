@@ -72,51 +72,45 @@ print_header() {
     echo -e "${NC}"
 }
 
-# Блок спонсора для терминала. Цвета берём кодами 256-палитры, а не truecolor:
-# часть профилей macOS Terminal ломает форму с точками с запятой.
-print_stencloud_promo() {
-    local reset white violet
+# Блок спонсора для терминала. Строки собираются в массив, а не печатаются на
+# месте: меню выводит блок ПОД приглашением ввода и возвращает курсор обратно,
+# а для этого нужна высота блока в строках.
+# Цвета берём кодами 256-палитры, а не truecolor: часть профилей macOS Terminal
+# ломает форму с точками с запятой.
+stencloud_promo_lines() {
+    local reset='' white='' violet=''
 
     if [[ -t 1 && "${NO_COLOR:-}" == "" ]]; then
         reset=$'\033[0m'
         white=$'\033[1;97m'
         violet=$'\033[1;38;5;99m'
-    else
-        reset=''
-        white=''
-        violet=''
     fi
 
+    STENCLOUD_PROMO=(
+        "$white"'   ___ _____ ___ _  _ '"$reset"
+        "$white"'  / __|_   _| __| \| |'"$reset"
+        "$white"'  \__ \ | | | _|| .` |'"$reset"
+        "$white"'  |___/ |_| |___|_|\_|'"$reset"
+        "$violet"'   ___ _    ___  _   _ ___ '"$reset"
+        "$violet"'  / __| |  / _ \| | | |   \'"$reset"
+        "$violet"' | (__| |_| (_) | |_| | |) |'"$reset"
+        "$violet"'  \___|____\___/ \___/|___/ '"$reset"
+        ""
+        "$violet"'  STENCLOUD'"$reset$white"' - CHEAP VIRTUAL/DEDICATED SERVERS IN NETHERLANDS AND ESTONIA'"$reset"
+        "$white"'  1 TB — '"$reset$violet"'1€'"$reset"
+        "$white"'  UP TO '"$reset$violet"'50G'"$reset$white"' UPLINKS'"$reset"
+        "$white"'  PROMO '"$reset$violet"'20%'"$reset$white"' - '"$reset$violet"'BEDOLAGA'"$reset"
+        "$violet"'  @STENCLOUDBOT'"$reset$white"' / '"$reset$violet"'STENCLOUD.NET'"$reset"
+    )
+}
+
+# Печать блока на месте: запасной путь для не-TTY и dumb-терминалов, где
+# курсор двигать нечем.
+print_stencloud_promo() {
+    stencloud_promo_lines
     printf '\n'
-    printf '%s%s%s\n' "$white"  '   ___ _____ ___ _  _ ' "$reset"
-    printf '%s%s%s\n' "$white"  '  / __|_   _| __| \| |' "$reset"
-    printf '%s%s%s\n' "$white"  '  \__ \ | | | _|| .` |' "$reset"
-    printf '%s%s%s\n' "$white"  '  |___/ |_| |___|_|\_|' "$reset"
-
-    printf '%s%s%s\n' "$violet" '   ___ _    ___  _   _ ___ ' "$reset"
-    printf '%s%s%s\n' "$violet" '  / __| |  / _ \| | | |   \' "$reset"
-    printf '%s%s%s\n' "$violet" ' | (__| |_| (_) | |_| | |) |' "$reset"
-    printf '%s%s%s\n' "$violet" '  \___|____\___/ \___/|___/ ' "$reset"
-
+    printf '%s\n' "${STENCLOUD_PROMO[@]}"
     printf '\n'
-    printf '%s%s%s' "$violet" '  STENCLOUD' "$reset"
-    printf '%s%s%s\n' "$white" ' - CHEAP VIRTUAL/DEDICATED SERVERS IN NETHERLANDS AND ESTONIA' "$reset"
-
-    printf '%s%s%s' "$white" '  1 TB — ' "$reset"
-    printf '%s%s%s\n' "$violet" '1€' "$reset"
-
-    printf '%s%s%s' "$white" '  UP TO ' "$reset"
-    printf '%s%s%s' "$violet" '50G' "$reset"
-    printf '%s%s%s\n' "$white" ' UPLINKS' "$reset"
-
-    printf '%s%s%s' "$white" '  PROMO ' "$reset"
-    printf '%s%s%s' "$violet" '20%' "$reset"
-    printf '%s%s%s' "$white" ' - ' "$reset"
-    printf '%s%s%s\n' "$violet" 'BEDOLAGA' "$reset"
-
-    printf '%s%s%s' "$violet" '  @STENCLOUDBOT' "$reset"
-    printf '%s%s%s' "$white" ' / ' "$reset"
-    printf '%s%s%s\n\n' "$violet" 'STENCLOUD.NET' "$reset"
 }
 
 print_separator() {
@@ -2308,7 +2302,21 @@ show_menu() {
     echo -e "  ${GREEN}13)${NC}  Утилиты (BBR, IPv6...)"
     echo ""
     echo -e "  ${RED} 0)${NC}  Выход"
-    print_stencloud_promo
+
+    # Блок спонсора уходит ПОД строку ввода: печатаем его, затем поднимаем
+    # курсор обратно относительным сдвигом. Сохранённая позиция (ESC[s/ESC[u)
+    # тут не годится — если блок не влез и экран прокрутился, строка ввода
+    # уедет вверх, а сохранённый номер строки останется прежним.
+    if [[ -t 0 && -t 1 && "${TERM:-dumb}" != "dumb" ]]; then
+        MT_PROMO_BELOW=1
+        stencloud_promo_lines
+        printf '\n\n\n'                        # отбивка, строка ввода, отбивка
+        printf '%s\n' "${STENCLOUD_PROMO[@]}"
+        printf '\033[%dA' $(( ${#STENCLOUD_PROMO[@]} + 2 ))
+    else
+        MT_PROMO_BELOW=0
+        print_stencloud_promo
+    fi
     echo -ne "  ${BOLD}Выберите пункт [0-13]: ${NC}"
 }
 
@@ -2322,6 +2330,9 @@ show_menu() {
 while true; do
     show_menu
     read -r choice
+    # Блок спонсора висит ниже строки ввода — стираем его до низа экрана,
+    # иначе вывод теста ляжет прямо поверх букв.
+    [[ "${MT_PROMO_BELOW:-0}" == "1" ]] && printf '\033[J'
 
     case "$choice" in
         1)  run_ip_region; pause_prompt ;;
