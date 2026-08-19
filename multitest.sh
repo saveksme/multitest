@@ -574,6 +574,19 @@ run_all() {
 #  Утилиты
 # ============================================================
 
+BBR_CONF="/etc/sysctl.d/99-bbr-cake.conf"
+IPV6_CONF="/etc/sysctl.d/99-disable-ipv6.conf"
+
+# Ищет ключ sysctl в чужих конфигах. Свой файл мы при выключении удаляем, но
+# если то же значение прописано ещё где-то, после перезагрузки оно вернётся —
+# и человек будет думать, что выключение не сработало. Лучше сказать сразу.
+sysctl_other_sources() {
+    local key="${1//./\\.}" mine="$2"
+    grep -rlsE "^[[:space:]]*${key}[[:space:]]*=" \
+        /etc/sysctl.conf /etc/sysctl.d /run/sysctl.d /usr/lib/sysctl.d 2>/dev/null \
+        | grep -vFx "$mine" | sort -u
+}
+
 enable_bbr_cake() {
     print_separator "Включение BBR + Cake"
 
@@ -591,13 +604,22 @@ enable_bbr_cake() {
     modprobe tcp_bbr 2>/dev/null
     modprobe sch_cake 2>/dev/null
 
+    # Запоминаем, что стояло до нас: иначе выключать некуда — «обратно» у
+    # congestion control нет, значение просто держится до следующей записи.
+    # Метку пишем только при первом включении, иначе повторный запуск затрёт
+    # исходные значения теми, что сам же и поставил.
+    local prev_note
+    prev_note=$(grep -m1 '^# multitest: было ' "$BBR_CONF" 2>/dev/null) \
+        || prev_note="# multitest: было cc=${current_cc:-?} qdisc=${current_qdisc:-?}"
+
     # Записываем параметры в sysctl
-    cat > /etc/sysctl.d/99-bbr-cake.conf <<EOF
+    cat > "$BBR_CONF" <<EOF
+${prev_note}
 net.core.default_qdisc=cake
 net.ipv4.tcp_congestion_control=bbr
 EOF
 
-    sysctl -p /etc/sysctl.d/99-bbr-cake.conf
+    sysctl -p "$BBR_CONF"
 
     # Проверяем результат
     local new_cc
@@ -611,6 +633,75 @@ EOF
     else
         echo -e "${YELLOW}Congestion control: ${new_cc}, qdisc: ${new_qdisc}${NC}"
         echo -e "${YELLOW}Проверьте, что ядро поддерживает BBR и Cake.${NC}"
+    fi
+}
+
+disable_bbr_cake() {
+    print_separator "Выключение BBR + Cake"
+
+    local cc qd
+    cc=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)
+    qd=$(sysctl -n net.core.default_qdisc 2>/dev/null)
+
+    echo -e "Текущий congestion control: ${BOLD}${cc}${NC}"
+    echo -e "Текущий qdisc:              ${BOLD}${qd}${NC}"
+    echo ""
+
+    # Куда возвращаться: значения из метки, записанной при включении. Файла нет
+    # или метки в нём нет — берём то, с чем ядро живёт по умолчанию.
+    local prev_cc="" prev_qd=""
+    if [[ -f "$BBR_CONF" ]]; then
+        prev_cc=$(sed -n 's/^# multitest: было cc=\([^ ]*\).*/\1/p'    "$BBR_CONF" | head -1)
+        prev_qd=$(sed -n 's/^# multitest: было .*qdisc=\([^ ]*\).*/\1/p' "$BBR_CONF" | head -1)
+    fi
+    # Если и до нас стояли bbr/cake — возвращать их бессмысленно, просили выключить.
+    [[ -z "$prev_cc" || "$prev_cc" == "bbr"  || "$prev_cc" == "?" ]] && prev_cc="cubic"
+    [[ -z "$prev_qd" || "$prev_qd" == "cake" || "$prev_qd" == "?" ]] && prev_qd="fq_codel"
+
+    # cubic может быть не собран в ядре — тогда берём первый доступный.
+    local avail
+    avail=$(sysctl -n net.ipv4.tcp_available_congestion_control 2>/dev/null)
+    if [[ -n "$avail" && " $avail " != *" $prev_cc "* ]]; then
+        echo -e "${YELLOW}${prev_cc} недоступен (есть: ${avail}) — ставлю ${avail%% *}.${NC}"
+        prev_cc="${avail%% *}"
+    fi
+
+    rm -f "$BBR_CONF"
+    sysctl -w "net.ipv4.tcp_congestion_control=$prev_cc" >/dev/null 2>&1
+    sysctl -w "net.core.default_qdisc=$prev_qd"          >/dev/null 2>&1
+
+    local new_cc new_qd
+    new_cc=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)
+    new_qd=$(sysctl -n net.core.default_qdisc 2>/dev/null)
+
+    echo ""
+    if [[ "$new_cc" != "bbr" && "$new_qd" != "cake" ]]; then
+        echo -e "${GREEN}BBR + Cake выключены: ${BOLD}${new_cc} / ${new_qd}${NC}"
+    else
+        echo -e "${RED}Сейчас ${new_cc} / ${new_qd} — сбросить не удалось (нужен root?).${NC}"
+        return
+    fi
+
+    # default_qdisc читается в момент создания очереди. У поднятого интерфейса
+    # она уже создана, поэтому cake на нём останется до перезагрузки.
+    local ifc live
+    ifc=$(ip route show default 2>/dev/null | awk '{print $5; exit}')
+    if [[ -n "$ifc" ]]; then
+        live=$(tc qdisc show dev "$ifc" 2>/dev/null | awk 'NR==1{print $2}')
+        if [[ "$live" == "cake" ]]; then
+            echo ""
+            echo -e "  ${YELLOW}На ${BOLD}${ifc}${NC}${YELLOW} очередь всё ещё cake: новый qdisc берётся при её создании.${NC}"
+            echo -e "  Сменится после перезагрузки — или сразу: ${BOLD}tc qdisc replace dev ${ifc} root ${prev_qd}${NC}"
+        fi
+    fi
+
+    local others
+    others=$( { sysctl_other_sources "net.ipv4.tcp_congestion_control" "$BBR_CONF"
+                sysctl_other_sources "net.core.default_qdisc"          "$BBR_CONF"; } | sort -u )
+    if [[ -n "$others" ]]; then
+        echo ""
+        echo -e "  ${YELLOW}Эти файлы тоже задают congestion control или qdisc — после перезагрузки победят они:${NC}"
+        printf '%s\n' "$others" | sed 's/^/    /'
     fi
 }
 
@@ -630,13 +721,13 @@ disable_ipv6() {
     echo ""
 
     # Записываем параметры в sysctl
-    cat > /etc/sysctl.d/99-disable-ipv6.conf <<EOF
+    cat > "$IPV6_CONF" <<EOF
 net.ipv6.conf.all.disable_ipv6=1
 net.ipv6.conf.default.disable_ipv6=1
 net.ipv6.conf.lo.disable_ipv6=1
 EOF
 
-    sysctl -p /etc/sysctl.d/99-disable-ipv6.conf
+    sysctl -p "$IPV6_CONF"
 
     # Проверяем результат
     local new_state
@@ -650,13 +741,100 @@ EOF
     fi
 }
 
+enable_ipv6() {
+    print_separator "Включение IPv6"
+
+    # Ядро могло стартовать с ipv6.disable=1 — тогда ключей sysctl просто нет,
+    # и включать нечего: правится только параметром загрузки.
+    if [[ ! -e /proc/sys/net/ipv6/conf/all/disable_ipv6 ]]; then
+        echo -e "${RED}IPv6 отключён на уровне ядра (ipv6.disable=1 в параметрах загрузки).${NC}"
+        echo -e "  Sysctl тут бессилен: уберите ${BOLD}ipv6.disable=1${NC} из GRUB_CMDLINE_LINUX"
+        echo -e "  в ${BOLD}/etc/default/grub${NC}, выполните ${BOLD}update-grub${NC} и перезагрузитесь."
+        return
+    fi
+
+    local current_state
+    current_state=$(sysctl -n net.ipv6.conf.all.disable_ipv6 2>/dev/null)
+
+    if [[ "$current_state" == "0" ]]; then
+        echo -e "${YELLOW}IPv6 уже включён.${NC}"
+        return
+    fi
+
+    echo -e "Текущий статус IPv6: ${BOLD}выключен${NC}"
+    echo ""
+
+    rm -f "$IPV6_CONF"
+    sysctl -w net.ipv6.conf.all.disable_ipv6=0     >/dev/null 2>&1
+    sysctl -w net.ipv6.conf.default.disable_ipv6=0 >/dev/null 2>&1
+    sysctl -w net.ipv6.conf.lo.disable_ipv6=0      >/dev/null 2>&1
+
+    local new_state
+    new_state=$(sysctl -n net.ipv6.conf.all.disable_ipv6 2>/dev/null)
+
+    echo ""
+    if [[ "$new_state" == "0" ]]; then
+        echo -e "${GREEN}IPv6 включён.${NC}"
+    else
+        echo -e "${RED}Не удалось включить IPv6 (нужен root?).${NC}"
+        return
+    fi
+
+    # Адрес сам собой не возвращается: он приезжает с router advertisement, и
+    # это занимает несколько секунд. Пустой список — ещё не отказ.
+    local addrs
+    addrs=$(ip -6 addr show scope global 2>/dev/null | awk '/inet6/{print $2}' | paste -sd' ' -)
+    if [[ -n "$addrs" ]]; then
+        echo -e "  Глобальные адреса: ${BOLD}${addrs}${NC}"
+    else
+        echo -e "  ${YELLOW}Глобального адреса пока нет — он приходит с router advertisement.${NC}"
+        echo -e "  ${YELLOW}Подождите несколько секунд; если не появился — поднимите интерфейс"
+        echo -e "  заново или пропишите адрес статикой, как он указан в панели хостера.${NC}"
+    fi
+
+    local others
+    others=$(sysctl_other_sources "net.ipv6.conf.all.disable_ipv6" "$IPV6_CONF")
+    if [[ -n "$others" ]]; then
+        echo ""
+        echo -e "  ${YELLOW}IPv6 выключен ещё и здесь — после перезагрузки вернётся:${NC}"
+        printf '%s\n' "$others" | sed 's/^/    /'
+    fi
+}
+
 show_utilities_menu() {
     while true; do
         print_header
         echo -e "  ${CYAN}${BOLD}── Утилиты ──${NC}"
         echo ""
-        echo -e "  ${GREEN}1)${NC}  Включить BBR + Cake"
-        echo -e "  ${GREEN}2)${NC}  Выключить IPv6"
+
+        # Пункты — переключатели: показываем состояние и предлагаем обратное
+        # действие. Иначе на два параметра пришлось бы четыре пункта, половина
+        # из которых в любой момент бессмысленна.
+        local cc qd bbr_on=0 v6_on=0 v6_txt
+        cc=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)
+        qd=$(sysctl -n net.core.default_qdisc 2>/dev/null)
+        [[ "$cc" == "bbr" && "$qd" == "cake" ]] && bbr_on=1
+
+        if [[ ! -e /proc/sys/net/ipv6/conf/all/disable_ipv6 ]]; then
+            v6_txt="выключен в ядре"
+        elif [[ "$(sysctl -n net.ipv6.conf.all.disable_ipv6 2>/dev/null)" == "1" ]]; then
+            v6_txt="выключен"
+        else
+            v6_on=1
+            v6_txt="включён"
+        fi
+
+        if [[ $bbr_on -eq 1 ]]; then
+            echo -e "  ${GREEN}1)${NC}  BBR + Cake — ${BOLD}выключить${NC}  ${CYAN}сейчас: ${cc} / ${qd}${NC}"
+        else
+            echo -e "  ${GREEN}1)${NC}  BBR + Cake — ${BOLD}включить${NC}   ${CYAN}сейчас: ${cc:-?} / ${qd:-?}${NC}"
+        fi
+        if [[ $v6_on -eq 1 ]]; then
+            echo -e "  ${GREEN}2)${NC}  IPv6 — ${BOLD}выключить${NC}        ${CYAN}сейчас: ${v6_txt}${NC}"
+        else
+            echo -e "  ${GREEN}2)${NC}  IPv6 — ${BOLD}включить${NC}         ${CYAN}сейчас: ${v6_txt}${NC}"
+        fi
+
         echo ""
         echo -e "  ${RED}0)${NC}  Назад"
         echo ""
@@ -664,8 +842,8 @@ show_utilities_menu() {
         read -r util_choice
 
         case "$util_choice" in
-            1) enable_bbr_cake; pause_prompt ;;
-            2) disable_ipv6; pause_prompt ;;
+            1) if [[ $bbr_on -eq 1 ]]; then disable_bbr_cake; else enable_bbr_cake; fi; pause_prompt ;;
+            2) if [[ $v6_on -eq 1 ]]; then disable_ipv6; else enable_ipv6; fi; pause_prompt ;;
             0) return ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; pause_prompt ;;
         esac
