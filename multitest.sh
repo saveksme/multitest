@@ -1516,7 +1516,14 @@ emit_media_services() {
     ' | while IFS=$'\x1f' read -r nm stt reg; do
         [[ -z "$nm" ]] && continue
         local state val
+        # Частичный доступ разбираем ДО общих шаблонов, иначе его съедают они:
+        # NoPrem. — это работающий YouTube без Premium, но начинается на No и
+        # попадал в «блок». NF.Only — Netflix отдаёт только свои производства;
+        # такой статус не совпадал ни с чем и уходил в «неизвестно», где от
+        # него оставался один регион, как будто сервис доступен целиком.
         case "$stt" in
+            NoPrem*|No.Prem*|NoPremium*) state="warn"; val="без Premium" ;;
+            NF.Only*|NFOnly*|Only.NF*)   state="warn"; val="только оригиналы" ;;
             Yes*|Native*|Unlock*) state="ok"; [[ -z "$reg" || "$reg" == "-" ]] && val="да" || val="$reg" ;;
             Block*|No*|Failed*|Restricted*|Banned*) state="bad"; val="блок" ;;
             *) state="na"; [[ -z "$reg" || "$reg" == "-" ]] && val="?" || val="$reg" ;;
