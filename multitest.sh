@@ -914,6 +914,32 @@ up_imgdb() {
     printf '%s' "$url"
 }
 
+# imgdb.io, альбом: до 64 картинок одним запросом, в ответ одна ссылка
+# https://imgdb.io/a/<id>. Ради него всё и затевалось — сводка уезжает не
+# простынёй в 6000 px, которую Telegram пересчитает и зальёт JPEG поверх
+# 11-пиксельного текста, а страницами: каждая своим файлом и в размере,
+# который мессенджер уже не трогает.
+# Двухшаговый вариант API (сначала /upload, потом сборка по id) не берём:
+# он на случай запросов больше 150 МБ, а страницы весят десятки килобайт,
+# зато каждый лишний запрос — это ещё один шанс упасть на полпути.
+up_imgdb_album() {
+    local -a args=(); local f r url exp
+    (( $# > 0 )) || return 1
+    for f in "$@"; do
+        # SVG хостинг не принимает (415) — на таком наборе альбома не будет
+        [[ -s "$f" && "$f" != *.svg ]] || return 1
+        args+=( -F "file=@$f" )
+    done
+    r=$(curl -fsS -4 -A "$MT_UA" --max-time 180 "${args[@]}" \
+        "https://imgdb.io/api/v1/album?ttl=${MT_IMGDB_TTL}" 2>/dev/null) || return 1
+    # первый "url" в ответе — сам альбом; members отдаются в items как голые id
+    url=$(printf '%s' "$r" | grep -oE '"url"[[:space:]]*:[[:space:]]*"[^"]+"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+    [[ "$url" == https://* ]] || return 1
+    exp=$(printf '%s' "$r" | grep -oE '"expires"[[:space:]]*:[[:space:]]*(null|[0-9]+)' | head -1 | grep -oE '(null|[0-9]+)$')
+    [[ -n "$exp" && -n "$SUMMARY_DIR" && -d "$SUMMARY_DIR" ]] && printf '%s' "$exp" > "$SUMMARY_DIR/expires.txt"
+    printf '%s' "$url"
+}
+
 # x0.at — запасной: анонимно, работает с VPS, ссылка живёт ~100 дней.
 up_x0()      { curl -fsS -4 -A "$MT_UA" --max-time 60 -F "file=@$1" https://x0.at 2>/dev/null; }
 # catbox: постоянные ссылки, но анонимную загрузку файлов с хостинг/VPS-IP отдаёт
@@ -1845,64 +1871,115 @@ render_services() {
     echo "$RS_CY"
 }
 
-# Печатает SVG-карточку «Server Scorecard».
-build_summary_svg() {
+# Палитра и геометрия карточки. Раньше это были local внутри build_summary_svg,
+# и вложенные sv_* видели их по динамической области видимости. Страниц у сводки
+# теперь несколько и рисуют их разные функции — общий набор вынесен в глобальные,
+# иначе каждая страница тащила бы копию шкалы.
+mt_style_init() {
+    C_BG="#0A0A0A"; C_SC="#131313"; C_SCH="#202020"; C_TRACK="#2E2E2E"
+    C_LINE="#262626"; C_LINE2="#3D3D3D"
+    C_TXT="#F2F2F2"; C_TXT2="#9C9C9C"; C_TXT3="#757575"; C_FOOT="#545454"
+    C_INV="#E6E6E6"; C_INK="#0A0A0A"; C_MARK="#C6C6C6"
+    C_AD="#875FFF"
+    W=1100; PAD=32; IPAD=28; CARDW=$((W-2*PAD))
+    # колонки блока сервисов — их читают rs_flush/render_services
+    colw=$(( (CARDW-2*IPAD-32)/2 ))
+    sx1=$((PAD+IPAD))
+    sx2=$((PAD+IPAD+(CARDW-2*IPAD-32)/2+32))
     load_logos
-    # --- монохромная шкала ---
-    local C_BG="#0A0A0A" C_SC="#131313" C_SCH="#202020" C_TRACK="#2E2E2E"
-    local C_LINE="#262626" C_LINE2="#3D3D3D"
-    local C_TXT="#F2F2F2" C_TXT2="#9C9C9C" C_TXT3="#757575" C_FOOT="#545454"
-    local C_INV="#E6E6E6" C_INK="#0A0A0A" C_MARK="#C6C6C6"
-    local W=1100 PAD=32 IPAD=28; local CARDW=$((W-2*PAD))
-    SVG_BODY=""
-    local Y=$PAD
+}
 
-    local date_e; date_e=$(date '+%Y-%m-%d %H:%M' | xml_escape)
-    local ip4_disp ip6_disp
-    ip4_disp=$(mask_ip "$SYS_IP4"); ip6_disp=$(mask_ip "$SYS_IP6")
-    # Имя хоста на карточку не выводим: у большинства VPS оно выдаёт панель или
-    # провайдера целиком (вида vm17472.<панель>.wtf), а картинка уходит на публичный
-    # файлообменник. IP там же маскируется по той же причине.
-    local ip_e geo_e
-    ip_e=$(sv_esc "$ip4_disp${ip4_disp:+${ip6_disp:+ · }}$ip6_disp")
-    [[ -n "$ip_e" ]] || ip_e="—"
-    geo_e=$(sv_esc "$SYS_COUNTRY/$SYS_CITY")
+# Кто попал в прогон (по странице на тест), а кого не выбирали (сноска на обложке).
+mt_album_plan() {
+    MT_PAGE_IDX=(); MT_OFF_NAMES=()
+    local idx fn
+    for idx in "${!MT_CAT_FUNCS[@]}"; do
+        fn="${MT_CAT_FUNCS[$idx]}"
+        if [[ -n "${MT_STATUS[$fn]:-}" ]]; then
+            MT_PAGE_IDX+=( "$idx" )
+        else
+            MT_OFF_NAMES+=( "${MT_CAT_NAMES[$idx]}" )
+        fi
+    done
+}
 
-    # счётчики прогона (только выбранные тесты)
-    local d=0 s=0 e=0 tot=0 fn st
+# Счётчики прогона (только выбранные тесты) -> MT_DONE / MT_SKIP / MT_ERR / MT_TOT.
+mt_run_counters() {
+    MT_DONE=0; MT_SKIP=0; MT_ERR=0; MT_TOT=0
+    local fn st
     for fn in "${MT_CAT_FUNCS[@]}"; do
         st="${MT_STATUS[$fn]:-}"; [[ -z "$st" ]] && continue
-        tot=$((tot+1)); case "$st" in выполнен) d=$((d+1));; ошибка) e=$((e+1));; *) s=$((s+1));; esac
+        MT_TOT=$((MT_TOT+1))
+        case "$st" in
+            выполнен) MT_DONE=$((MT_DONE+1)) ;;
+            ошибка)   MT_ERR=$((MT_ERR+1)) ;;
+            *)        MT_SKIP=$((MT_SKIP+1)) ;;
+        esac
     done
-    [[ $tot -eq 0 ]] && tot=1
+    (( MT_TOT == 0 )) && MT_TOT=1
+}
 
-    # ---- ШАПКА ---- (без плашки: это колонтитул страницы, а не карточка)
-    local xr=$((PAD+CARDW))
+# Строка идентификации сервера: замаскированные адреса, гео, дата.
+# Она нужна на КАЖДОЙ странице альбома: из альбома пересылают по одной картинке,
+# и страница без неё уезжает в чужой чат как результат неизвестно чьего сервера.
+mt_ident_line() {
+    local ip4 ip6 ip
+    ip4=$(mask_ip "$SYS_IP4"); ip6=$(mask_ip "$SYS_IP6")
+    ip="$ip4${ip4:+${ip6:+ · }}$ip6"; [[ -n "$ip" ]] || ip="—"
+    printf '%s · %s/%s · %s' "$ip" "$SYS_COUNTRY" "$SYS_CITY" "$(date '+%Y-%m-%d %H:%M')"
+}
+
+# Шапка обложки: логотип, подпись, идентификация и крупная дробь «выполнено».
+# Возвращает Y под шапкой в MT_Y.
+sv_head_full() {
+    local Y="$1" xr=$((PAD+CARDW))
     sv "<text x=\"$PAD\" y=\"$((Y+28))\" fill=\"$C_TXT\" font-size=\"26\" font-weight=\"600\" letter-spacing=\"3\">MULTITEST</text>"
     sv "<text x=\"$PAD\" y=\"$((Y+52))\" fill=\"$C_TXT2\" font-size=\"13\">Сводка диагностики сервера · v${SCRIPT_VERSION}</text>"
-    sv "<text x=\"$PAD\" y=\"$((Y+74))\" fill=\"$C_TXT3\" font-size=\"12.5\">${ip_e} · ${geo_e} · ${date_e}</text>"
+    sv "<text x=\"$PAD\" y=\"$((Y+74))\" fill=\"$C_TXT3\" font-size=\"12.5\">$(sv_esc "$(mt_ident_line)")</text>"
     # главное число сводки — крупнее логотипа: это и есть результат прогона
-    sv "<text x=\"$xr\" y=\"$((Y+38))\" text-anchor=\"end\" fill=\"$C_TXT\" font-size=\"40\" font-weight=\"700\">${d}/${tot}</text>"
+    sv "<text x=\"$xr\" y=\"$((Y+38))\" text-anchor=\"end\" fill=\"$C_TXT\" font-size=\"40\" font-weight=\"700\">${MT_DONE}/${MT_TOT}</text>"
     sv "<text x=\"$xr\" y=\"$((Y+58))\" text-anchor=\"end\" fill=\"$C_TXT3\" font-size=\"10.5\" letter-spacing=\"1.4\">ВЫПОЛНЕНО</text>"
     local extra=""
-    [[ $s -gt 0 ]] && extra="пропущено: $s"
-    [[ $e -gt 0 ]] && extra="${extra:+$extra · }с ошибкой: $e"
+    (( MT_SKIP > 0 )) && extra="пропущено: $MT_SKIP"
+    (( MT_ERR  > 0 )) && extra="${extra:+$extra · }с ошибкой: $MT_ERR"
     [[ -n "$extra" ]] && sv "<text x=\"$xr\" y=\"$((Y+80))\" text-anchor=\"end\" fill=\"$C_TXT3\" font-size=\"12\">$extra</text>"
-    # ---- БАННЕР СПОНСОРА ---- (встаёт на место линейки-разделителя шапки:
-    # рамка блока сама отбивает колонтитул от карточек, вторая линия рядом шумит)
-    local C_AD="#875FFF" ADH=42 ady=$((Y+96))
-    sv "<rect x=\"$PAD\" y=\"$ady\" width=\"$CARDW\" height=\"$ADH\" rx=\"6\" fill=\"$C_SC\" stroke=\"$C_AD\" stroke-width=\"2\"/>"
-    sv "<rect x=\"$((PAD+11))\" y=\"$((ady+10))\" width=\"4\" height=\"$((ADH-20))\" rx=\"2\" fill=\"$C_AD\"/>"
-    sv "<text x=\"$((PAD+CARDW/2))\" y=\"$((ady+27))\" text-anchor=\"middle\" fill=\"$C_TXT\" font-size=\"14\" font-weight=\"700\" letter-spacing=\"1.5\">$(sv_esc "$AD_TEXT")</text>"
-    Y=$((ady+ADH+26))
+    MT_Y=$((Y+96))
+}
 
-    # ---- КАРТОЧКА «СЕРВЕР» ---- (label|value; подписи сразу заглавными — локале-прочно)
+# Шапка страницы теста: та же идентификация, но в одну полосу — на странице
+# главное сама карточка, шапка тут только чтобы картинка не потеряла хозяина.
+sv_head_slim() {
+    local Y="$1" xr=$((PAD+CARDW))
+    sv "<text x=\"$PAD\" y=\"$((Y+20))\" fill=\"$C_TXT\" font-size=\"17\" font-weight=\"600\" letter-spacing=\"2.4\">MULTITEST</text>"
+    sv "<text x=\"$PAD\" y=\"$((Y+42))\" fill=\"$C_TXT3\" font-size=\"12\">$(sv_esc "$(mt_ident_line)")</text>"
+    sv "<text x=\"$xr\" y=\"$((Y+22))\" text-anchor=\"end\" fill=\"$C_TXT\" font-size=\"20\" font-weight=\"700\">${MT_PAGE_I} / ${MT_PAGE_N}</text>"
+    sv "<text x=\"$xr\" y=\"$((Y+42))\" text-anchor=\"end\" fill=\"$C_TXT3\" font-size=\"10.5\" letter-spacing=\"1.4\">СТРАНИЦА</text>"
+    sv "<line x1=\"$PAD\" y1=\"$((Y+58))\" x2=\"$xr\" y2=\"$((Y+58))\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
+    MT_Y=$((Y+80))
+}
+
+# Баннер спонсора (встаёт на место линейки-разделителя шапки: рамка блока сама
+# отбивает колонтитул от карточек, вторая линия рядом шумит).
+sv_banner() {
+    local Y="$1" ADH=42
+    sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$ADH\" rx=\"6\" fill=\"$C_SC\" stroke=\"$C_AD\" stroke-width=\"2\"/>"
+    sv "<rect x=\"$((PAD+11))\" y=\"$((Y+10))\" width=\"4\" height=\"$((ADH-20))\" rx=\"2\" fill=\"$C_AD\"/>"
+    sv "<text x=\"$((PAD+CARDW/2))\" y=\"$((Y+27))\" text-anchor=\"middle\" fill=\"$C_TXT\" font-size=\"14\" font-weight=\"700\" letter-spacing=\"1.5\">$(sv_esc "$AD_TEXT")</text>"
+    MT_Y=$((Y+ADH+26))
+}
+
+# Карточка «Сервер» (label|value; подписи сразу заглавными — локале-прочно).
+sv_card_server() {
+    local Y="$1"
+    local ip4_disp ip6_disp
+    ip4_disp=$(mask_ip "$SYS_IP4"); ip6_disp=$(mask_ip "$SYS_IP6")
     local -a SF=( "CPU|$SYS_CPU · $SYS_CORES ядер" "RAM|$SYS_RAM" "ДИСК|$SYS_DISK" \
         "ОС|$SYS_OS" "ЯДРО|$SYS_KERNEL" "VIRT|$SYS_VIRT" "IPv4|${ip4_disp:-—}" )
     [[ -n "$ip6_disp" ]] && SF+=( "IPv6|$ip6_disp" )
     SF+=( "ГЕО|$SYS_COUNTRY / $SYS_CITY" "ASN|$SYS_ASN" "BBR / QDISC|$SYS_CC / $SYS_QDISC" \
         "UPTIME|$SYS_UPTIME" "LOAD AVG|$SYS_LOAD" )
-    local SR=$(( (${#SF[@]}+1)/2 )); local SH=$(( 66 + SR*30 + 14 ))
+    local SR=$(( (${#SF[@]}+1)/2 )) SH
+    SH=$(( 66 + SR*30 + 14 ))
     sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$SH\" rx=\"6\" fill=\"$C_SC\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
     sv "<text x=\"$((PAD+IPAD))\" y=\"$((Y+34))\" fill=\"$C_TXT\" font-size=\"19\" font-weight=\"700\">Сервер</text>"
     sv "<line x1=\"$((PAD+IPAD))\" y1=\"$((Y+52))\" x2=\"$((PAD+CARDW-IPAD))\" y2=\"$((Y+52))\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
@@ -1914,110 +1991,205 @@ build_summary_svg() {
         sv "<text x=\"$((cx+104))\" y=\"$((ry+20))\" fill=\"$C_TXT\" font-size=\"14\">$(sv_esc "$(vcut "$val" 46)")</text>"
         ((i%2==1)) && ry=$((ry+30))
     done
-    Y=$((Y+SH+30))
+    MT_Y=$((Y+SH+30))
+}
 
-    local colw=$(( (CARDW-2*IPAD-32)/2 )) sx1=$((PAD+IPAD)) sx2=$((PAD+IPAD+(CARDW-2*IPAD-32)/2+32))
-
-    # ---- КАРТОЧКИ ТЕСТОВ ---- (невыбранные собираем в одну сноску внизу)
-    local -a OFFNAMES=()
-    local idx
-    for idx in "${!MT_CAT_FUNCS[@]}"; do
-        fn="${MT_CAT_FUNCS[$idx]}"; local nm="${MT_CAT_NAMES[$idx]}"
-        st="${MT_STATUS[$fn]:-}"
-        [[ -z "$st" ]] && { OFFNAMES+=( "$nm" ); continue; }
-
-        local mfile="$SUMMARY_DIR/$fn.metrics" sfile="$SUMMARY_DIR/$fn.services"
-        local sstate="done"; case "$st" in выполнен) sstate="done";; ошибка) sstate="err";; *) sstate="skip";; esac
-
-        # метрики -> позиции чипов (предварительный проход)
-        local -a ML=(); local nmet=0
-        if [[ "$sstate" == "done" && -s "$mfile" ]]; then
-            while IFS=$'\x1f' read -r l v ck; do [[ -z "$l" ]] && continue; ML+=( "$l|$v|$ck" ); done < "$mfile"
-            nmet=${#ML[@]}
-        fi
-        local chip_rows=0 cx=$IPAD
-        if [[ $nmet -gt 0 ]]; then chip_rows=1
-            local kv l v ck w
-            for kv in "${ML[@]}"; do l="${kv%%|*}"; local rest="${kv#*|}"; v="${rest%%|*}"
-                w=$(sv_chipw "$l" "$v")
-                if (( cx > IPAD && cx + w > CARDW - IPAD )); then chip_rows=$((chip_rows+1)); cx=$IPAD; fi
-                cx=$((cx + w + 8))
-            done
-        fi
-        local nsvc=0
-        [[ "$sstate" == "done" && -s "$sfile" ]] && nsvc=$(grep -c . "$sfile")
-
-        # высота карточки (высоту блока сервисов меряем тем же кодом, что и рисуем)
-        local H=78 chips_h=0 svc_h=0
-        if [[ "$sstate" == "done" ]]; then
-            [[ $chip_rows -gt 0 ]] && chips_h=$(( chip_rows*38 ))
-            [[ $nsvc -gt 0 ]] && svc_h=$(render_services "$sfile" 0 0)
-            # тест прошёл, но парсер ничего не выцепил — тогда карточка это только
-            # заголовок: линейка под ним ничего бы не отделяла
-            if (( chips_h==0 && svc_h==0 )); then H=58
-            else H=$(( 66 + chips_h + (chips_h>0?6:0) + svc_h + 16 )); fi
-        fi
-
-        sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$H\" rx=\"6\" fill=\"$C_SC\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
-        sv "<text x=\"$((PAD+IPAD))\" y=\"$((Y+34))\" fill=\"$C_TXT\" font-size=\"19\" font-weight=\"700\">$(sv_esc "$nm")</text>"
-        sv_status_chip $((PAD+CARDW-IPAD)) $((Y+19)) "$sstate"
-
-        if [[ "$sstate" != "done" ]]; then
-            local note="Пропущен пользователем во время прогона."
-            [[ "$sstate" == "err" ]] && note="Тест завершился с ошибкой или без вывода."
-            sv "<text x=\"$((PAD+IPAD))\" y=\"$((Y+58))\" fill=\"$C_TXT3\" font-size=\"13\">$note</text>"
-            Y=$((Y+H+14)); continue
-        fi
-
-        (( chips_h>0 || svc_h>0 )) && sv "<line x1=\"$((PAD+IPAD))\" y1=\"$((Y+52))\" x2=\"$((PAD+CARDW-IPAD))\" y2=\"$((Y+52))\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
-
-        # чипы метрик
-        if [[ $nmet -gt 0 ]]; then
-            cx=$IPAD; local cyy=$((Y+66)) row=0 kv l v ck w
-            for kv in "${ML[@]}"; do
-                l="${kv%%|*}"; local rest="${kv#*|}"; v="${rest%%|*}"; ck="${rest#*|}"
-                w=$(sv_chipw "$l" "$v")
-                if (( cx > IPAD && cx + w > CARDW - IPAD )); then row=$((row+1)); cx=$IPAD; fi
-                sv_mchip $((PAD+cx)) $((cyy+row*38)) "$l" "$v" "$ck"
-                cx=$((cx + w + 8))
-            done
-        fi
-
-        # строки сервисов (2 колонки + разделители)
-        if [[ $nsvc -gt 0 ]]; then
-            local sy=$(( Y + 66 + chips_h + (chips_h>0?6:0) ))
-            render_services "$sfile" "$sy" 1 >/dev/null
-        fi
-        Y=$((Y+H+14))
+# Оглавление альбома: тест — его страница — его статус. Только на обложке и
+# только в альбоме: в одной длинной картинке карточки идут следом, и список
+# перед ними дублировал бы сам себя.
+sv_card_toc() {
+    local Y="$1" n=${#MT_PAGE_IDX[@]}
+    (( n > 0 )) || { MT_Y=$Y; return 0; }
+    local SR=$(( (n+1)/2 )) SH
+    SH=$(( 66 + SR*30 + 14 ))
+    sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$SH\" rx=\"6\" fill=\"$C_SC\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
+    sv "<text x=\"$((PAD+IPAD))\" y=\"$((Y+34))\" fill=\"$C_TXT\" font-size=\"19\" font-weight=\"700\">Тесты</text>"
+    sv "<text x=\"$((PAD+CARDW-IPAD))\" y=\"$((Y+33))\" text-anchor=\"end\" fill=\"$C_TXT3\" font-size=\"12\">страниц в альбоме: ${MT_PAGE_N}</text>"
+    sv "<line x1=\"$((PAD+IPAD))\" y1=\"$((Y+52))\" x2=\"$((PAD+CARDW-IPAD))\" y2=\"$((Y+52))\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
+    local tw=$(( (CARDW-2*IPAD)/2 )) ry=$((Y+66)) i idx fn st sstate cx
+    for i in "${!MT_PAGE_IDX[@]}"; do
+        idx="${MT_PAGE_IDX[$i]}"; fn="${MT_CAT_FUNCS[$idx]}"; st="${MT_STATUS[$fn]:-}"
+        case "$st" in выполнен) sstate="done";; ошибка) sstate="err";; *) sstate="skip";; esac
+        if ((i%2==0)); then cx=$((PAD+IPAD)); else cx=$((PAD+IPAD+tw)); fi
+        sv "<text x=\"$cx\" y=\"$((ry+20))\" fill=\"$C_TXT3\" font-size=\"12\">$(printf '%02d' $((i+2)))</text>"
+        sv "<text x=\"$((cx+30))\" y=\"$((ry+20))\" fill=\"$C_TXT\" font-size=\"13.5\">$(sv_esc "$(vcut "${MT_CAT_NAMES[$idx]}" 26)")</text>"
+        sv_status_chip $((cx+tw-16)) $((ry+2)) "$sstate"
+        ((i%2==1)) && ry=$((ry+30))
     done
+    MT_Y=$((Y+SH+30))
+}
 
-    # ---- НЕ ЗАПУСКАЛИСЬ ---- (сноской: пустая карточка на каждый тест — трата места)
-    if [[ ${#OFFNAMES[@]} -gt 0 ]]; then
-        Y=$((Y+10))
-        sv "<line x1=\"$PAD\" y1=\"$Y\" x2=\"$((PAD+CARDW))\" y2=\"$Y\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
-        sv "<text x=\"$PAD\" y=\"$((Y+24))\" fill=\"$C_TXT3\" font-size=\"11\" letter-spacing=\"1.2\">НЕ ЗАПУСКАЛИСЬ</text>"
-        local oy=$((Y+50)) oi ox
-        for oi in "${!OFFNAMES[@]}"; do
-            ox=$PAD; ((oi%2==1)) && ox=$((PAD+CARDW/2))
-            sv "<text x=\"$ox\" y=\"$oy\" fill=\"$C_TXT3\" font-size=\"13\">$(sv_esc "${OFFNAMES[$oi]}")</text>"
-            ((oi%2==1)) && oy=$((oy+24))
+# Сноска «не запускались»: пустая карточка на каждый невыбранный тест — трата места.
+sv_offnames() {
+    local Y="$1" n=${#MT_OFF_NAMES[@]}
+    (( n > 0 )) || { MT_Y=$Y; return 0; }
+    Y=$((Y+10))
+    sv "<line x1=\"$PAD\" y1=\"$Y\" x2=\"$((PAD+CARDW))\" y2=\"$Y\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
+    sv "<text x=\"$PAD\" y=\"$((Y+24))\" fill=\"$C_TXT3\" font-size=\"11\" letter-spacing=\"1.2\">НЕ ЗАПУСКАЛИСЬ</text>"
+    local oy=$((Y+50)) oi ox
+    for oi in "${!MT_OFF_NAMES[@]}"; do
+        ox=$PAD; ((oi%2==1)) && ox=$((PAD+CARDW/2))
+        sv "<text x=\"$ox\" y=\"$oy\" fill=\"$C_TXT3\" font-size=\"13\">$(sv_esc "${MT_OFF_NAMES[$oi]}")</text>"
+        ((oi%2==1)) && oy=$((oy+24))
+    done
+    (( n%2==1 )) && oy=$((oy+24))
+    MT_Y=$((oy-4))
+}
+
+# Карточка одного теста. Высоту отдаёт в CARD_H, а не через echo: рисование
+# внутри $(...) ушло бы в подоболочку вместе с накопленным SVG_BODY.
+# draw=0 — только померить, draw=1 — померить и нарисовать.
+sv_test_card() {
+    local idx="$1" Y="$2" draw="$3"
+    local fn="${MT_CAT_FUNCS[$idx]}" nm="${MT_CAT_NAMES[$idx]}"
+    local st="${MT_STATUS[$fn]:-}" sstate
+    case "$st" in выполнен) sstate="done";; ошибка) sstate="err";; *) sstate="skip";; esac
+    local mfile="$SUMMARY_DIR/$fn.metrics" sfile="$SUMMARY_DIR/$fn.services"
+    local kv rest l v ck w
+
+    # метрики -> позиции чипов (предварительный проход)
+    local -a ML=(); local nmet=0
+    if [[ "$sstate" == "done" && -s "$mfile" ]]; then
+        while IFS=$'\x1f' read -r l v ck; do [[ -z "$l" ]] && continue; ML+=( "$l|$v|$ck" ); done < "$mfile"
+        nmet=${#ML[@]}
+    fi
+    local chip_rows=0 cx=$IPAD
+    if [[ $nmet -gt 0 ]]; then chip_rows=1
+        for kv in "${ML[@]}"; do
+            l="${kv%%|*}"; rest="${kv#*|}"; v="${rest%%|*}"
+            w=$(sv_chipw "$l" "$v")
+            if (( cx > IPAD && cx + w > CARDW - IPAD )); then chip_rows=$((chip_rows+1)); cx=$IPAD; fi
+            cx=$((cx + w + 8))
         done
-        (( ${#OFFNAMES[@]}%2==1 )) && oy=$((oy+24))
-        Y=$((oy-4))
+    fi
+    local nsvc=0
+    [[ "$sstate" == "done" && -s "$sfile" ]] && nsvc=$(grep -c . "$sfile")
+
+    # высота карточки (высоту блока сервисов меряем тем же кодом, что и рисуем)
+    local H=78 chips_h=0 svc_h=0
+    if [[ "$sstate" == "done" ]]; then
+        [[ $chip_rows -gt 0 ]] && chips_h=$(( chip_rows*38 ))
+        [[ $nsvc -gt 0 ]] && svc_h=$(render_services "$sfile" 0 0)
+        # тест прошёл, но парсер ничего не выцепил — тогда карточка это только
+        # заголовок: линейка под ним ничего бы не отделяла
+        if (( chips_h==0 && svc_h==0 )); then H=58
+        else H=$(( 66 + chips_h + (chips_h>0?6:0) + svc_h + 16 )); fi
+    fi
+    CARD_H=$H
+    [[ "$draw" == "1" ]] || return 0
+
+    sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$H\" rx=\"6\" fill=\"$C_SC\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
+    sv "<text x=\"$((PAD+IPAD))\" y=\"$((Y+34))\" fill=\"$C_TXT\" font-size=\"19\" font-weight=\"700\">$(sv_esc "$nm")</text>"
+    sv_status_chip $((PAD+CARDW-IPAD)) $((Y+19)) "$sstate"
+
+    if [[ "$sstate" != "done" ]]; then
+        local note="Пропущен пользователем во время прогона."
+        [[ "$sstate" == "err" ]] && note="Тест завершился с ошибкой или без вывода."
+        sv "<text x=\"$((PAD+IPAD))\" y=\"$((Y+58))\" fill=\"$C_TXT3\" font-size=\"13\">$note</text>"
+        return 0
     fi
 
-    # ---- ПОДВАЛ ----
-    Y=$((Y+34))
-    sv "<text x=\"$PAD\" y=\"$Y\" fill=\"$C_FOOT\" font-size=\"12\">multitest v${SCRIPT_VERSION} · ${date_e} · логотипы Simple Icons (CC0)</text>"
-    Y=$((Y+24))
+    (( chips_h>0 || svc_h>0 )) && sv "<line x1=\"$((PAD+IPAD))\" y1=\"$((Y+52))\" x2=\"$((PAD+CARDW-IPAD))\" y2=\"$((Y+52))\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
 
-    local SVGH=$Y
+    # чипы метрик
+    if [[ $nmet -gt 0 ]]; then
+        cx=$IPAD; local cyy=$((Y+66)) row=0
+        for kv in "${ML[@]}"; do
+            l="${kv%%|*}"; rest="${kv#*|}"; v="${rest%%|*}"; ck="${rest#*|}"
+            w=$(sv_chipw "$l" "$v")
+            if (( cx > IPAD && cx + w > CARDW - IPAD )); then row=$((row+1)); cx=$IPAD; fi
+            sv_mchip $((PAD+cx)) $((cyy+row*38)) "$l" "$v" "$ck"
+            cx=$((cx + w + 8))
+        done
+    fi
+
+    # строки сервисов (2 колонки + разделители)
+    if [[ $nsvc -gt 0 ]]; then
+        local sy=$(( Y + 66 + chips_h + (chips_h>0?6:0) ))
+        render_services "$sfile" "$sy" 1 >/dev/null
+    fi
+    return 0
+}
+
+# Подвал страницы. Короткая страница (пропущенный тест — это заголовок и строчка
+# пояснения) иначе выходила бы полоской: прижимаем подвал к низу и дотягиваем
+# холст до MT_PAGE_MINH, чтобы в ленте альбома все картинки были одного порядка.
+MT_PAGE_MINH="${MT_PAGE_MINH:-520}"
+
+sv_footer_and_close() {
+    local Y="$1" note="$2"
+    # отдельным оператором: bash раскрывает все слова `local` до присваиваний,
+    # и в `local Y="$1" footY=$((Y+34))` подвал считался бы от пустого Y
+    local footY=$((Y+34)) SVGH
+    (( footY + 14 < MT_PAGE_MINH )) && footY=$(( MT_PAGE_MINH - 14 ))
+    sv "<text x=\"$PAD\" y=\"$footY\" fill=\"$C_FOOT\" font-size=\"12\">$(sv_esc "$note")</text>"
+    SVGH=$((footY+24))
+    MT_PAGE_H=$SVGH
     cat <<HEAD
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 $W $SVGH" text-rendering="geometricPrecision" font-family="'IBM Plex Sans', Roboto, 'Noto Sans', 'DejaVu Sans', sans-serif">
 <rect width="$W" height="$SVGH" fill="$C_BG"/>
 HEAD
     printf '%s' "$SVG_BODY"
     echo "</svg>"
+}
+
+# --- Страницы альбома -------------------------------------------------------
+
+# Обложка: шапка со счётом, баннер, характеристики сервера, оглавление альбома.
+build_page_cover() {
+    SVG_BODY=""
+    local date_e; date_e=$(date '+%Y-%m-%d %H:%M')
+    sv_head_full "$PAD"
+    sv_banner "$MT_Y"
+    sv_card_server "$MT_Y"
+    sv_card_toc "$MT_Y"
+    sv_offnames "$MT_Y"
+    sv_footer_and_close "$MT_Y" "multitest v${SCRIPT_VERSION} · ${date_e} · обложка · страниц: ${MT_PAGE_N} · логотипы Simple Icons (CC0)"
+}
+
+# Страница одного теста: слим-шапка с идентификацией и его карточка целиком.
+build_page_test() {
+    local idx="$1"
+    SVG_BODY=""
+    local date_e; date_e=$(date '+%Y-%m-%d %H:%M')
+    sv_head_slim "$PAD"
+    local top=$MT_Y
+    # Сперва меряем карточку вхолостую. Короткая страница (пропущенный тест —
+    # это заголовок и строчка пояснения) иначе прижимала бы всё к шапке, а нижняя
+    # треть картинки оставалась бы пустой: в ленте альбома это читается как
+    # «страница не догрузилась». Остаток высоты делим поровну — поля сверху и снизу.
+    sv_test_card "$idx" 0 0
+    local natural=$(( top + CARD_H + 58 ))
+    (( natural < MT_PAGE_MINH )) && top=$(( top + (MT_PAGE_MINH - natural)/2 ))
+    sv_test_card "$idx" "$top" 1
+    sv_footer_and_close $((top+CARD_H)) "multitest v${SCRIPT_VERSION} · ${date_e} · страница ${MT_PAGE_I} из ${MT_PAGE_N}"
+}
+
+# Печатает SVG-карточку «Server Scorecard» одним полотном — запасной путь на
+# случай, если альбом собрать или залить не вышло (MT_ALBUM=0 включает его руками).
+build_summary_svg() {
+    mt_style_init
+    mt_album_plan
+    mt_run_counters
+    SVG_BODY=""
+    local date_e; date_e=$(date '+%Y-%m-%d %H:%M')
+
+    sv_head_full "$PAD"
+    sv_banner "$MT_Y"
+    sv_card_server "$MT_Y"
+
+    local Y=$MT_Y i idx
+    for i in "${!MT_PAGE_IDX[@]}"; do
+        idx="${MT_PAGE_IDX[$i]}"
+        sv_test_card "$idx" "$Y" 1
+        Y=$((Y+CARD_H+14))
+    done
+
+    sv_offnames "$Y"
+    # одностраничнику высота холста задаётся содержимым, а не полом страницы альбома
+    local keep=$MT_PAGE_MINH; MT_PAGE_MINH=0
+    sv_footer_and_close "$MT_Y" "multitest v${SCRIPT_VERSION} · ${date_e} · логотипы Simple Icons (CC0)"
+    MT_PAGE_MINH=$keep
 }
 
 # Крутилка: команда уходит в фоновый процесс, её вывод — в лог, а в терминале
@@ -2102,6 +2274,74 @@ step_upload() {
     printf '%s' "$url" > "$SUMMARY_DIR/url.txt"
 }
 
+# --- шаги альбома (страница на тест) ---------------------------------------
+
+# Telegram ужимает отправленное «фото» до ~1280 px по длинной стороне (у новых
+# клиентов и с галочкой HD — до 2560) и перекодирует в JPEG. Прежняя простыня
+# 2200x6000 приезжала в чат с масштабом 0.2-0.4x, и 11-пиксельные подписи в
+# плитках превращались в пару физических пикселей под JPEG-звоном. Страницу
+# отдаём сразу в размере, который клиенту нечего пересчитывать.
+MT_MAXSIDE="${MT_MAXSIDE:-2560}"
+MT_PAGE_SCALE="${MT_PAGE_SCALE:-2}"
+# Альбом у imgdb — 64 картинки; выше потолка собирать нечего, уходим в простыню.
+MT_ALBUM="${MT_ALBUM:-1}"
+MT_ALBUM_MAX=64
+
+# Рендер одной страницы: <base>.svg -> <base>.png, путь дописывается в pages.list.
+# Высоту берём из MT_PAGE_H, который выставил построитель страницы: разбирать
+# её обратно из viewBox — лишний способ разойтись с тем, что нарисовано.
+mt_render_page() {
+    local base="$1"
+    local svg="$base.svg" png="$base.png"
+    local w=$(( W * MT_PAGE_SCALE )) h=$(( MT_PAGE_H * MT_PAGE_SCALE ))
+    local -a geo
+    if (( h > MT_MAXSIDE )); then geo=( -h "$MT_MAXSIDE" ); else geo=( -w "$w" ); fi
+    if   command -v rsvg-convert &>/dev/null; then rsvg-convert "${geo[@]}" -o "$png" "$svg" 2>/dev/null
+    elif command -v magick       &>/dev/null; then magick  -density 220 -background none "$svg" -resize "${w}x${MT_MAXSIDE}>" "$png" 2>/dev/null
+    elif command -v convert      &>/dev/null; then convert -density 220 -background none "$svg" -resize "${w}x${MT_MAXSIDE}>" "$png" 2>/dev/null
+    fi
+    [[ -s "$png" ]] || return 1
+    printf '%s\n' "$png" >> "$SUMMARY_DIR/pages.list"
+}
+
+step_build_pages() {
+    # ниже идёт rm -rf по этому пути — пустой SUMMARY_DIR превратил бы его в /pages
+    [[ -n "$SUMMARY_DIR" && -d "$SUMMARY_DIR" ]] || return 1
+    gather_system_facts
+    mt_style_init
+    mt_album_plan
+    mt_run_counters
+
+    local dir="$SUMMARY_DIR/pages" i idx fn base
+    rm -rf "$dir"; mkdir -p "$dir" 2>/dev/null || return 1
+    : > "$SUMMARY_DIR/pages.list" || return 1
+
+    MT_PAGE_N=$(( ${#MT_PAGE_IDX[@]} + 1 ))
+    MT_PAGE_I=1
+    build_page_cover > "$dir/01-cover.svg"
+    [[ -s "$dir/01-cover.svg" ]] || return 1
+    mt_render_page "$dir/01-cover" || return 1
+
+    for i in "${!MT_PAGE_IDX[@]}"; do
+        idx="${MT_PAGE_IDX[$i]}"; fn="${MT_CAT_FUNCS[$idx]}"
+        MT_PAGE_I=$(( i + 2 ))
+        base=$(printf '%s/%02d-%s' "$dir" "$MT_PAGE_I" "${fn#run_}")
+        build_page_test "$idx" > "$base.svg"
+        [[ -s "$base.svg" ]] || return 1
+        mt_render_page "$base" || return 1
+    done
+    [[ -s "$SUMMARY_DIR/pages.list" ]]
+}
+
+step_upload_album() {
+    local -a files=(); local f url
+    while IFS= read -r f; do [[ -s "$f" ]] && files+=( "$f" ); done < "$SUMMARY_DIR/pages.list"
+    (( ${#files[@]} > 0 )) || return 1
+    url=$(up_imgdb_album "${files[@]}") || return 1
+    [[ "$url" == https://* ]] || return 1
+    printf '%s' "$url" > "$SUMMARY_DIR/url.txt"
+}
+
 # Русское склонение числительных: 1 день / 2 дня / 5 дней.
 ru_plural() {
     local n=$1 one=$2 few=$3 many=$4
@@ -2130,6 +2370,43 @@ imgdb_life() {
 }
 
 # Строит картинку-сводку, рендерит в PNG (2x) и заливает на хостинг.
+# Альбом: обложка + по странице на тест, всё одним запросом на imgdb, в ответ
+# одна ссылка. Возвращает 0, только если ссылка на руках — иначе вызывающий
+# уходит на прежний путь с одной длинной картинкой.
+render_album_summary() {
+    mt_album_plan
+    local n=$(( ${#MT_PAGE_IDX[@]} + 1 ))
+    # прогона не было — альбому неоткуда взяться; выше потолка imgdb тоже нечего пробовать
+    (( ${#MT_PAGE_IDX[@]} > 0 && n <= MT_ALBUM_MAX )) || return 1
+
+    rm -f "$SUMMARY_DIR/pages.list"
+    if ! spin_run "Собираю страницы альбома (${n})" step_build_pages; then
+        echo -e "  ${YELLOW}Страницы не собрались — соберу одной картинкой.${NC}"
+        return 1
+    fi
+    if ! spin_run "Загружаю альбом на imgdb" step_upload_album; then
+        echo -e "  ${YELLOW}Альбом не загрузился — соберу одной картинкой.${NC}"
+        return 1
+    fi
+
+    local url dir="$SUMMARY_DIR/pages" life
+    url=$(cat "$SUMMARY_DIR/url.txt"); life=$(imgdb_life)
+    echo ""
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "  ${BOLD}${GREEN}Альбом со сводкой:${NC} ${BOLD}${url}${NC}"
+    echo -e "  ${CYAN}Страниц: ${BOLD}${n}${NC}${CYAN} — обложка и по одной на тест.${NC}"
+    if [[ "$life" == "постоянная" ]]; then
+        echo -e "  ${YELLOW}Ссылка ${life}, но хостинг бесплатный и без гарантий.${NC}"
+    else
+        echo -e "  ${YELLOW}Ссылка ${life} — потом альбом удалится с хостинга.${NC}"
+    fi
+    echo -e "  ${YELLOW}В Telegram страницы шлите ${BOLD}файлами${NC}${YELLOW} (или альбомом) — так их не пережмут.${NC}"
+    echo -e "  ${YELLOW}Оригиналы лежат тут:${NC} ${BOLD}${dir}${NC}"
+    echo -e "    ${YELLOW}например: ${BOLD}scp -r root@<host>:${dir} .${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    return 0
+}
+
 render_and_upload_summary() {
     print_separator "Формирую сводку (изображение)"
 
@@ -2142,6 +2419,9 @@ render_and_upload_summary() {
     rm -f "$SUMMARY_DIR/url.txt" "$SUMMARY_DIR/out.path" "$SUMMARY_DIR/expires.txt"
 
     spin_run "Устанавливаю зависимости для картинки" step_render_deps
+
+    [[ "$MT_ALBUM" == "1" ]] && render_album_summary && return 0
+    # дальше — прежний путь: одна длинная картинка и перебор файлообменников
 
     if ! spin_run "Собираю карточку" step_build_svg; then
         echo -e "  ${YELLOW}Не удалось собрать карточку — сводки не будет.${NC}"
