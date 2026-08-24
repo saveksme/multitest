@@ -142,7 +142,7 @@ PNG не отрендерился и заливается `.svg`, запрос �
 
 ## Используемые проекты
 
-- [ipregion](https://ipregion.vrnt.xyz) — определение региона IP
+- [ipregion](https://github.com/Davoyan/ipregion) — определение региона IP
 - [censorcheck](https://github.com/vernette/censorcheck) — проверка цензуры и DPI
 - [censorcheck.tlab.pw](https://censorcheck.tlab.pw) — проверка блокировок (tlab)
 - [russian-iperf3-servers](https://github.com/itdoginfo/russian-iperf3-servers) — iPerf3 серверы в РФ

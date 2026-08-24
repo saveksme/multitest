@@ -236,7 +236,7 @@ install_deps_for() {
 run_ip_region() {
     print_separator "IP Region"
     check_and_install wget
-    bash <(wget -qO- https://ipregion.vrnt.xyz)
+    bash <(wget -qO- https://github.com/Davoyan/ipregion/raw/main/ipregion.sh)
 }
 
 run_censorcheck_geoblock() {
