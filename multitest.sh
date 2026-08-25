@@ -198,7 +198,7 @@ test_deps() {
         run_ip_region|run_censorcheck_geoblock|run_censorcheck_dpi|run_censorcheck_tlab|run_bench_sh)
             echo "wget" ;;
         run_iperf3_ru|run_iperf3_tlab)
-            echo "wget iperf3" ;;
+            echo "wget iperf3 jq" ;;
         run_yabs|run_ip_check_place|run_ip_quality)
             echo "curl" ;;
         run_sysbench_cpu)
@@ -269,6 +269,7 @@ run_iperf3_ru() {
     print_separator "iPerf3 — тест до российских серверов"
     check_and_install wget
     check_and_install iperf3
+    check_and_install jq
     bash <(wget -qO- https://github.com/itdoginfo/russian-iperf3-servers/raw/main/speedtest.sh)
 }
 
@@ -276,6 +277,7 @@ run_iperf3_tlab() {
     print_separator "iPerf3 — bench.tlab.pw (РФ)"
     check_and_install wget
     check_and_install iperf3
+    check_and_install jq
     wget -qO- bench.tlab.pw | bash
 }
 
