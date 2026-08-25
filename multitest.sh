@@ -1319,12 +1319,16 @@ mt_metric() { printf '%s\x1f%s\x1f%s\n' "$1" "$2" "${3:-}" >> "$MT_MFILE"; }
 mt_service() { printf '%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\n' "$1" "$2" "${3:-}" "${4:-na}" "${5:-}" "${6:--1}" >> "$MT_SFILE"; }
 
 # Разбирает ячейку таблицы ipregion в «состояние<US>подпись».
+# inv=1 переворачивает Yes/No: у «Google Search Captcha» ipregion считает
+# хорошим ответ No (капчи нет) и красит его в цвет сервиса, а Yes — в красный.
+# Все остальные Yes/No-проверки у него ровно наоборот, поэтому полярность
+# приходится задавать снаружи, а не угадывать по значению.
 ipregion_cell() {
-    local v="$1" cons="$2" st val code
+    local v="$1" cons="$2" inv="${3:-0}" st val code
     case "$v" in
         -1|N/A|n/a|null|null*|"") st="na"; val="N/A" ;;
-        Yes|yes) st="ok"; val="да" ;;
-        No|no)   st="bad"; val="нет" ;;
+        Yes|yes) if [[ "$inv" == "1" ]]; then st="bad"; val="есть"; else st="ok"; val="да"; fi ;;
+        No|no)   if [[ "$inv" == "1" ]]; then st="ok"; else st="bad"; fi; val="нет" ;;
         Denied|"Server error") st="bad"; val="$v" ;;
         Rate-limit|Rate-Limit) st="warn"; val="$v" ;;
         *)
@@ -1340,7 +1344,14 @@ ipregion_cell() {
 }
 
 parse_ipregion() {
-    local txt="$1" rows cons4 cons6 asn cnt match4 match6 has6 split
+    local txt="$1" rows cons4 cons6 asn nsvc ngeo match4 match6 has6 split
+    # Хвост «Legend» отрезаем целиком. Там своя таблица — Code / Country / % IPv4, —
+    # и по форме её строки неотличимы от сервисных: «DE  Germany  90%» проходило все
+    # фильтры и приезжало на карточку сервисом «DE» со значением «Germany», а «Code
+    # Country» — заголовком, притворившимся сервисом. Её же третья колонка включала
+    # признак наличия IPv6, и на одностековом сервере подписи метрик получали суффикс
+    # v4, которому не с чем было соседствовать.
+    txt=$(printf '%s\n' "$txt" | sed -n '/^[[:space:]]*Legend[[:space:]]*$/q;p')
     # нормализуем разделители (табы/серии пробелов -> таб) и отсеиваем строки-спиннеры
     # ("Checking: ...") и прочий не-табличный мусор: имя сервиса короткое, без : / \
     # $1 ~ /^[A-Za-z0-9]/ — имя сервиса всегда начинается с буквы или цифры;
@@ -1356,8 +1367,14 @@ parse_ipregion() {
 
     cons4=$(printf '%s\n' "$rows" | awk -F'\t' '$2 ~ /^[A-Z]{2}$/ {c[$2]++} END{m="";x=0;for(k in c)if(c[k]>x){x=c[k];m=k};print m}')
     cons6=$(printf '%s\n' "$rows" | awk -F'\t' '$3 ~ /^[A-Z]{2}$/ {c[$3]++} END{m="";x=0;for(k in c)if(c[k]>x){x=c[k];m=k};print m}')
-    asn=$(printf '%s\n' "$txt" | grep -m1 -iE '^ASN:' | sed -E 's/^ASN:[[:space:]]*//I' | cut -c1-22)
-    cnt=$(printf '%s\n' "$rows" | grep -c .)
+    # cut -c резал байты и обрывал имя на полуслове без всякого знака, что оно
+    # продолжается («AS218914 Datagio Syste»); vcut считает символы и ставит многоточие
+    asn=$(printf '%s\n' "$txt" | grep -m1 -iE '^ASN:' | sed -E 's/^ASN:[[:space:]]*//I')
+    [[ -n "$asn" ]] && asn=$(vcut "$asn" 32)
+    # Считаем порознь: на карточке это и так два разных блока, а одно число на оба
+    # («Сервисов 42») не отвечало ни на один вопрос, который к нему можно задать.
+    nsvc=$(printf '%s\n' "$rows" | awk -F'\t' '$1 !~ /\./ {n++} END{print n+0}')
+    ngeo=$(printf '%s\n' "$rows" | awk -F'\t' '$1 ~ /\./ {n++} END{print n+0}')
     match4=$(printf '%s\n' "$rows" | awk -F'\t' -v cc="$cons4" '$2~/^[A-Z]{2}$/{t++; if($2==cc)h++} END{if(t)printf "%d/%d",h+0,t}')
     match6=$(printf '%s\n' "$rows" | awk -F'\t' -v cc="$cons6" '$3~/^[A-Z]{2}$/{t++; if($3==cc)h++} END{if(t)printf "%d/%d",h+0,t}')
     # Сколько сервисов видят разные страны по v4 и по v6 — ради этого числа
@@ -1365,10 +1382,15 @@ parse_ipregion() {
     split=$(printf '%s\n' "$rows" | awk -F'\t' '$2~/^[A-Z]{2}/ && $3~/^[A-Z]{2}/ {
         split($2,a," "); split($3,b," "); if(a[1]!=b[1]) n++ } END{print n+0}')
 
-    [[ -n "$cons4" ]] && mt_metric "Консенсус IPv4" "$cons4" "pri"
+    if [[ -n "$cons4" ]]; then
+        # без второго стека «IPv4» в подписи не с чем соседствовать
+        if [[ $has6 -eq 1 ]]; then mt_metric "Консенсус IPv4" "$cons4" "pri"
+        else mt_metric "Консенсус" "$cons4" "pri"; fi
+    fi
     [[ $has6 -eq 1 && -n "$cons6" ]] && mt_metric "Консенсус IPv6" "$cons6" "pri"
     [[ -n "$asn" ]] && mt_metric "ASN" "$asn" ""
-    [[ -n "$cnt" && "$cnt" -gt 0 ]] && mt_metric "Сервисов" "$cnt" ""
+    [[ "$nsvc" -gt 0 ]] && mt_metric "Сервисов" "$nsvc" ""
+    [[ "$ngeo" -gt 0 ]] && mt_metric "GeoIP-баз" "$ngeo" ""
     if [[ $has6 -eq 1 ]]; then
         [[ -n "$match4" ]] && mt_metric "Совпадений v4" "$match4" "ok"
         [[ -n "$match6" ]] && mt_metric "Совпадений v6" "$match6" "ok"
@@ -1391,10 +1413,12 @@ parse_ipregion() {
         [[ -z "$name" ]] && continue
         if [[ "$name" == *.* ]]; then [[ "$pass" == "geo" ]] || continue
         else [[ "$pass" == "services" ]] || continue; fi
-        local st val st6 val6
-        IFS=$'\x1f' read -r st val <<< "$(ipregion_cell "$v4" "$cons4")"
+        local st val st6 val6 inv=0
+        # единственная проверка с обратной полярностью: капчи нет — это хорошо
+        [[ "$name" == *"Search Captcha"* ]] && inv=1
+        IFS=$'\x1f' read -r st val <<< "$(ipregion_cell "$v4" "$cons4" "$inv")"
         if [[ $has6 -eq 1 ]]; then
-            IFS=$'\x1f' read -r st6 val6 <<< "$(ipregion_cell "$v6" "$cons6")"
+            IFS=$'\x1f' read -r st6 val6 <<< "$(ipregion_cell "$v6" "$cons6" "$inv")"
             # «N/A по v6» — обычное дело (у сервиса просто нет AAAA), это не
             # повод шуметь. А вот разные ответы по стекам показываем оба.
             if [[ "$st6" != "na" && "$val6" != "$val" ]]; then
