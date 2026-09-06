@@ -1,0 +1,35 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>multitest — превью сводки</title>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@300;400;500;700&family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  body { background:#1b1b1b; color:#999; font:13px/1.5 system-ui; margin:0; padding:16px 20px 60px }
+  h2 { color:#ddd; font-size:14px; font-weight:600; margin:22px 0 8px }
+  img { display:block; box-shadow:0 0 0 1px #333 }
+  .zoom { overflow:hidden; box-shadow:0 0 0 1px #333 }
+  .zoom > div { transform-origin:top left }
+  a { color:#8b7fff }
+</style>
+<p>Ctrl+R после <code>bash .preview/gen.sh</code>. Кроп — правый нижний угол обложки ×3.</p>
+<h2>Обложка — угол с плашкой спонсора ×3</h2>
+<div class="zoom" id="crop"></div>
+<h2>Обложка целиком</h2>
+<img src="out/01-cover.svg?v=1" width="1100">
+<h2>Страница теста</h2>
+<img src="out/02-test.svg?v=1" width="1100">
+<h2>Страница пропущенного теста</h2>
+<img src="out/03-skip.svg?v=1" width="1100">
+<h2>Одна длинная картинка (MT_ALBUM=0)</h2>
+<img src="out/long.svg?v=1" width="1100">
+<script>
+  // Кроп: тянем SVG инлайном, чтобы знать реальную высоту холста.
+  fetch('out/01-cover.svg?v=1').then(r => r.text()).then(t => {
+    const vb = t.match(/viewBox="0 0 (\d+) (\d+)"/);
+    const W = +vb[1], H = +vb[2], k = 2, cw = 390, ch = 100;
+    const el = document.getElementById('crop');
+    el.style.width = cw * k + 'px'; el.style.height = ch * k + 'px';
+    el.innerHTML = `<div style="transform:scale(${k});margin-left:${-(W - cw) * k}px;margin-top:${-(H - ch) * k}px">${t}</div>`;
+    const s = el.querySelector('svg'); s.removeAttribute('width'); s.removeAttribute('height');
+    s.style.width = W + 'px'; s.style.height = H + 'px';
+  });
+</script>
