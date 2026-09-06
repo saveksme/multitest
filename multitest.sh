@@ -47,15 +47,20 @@ AD_LOGO_DOTS="M 144.5 148.7 C 142.4 149.3, 141 151.9, 141.4 154.2 C 141.7 155.7,
 # него librsvg подставит на месте флага пустые прямоугольники или голые буквы
 # NL/EE.
 #
-# Форма и волна взяты у apple-эмодзи, но заливка плоская — три официальных
-# цвета на флаг, без теней и градиента, и прозрачные поля обрезаны. Это не
+# Силуэт, волна и полупрозрачный край взяты у apple-эмодзи как есть — с ними
+# флаг и читается флагом. Плоской сделана только заливка: три официальных цвета
+# страны вместо теней и градиента, и прозрачные поля обрезаны. Это не
 # вкусовщина, а требование хостинга: imgdb для ссылок дольше 72 ч квантует
 # картинку до 9 цветов, а слоты в палитре достаются цветам по числу пикселей.
 # У живого эмодзи пиксели размазаны по десяткам оттенков, ни один не набирает
-# веса — и флаг приезжает в чат серым. Три плоских тона на полную клетку вес
-# набирают: проверено квантованием до 9 и до 16 цветов.
-AD_FLAG_NL="iVBORw0KGgoAAAANSUhEUgAAAEAAAAAuCAMAAACvSe/GAAAADFBMVEVMaXEhRouuHCj///8hxcOgAAAAAXRSTlMAQObYZgAAAAlwSFlzAAAD6AAAA+gBtXtSawAAAIBJREFUSMftlksOwCAIBXlw/zu3TbX2Q40PlzL7mYBxgQiFFqBCAkC/jLr6z4xbCvs+UbcGntMcD8QgOkkGFgzYBciA+QwFrAsEYfdEcF+IUusENkcGVgygQX4kuAxNgD4ChN0aaAtx6iMQJwMZoAPvy3E80Dk/Jah6w4Rct0J5G69dE+Dg5+xGAAAAAElFTkSuQmCC"
-AD_FLAG_EE="iVBORw0KGgoAAAANSUhEUgAAAEAAAAAuCAMAAACvSe/GAAAADFBMVEVMaXEAAAD///8Acs6j4hWOAAAAAXRSTlMAQObYZgAAAAlwSFlzAAAD6AAAA+gBtXtSawAAAI9JREFUSMftlkEOgCAMBLf0/3/WREETC+zCwUvnPhMxFQtIeANYNd/suFzC56BXcZLPa3ERWchABtytoQYshAvYEDwPI7s1YFHDWGCbZCADYuCcz9JowwpOLTE+D3TdmsDgWy8EZ+A6Ue+sZGCdDPwSqLeuHghu/XsSeTXawjCeu8k2+Pq1qSqzEq4vw5J3ALYIFOMcNJ1jAAAAAElFTkSuQmCC"
+# веса — и флаг приезжает в чат серым.
+#
+# Запас тут тонкий: красный держится за слот на пределе, и размер флага
+# подобран по факту (16×11 переживает квантование, 15×11 и 18×13 — уже нет).
+# Если однажды поедет снова — чинить надо не картинку, а ttl: на ссылках
+# короче 72 ч хостинг палитру не режет, и туда встаёт живой эмодзи без правок.
+AD_FLAG_NL="iVBORw0KGgoAAAANSUhEUgAAAEAAAAAuCAYAAACYlx/0AAAACXBIWXMAAAPoAAAD6AG1e1JrAAACv0lEQVRo3u2av2obQRDGT1ap1uAmTUjj2qU7Q3ARDH6IFCGNIF38BgK/gFGZQggExsiVceU6REXq9HGZUoHVnmfEN2ZZ79ztydLpTt6FD92f1d1+v5lZVmizs6/fsm3p/ellh9QVXb877Cj9+P4+3f9An59In+l4QBpBt55G1OeK+3Bf0jF/n5/jv18GsVe3WT7XjGLAPPAr0gPpJ5n5SzJQXlFzaAYoDHGf36kNsKNFQxP3ZwWMBiOLfr5ZMVpmSEAsPJmA5F4IygUP/COnVmTUVJUBc8z2PbOhiPqG+Ng6qpoBVgE2ZQBT7kADumMiPEjUWneFNO/iu8dIMzH7UNFsvmHJOEYZJo3cISv18hv3BqibPlJVxOd9mYw8k1qdumYXNZktAjB2AeQbiICfwnlDFARgvHrRJhpt4rEB5Q1VIYC3oAQgAUgAEoAEoLUAYhstztwFWOhZzQWwydY4ABtoNuYaZchNhh9B87pWbjU2W3Aux2MGcIMLJrJuirTYgtGVAZDXJYBbXDSRqdSWFp0BIQBtNp4AJAAJQAKQAJQAeZMAQq29AHjBFivNT9FCyLbNpCILaUCel8L5NleBazC6qpYAJqBidtysK4PPCQOYOulinDR5VSY0xGgZgLEAMKFa8Wop3yG9ALCLJhOABCABSAB2EoD1TMhqbwFZRa0EYJ31iXHXKd5xTMSNA6iRADSjRfoX0ByqXAKmJgg20ux/0iPpF/93QRqSeK/SF9I5NmLxhqwDT3ztCPe533fSD9IMgOTZz0vh+0CqSE2tY7KJiaqYvXNMHsHQWjZxYg/jAaAM8b4lgEFByhivfrSJpgoUieoE0TlH1Holg98LSTZoOhs11X7elr4ev1dOhAynyp+IGoqRm8JDRPWkKKqauXVt13UBybVMI+PVzxSlMgvoHn1C9dmrYrbOjdoC9wndr4AYHs4cWQAAAABJRU5ErkJggg=="
+AD_FLAG_EE="iVBORw0KGgoAAAANSUhEUgAAAEAAAAAuCAYAAACYlx/0AAAACXBIWXMAAAPoAAAD6AG1e1JrAAACf0lEQVRo3u2aPW7CMBTHE+UIbLkAd+jQE1TduUBRF6R2onMHLsDSHVV0qVQhRobOlVBZqx6gQwf2Yru2eYbHw84XJASwpX9c58v+//ycBuUFV7d3wSEV3E8jpDDhnIZUU+pS6kbqUeoZNCZS+/pwTguuUddH5L7hcuPouGqzyKgx+ST1LvUh9SsldtBc6hPAaCC6zw0aMDjTzmluBZIYTZpZajbNKActkFgOUSAPahDXKrQSTEUZFaYAKmIWGxU7ygbkJdCbZWOsiSwHGdP1kiPEY7iHWnsdFMZVms0CQxgAb2QnXi9j9DDpwOy1oO6AzMNImfzKabQKs6kARo4wKXpzbtGhjOYCwFLWC9WiJrNZCoBTlwfgAXgAHoAHcKwAuK6DIJu2TWPVEsB6HFlN5pWBiADwkzWbrNcANqICCCx3+JanP6iHCsAIGguybvgOM1oXowUBnL48AA/AA/AAPAAPwAM4XwDi+ACgN01ZuHCX1bGNt9PN+y3qCyCbyZ2K7qMWANZmD1HY9s/hcsOXlzmrBSNhqAFYDuAwKbpGmah5oQBqP+AyAXAP4MwBCA/AAzhaAJyIIeH9Rw+APqc4+pftFLkWQ2F1BcDJeLjj65BJ1JgT2ZI5uAXI5pchQqfK0HUZVe0fqZnURGog1ZNqQ2bbBSROxkgNqJtwXJ3XhWunCJD9y5AjVPYZvoy8bVKzE0jKaoOBeF9JnJDyFwOUPvSnAfQsZAT5RcZQzRwPHUH+5glGZzArXZOnmJaWZ8lZDB3ZpiGS89xV6i00DBk1qG+ydnjBLDGWMKtRBpNhkYzVrBBX+yxkIpgRvH4GYGRqkWt9mjUZFk2SLjlvWff5Dz+It5YpQoaAAAAAAElFTkSuQmCC"
 
 # ============================================================
 #  Установка (--install)
@@ -2064,7 +2069,7 @@ sv_head_slim() {
 AD_H=50                    # полная высота подписи, от «powered by» до низа марки
 AD_MARKH=36                # высота чернил марки
 AD_MARKW=71                # её ширина при этой высоте: 340 × 36 / 172.3
-AD_FLAGW=18; AD_FLAGH=13   # флаг: пропорции исходной картинки, 64 × 46
+AD_FLAGW=16; AD_FLAGH=11   # флаг: пропорции исходной картинки, 64 × 46
 
 # Ширина правой колонки. Считаем по символам, как остальные чипы карточки:
 # ширины строк известны (промокод и скидка — константы), а точных метрик
@@ -2099,8 +2104,8 @@ sv_sponsor() {
     # строка STEN — промокод
     sv "<text x=\"$rx\" y=\"$((Y+31))\" fill=\"$C_TXT\" font-family=\"$F_AD\" font-size=\"22\" letter-spacing=\"1.2\">$(sv_esc "$AD_PROMO")</text>"
     # строка CLOUD — флаги и скидка; флаги центруются по её базовой линии
-    sv_ad_flag "$rx" $((Y+36)) "$AD_FLAG_NL"
-    sv_ad_flag $((rx+AD_FLAGW+5)) $((Y+36)) "$AD_FLAG_EE"
+    sv_ad_flag "$rx" $((Y+37)) "$AD_FLAG_NL"
+    sv_ad_flag $((rx+AD_FLAGW+5)) $((Y+37)) "$AD_FLAG_EE"
     sv "<text x=\"$((rx+AD_FLAGW*2+11))\" y=\"$((Y+48))\" fill=\"$C_TXT\" font-family=\"$F_AD\" font-size=\"15.5\">$(sv_esc "$AD_DISCOUNT")</text>"
 }
 
