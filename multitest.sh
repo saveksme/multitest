@@ -21,16 +21,40 @@ SUMMARY_TS=""
 SCRIPT_CAPTURE="util"      # util | busybox
 MT_UA="Mozilla/5.0 (X11; Linux x86_64) multitest/${SCRIPT_VERSION}"  # User-Agent для хостингов
 
-# Спонсор: строка баннера в сводке и блок в главном меню (см. print_stencloud_promo)
-AD_TEXT="STENCLOUD - CHEAP SERVERS IN NETHERLANDS AND ESTONIA | PROMO 20% — BEDOLAGA"
+# Спонсор: подпись в подвале сводки (см. sv_sponsor) и блок в главном меню
+# (см. print_stencloud_promo).
+AD_PROMO="BEDOLAGA"        # промокод
+AD_DISCOUNT="−20%"         # скидка по нему
 
-# Марка спонсора для плашки: контур обведён с растрового логотипа и упрощён —
+# Марка спонсора для подписи: контур обведён с растрового логотипа
+# (assets/brand/stencloud.png, там же лежит читаемая копия stencloud.svg) —
 # держать её вектором обязательно, скрипт качают одним файлом, а PNG в base64
-# весил бы больше всей таблицы Simple Icons. Система координат — высота 200,
-# ширина 356; заливка evenodd, дырки внутри букв идут отдельными подпутями.
-AD_LOGO_W=356
-AD_LOGO_H=200
-AD_LOGO_PATH="M32,23 73,23 80,26 88,32 91,41 91,48 70,48 69,44 65,42 37,42 34,43 32,46 32,49 35,52 73,52 82,56 87,60 91,65 93,70 94,73 94,82 91,90 83,98 78,101 72,103 31,103 21,99 17,97 14,93 11,87 10,82 10,77 31,77 32,82 36,84 67,84 71,83 72,80 72,76 70,74 67,72 29,72 22,69 18,66 14,62 10,54 10,43 12,38 16,32 20,28 27,25ZM96,23 172,23 172,44 143,44 143,103 121,103 121,44 96,44ZM177,23 252,23 252,43 199,43 199,54 249,54 249,72 199,72 199,83 252,83 252,103 177,103ZM260,23 287,23 320,69 322,69 322,23 343,23 343,103 316,103 285,61 283,61 283,102 260,103ZM35,112 47,112 58,115 63,118 66,123 69,128 70,133 70,137 52,137 51,133 49,130 46,128 37,127 31,130 28,135 26,142 27,153 30,158 34,161 42,162 47,160 51,157 52,151 70,151 70,158 65,168 59,173 49,177 34,177 28,176 22,173 18,171 13,165 9,154 8,137 10,130 12,125 14,122 20,117 29,113ZM74,112 92,112 92,161 121,161 121,177 74,177ZM219,112 238,113 238,154 240,158 245,161 251,161 255,160 259,154 259,113 277,112 277,157 274,166 269,171 263,175 257,177 241,177 235,176 230,174 223,168 220,162 219,157ZM295,112 318,112 325,113 334,117 341,123 346,132 348,138 348,149 346,157 343,163 335,171 328,174 320,177 284,177 284,113ZM171,113 181,113 186,114 191,117 195,121 200,129 200,139 204,140 209,143 215,150 216,154 216,160 214,168 208,174 203,176 199,177 143,177 134,174 129,169 125,159 125,150 128,141 134,134 138,132 144,130 152,130 155,123 160,118 165,115ZM303,128 303,161 314,161 321,159 326,155 328,149 328,142 325,133 323,131 318,128ZM151,154 149,155 147,158 148,162 150,164 171,164 173,163 175,161 174,156 171,154ZM182,155 179,157 179,161 182,164 185,164 187,163 188,160 188,157 186,155ZM195,155 193,156 192,161 194,163 198,164 201,161 201,157 198,155Z"
+# весил бы больше всей таблицы Simple Icons. Контур начинается в нуле и
+# занимает 340×172.3 единиц: от этого прямоугольника, а не от какой-то
+# отдельной системы координат, считается вся геометрия подписи. Логотип
+# трёхцветный, поэтому разрезан на три пути: слово STEN, фиолетовое CLOUD и
+# белая начинка облака поверх него (чёрточка и точки — они закрашены, а не
+# вырезаны, дыркой на тёмном фоне они читались бы провалом).
+# Центры строк от верха чернил: STEN 43.7, CLOUD 135.2 — по ним
+# равняется правая колонка подписи.
+AD_INK_W=340; AD_INK_H=172.3
+AD_LOGO_STEN="M 33.6 0.4 C 22.4 1.3, 12.7 9, 9.1 19.8 C 8.1 22.7, 7.7 27.3, 8.1 31 C 8.5 35, 9.3 37.5, 11.1 40.7 C 14.7 47, 20.7 51.5, 28.3 53.5 C 30.9 54.2, 31.5 54.2, 48.1 54.4 L 65.2 54.6 66.5 55.4 C 68.1 56.5, 69.1 58.4, 69.1 60.5 C 69.1 62.6, 68.2 64, 66.4 65.2 L 64.9 66.1 50.1 66.2 C 33.5 66.3, 33.6 66.3, 31.6 64.1 C 31 63.4, 30.4 62.4, 30.3 61.7 C 30.2 61, 29.9 60.4, 29.7 60.3 C 29.3 60, 7.4 60.3, 7.1 60.6 C 6.8 60.9, 7.4 66.3, 8 68.6 C 9.1 72.6, 10.9 75.9, 14.1 79.3 C 17.6 83, 21.3 85.1, 27 86.7 L 30 87.6 49.1 87.6 C 66.9 87.6, 68.4 87.5, 70.6 87 C 83.6 83.7, 91.8 73.4, 91.8 60.2 C 91.8 49.9, 85.5 40.4, 75.5 35.5 C 74.4 35, 72 34.2, 70 33.7 L 66.4 32.9 50.8 32.8 C 36.1 32.7, 35 32.7, 34 32.1 C 32.6 31.4, 31.5 29.9, 31.2 28.4 C 30.8 25.9, 32.6 23.1, 35.2 22.4 C 36 22.2, 40.9 22.1, 49.4 22.2 L 62.4 22.2 63.7 23 C 65.2 23.9, 66 24.9, 66.2 26.4 L 66.4 27.5 78.2 27.6 L 90 27.7 89.8 24.9 L 89.6 22.1 102.8 22.1 L 116 22.1 116.1 54.8 L 116.2 87.6 127.8 87.6 L 139.4 87.7 139.4 77.2 C 139.4 71.5, 139.4 57.4, 139.4 46 C 139.4 34.7, 139.4 24.6, 139.5 23.7 L 139.7 22.1 153.2 22.1 L 166.7 22.1 166.7 11.1 L 166.6 0.2 128 0.2 L 89.4 0.2 89.4 10.8 C 89.4 16.7, 89.3 21.2, 89.2 20.9 C 89.1 20.6, 88.7 19.2, 88.2 17.8 C 87.1 14.2, 84.9 10.9, 81.5 7.7 C 79.2 5.5, 78.2 4.8, 75.2 3.3 C 71.2 1.4, 69.1 0.8, 65.2 0.4 C 61.7 0, 37.7 0, 33.6 0.4 M 172.2 0.4 C 172.1 0.6, 172.1 20.3, 172.1 44.2 L 172.2 87.6 207.5 87.6 L 242.8 87.6 242.9 76.8 L 243 65.9 219.6 65.9 L 196.3 65.9 196.3 60.2 L 196.3 54.4 219.1 54.4 L 241.9 54.3 241.9 44.2 C 242 38.6, 242 33.7, 241.9 33.4 L 241.7 32.7 219 32.7 L 196.3 32.7 196.3 27.4 L 196.3 22.1 219.5 22 L 242.8 21.9 242.8 11 L 242.8 0.2 207.6 0.1 C 179.5 0, 172.3 0.1, 172.2 0.4 M 249.9 0.4 C 249.9 0.6, 249.8 20.3, 249.9 44.2 L 249.9 87.6 261.3 87.6 L 272.7 87.6 272.8 63.6 L 273 39.7 275.3 43.1 C 276.6 45, 278.6 48, 279.8 49.8 C 280.9 51.6, 283.7 55.8, 285.8 59.1 C 288 62.4, 290.8 66.8, 292.1 68.7 C 293.4 70.7, 296.7 75.8, 299.5 80 L 304.5 87.7 317 87.6 L 329.6 87.6 329.6 43.9 L 329.6 0.2 318.2 0.2 L 306.9 0.2 306.7 23.6 L 306.6 47.1 302.5 40.9 C 298.8 35.3, 295.7 30.5, 291.4 23.9 C 290.6 22.6, 288.5 19.4, 286.7 16.6 C 282.8 10.7, 280.1 6.4, 277.7 2.7 L 275.9 0 263 0 C 253 0, 250 0.1, 249.9 0.4"
+AD_LOGO_CLOUD="M 32 98.6 C 17.8 100.6, 6.3 110.1, 1.9 123.4 C 0.6 127.3, 0 131.4, 0 136.1 C 0 140.6, 0.3 143.3, 1.3 146.9 C 4.8 160.6, 16.5 170.3, 31.5 172 C 35.6 172.5, 38.2 172.4, 42.4 171.8 C 51.1 170.6, 59.2 166.2, 63.8 160.1 C 67.2 155.6, 69.3 150.2, 69.4 145.4 L 69.5 143.2 59.2 143.2 C 49.4 143.1, 48.8 143.1, 48.8 143.6 C 48.8 144, 48.5 145.1, 48.2 146.2 C 46.5 151, 41.4 153.7, 34.7 153.3 C 29 152.9, 24.7 150.1, 22.4 145.5 C 20.9 142.3, 20.5 140.6, 20.5 135.8 C 20.5 131.1, 20.9 129.3, 22.2 126.4 C 23.6 123.5, 24.9 121.9, 27.4 120.2 C 29.9 118.5, 32.4 117.6, 35.5 117.4 C 40 117, 44.4 118.5, 46.5 121.2 C 47.7 122.6, 48.8 125.5, 48.8 127 L 48.8 127.8 59.3 127.8 L 69.8 127.8 69.6 125.1 C 68.6 112.2, 59.8 102.2, 46.7 99.2 C 43.6 98.5, 35.3 98.2, 32 98.6 M 72.5 134.8 L 72.5 171.4 94.4 171.4 L 116.3 171.4 116.3 162.3 L 116.2 153.2 104.4 153.1 L 92.6 153 92.7 146.1 C 92.7 142.3, 92.8 130, 92.7 118.8 L 92.7 98.3 82.6 98.3 L 72.5 98.3 72.5 134.8 M 216.9 124.4 L 217 150.4 217.8 153.4 C 219.1 158.1, 220.8 161.1, 224.1 164.4 C 226.7 167, 227.3 167.5, 230.5 169 C 235.2 171.3, 238.2 172, 243.8 172.2 C 255.5 172.7, 265.2 168.4, 270.3 160.4 C 272.4 157.1, 273.4 154.7, 274.1 150.6 C 274.4 148.6, 274.8 105.2, 274.5 101 L 274.3 98.3 264.3 98.3 L 254.2 98.3 254.1 101.2 C 254 102.8, 253.9 113.8, 253.9 125.7 C 253.8 137.6, 253.7 147.6, 253.6 148.1 C 253.3 149.5, 252.2 151.2, 251.1 151.9 C 246.6 155.1, 240.2 153.8, 238.2 149.3 C 237.5 147.9, 237.5 147.5, 237.4 123.1 L 237.3 98.3 227.1 98.3 L 216.8 98.3 216.9 124.4 M 278.4 134.8 L 278.4 171.1 295 171 C 310.8 170.9, 311.7 170.9, 314.2 170.2 C 323.8 167.7, 329.5 164.2, 334.2 157.9 C 336.3 155, 337.5 152.7, 338.6 149.1 C 339.9 144.8, 340.1 142.3, 339.9 133.3 C 339.8 125.4, 339.7 124.7, 339 121.8 C 335.6 109.7, 326.9 101.9, 313.9 99.4 C 311.7 98.9, 308.3 98.8, 294.8 98.7 L 278.4 98.5 278.4 134.8 M 167 99.3 C 160.7 100.2, 155.1 103.1, 150.9 107.5 C 147.8 110.7, 145.9 113.7, 144.5 117.7 C 143.8 119.6, 143.3 120.1, 141.9 120.1 C 140 120.1, 135.6 121.3, 133.3 122.4 C 126 126.1, 121.4 131.7, 119.4 139.2 C 116.3 151.3, 121.7 163.5, 132.4 168.8 C 137.8 171.4, 135.5 171.2, 168.1 171.2 L 197.1 171.2 199.8 170.2 C 203.7 168.9, 205.7 167.6, 208.4 164.9 C 212.4 160.9, 214.5 156.2, 214.9 150.7 C 215.4 141, 210 132.4, 201.2 129.1 L 198.9 128.3 198.7 125.2 C 198.4 120.2, 197.1 116.2, 194.5 112.1 C 192.5 109, 191.2 107.6, 188.9 105.7 C 182.4 100.4, 174.6 98.1, 167 99.3 M 298.9 135 L 298.9 152.8 304.5 152.7 C 309.9 152.6, 310 152.6, 312.1 151.6 C 313.2 151, 314.9 149.9, 315.9 149 C 318.8 146.2, 319.8 142.6, 319.8 134.2 C 319.8 127.3, 318.9 123.9, 316.5 121.3 C 313.8 118.4, 310.1 117.3, 303.2 117.3 L 298.9 117.3 298.9 135 M 144.5 148.7 C 142.4 149.3, 141 151.9, 141.4 154.2 C 141.7 155.7, 143.2 157.3, 144.6 157.7 C 145.3 157.9, 149.9 158, 155.9 158 C 165.7 158, 166 158, 167.4 157.3 C 169.1 156.5, 169.9 155.1, 169.9 153.2 C 169.9 151.3, 169.1 149.9, 167.4 149.1 C 166 148.4, 165.8 148.4, 155.7 148.4 C 150.1 148.4, 145 148.6, 144.5 148.7 M 178.4 148.7 C 177.8 148.9, 177 149.5, 176.5 150.1 C 173.1 153.8, 177.2 159.5, 181.8 157.5 C 185.3 155.9, 185.4 150.9, 182 149.1 C 180.5 148.3, 179.9 148.3, 178.4 148.7 M 192.4 149 C 190 150.1, 189 153.1, 190.3 155.5 C 191.1 157.1, 193.3 158.2, 195.1 157.9 C 197.6 157.4, 199.4 154.8, 198.9 152.2 C 198.7 150.8, 197.1 149.1, 195.7 148.7 C 194.2 148.3, 193.8 148.3, 192.4 149"
+AD_LOGO_DOTS="M 144.5 148.7 C 142.4 149.3, 141 151.9, 141.4 154.2 C 141.7 155.7, 143.2 157.3, 144.6 157.7 C 145.3 157.9, 149.9 158, 155.9 158 C 165.7 158, 166 158, 167.4 157.3 C 169.1 156.5, 169.9 155.1, 169.9 153.2 C 169.9 151.3, 169.1 149.9, 167.4 149.1 C 166 148.4, 165.8 148.4, 155.7 148.4 C 150.1 148.4, 145 148.6, 144.5 148.7 M 178.4 148.7 C 177.8 148.9, 177 149.5, 176.5 150.1 C 173.1 153.8, 177.2 159.5, 181.8 157.5 C 185.3 155.9, 185.4 150.9, 182 149.1 C 180.5 148.3, 179.9 148.3, 178.4 148.7 M 192.4 149 C 190 150.1, 189 153.1, 190.3 155.5 C 191.1 157.1, 193.3 158.2, 195.1 157.9 C 197.6 157.4, 199.4 154.8, 198.9 152.2 C 198.7 150.8, 197.1 149.1, 195.7 148.7 C 194.2 148.3, 193.8 148.3, 192.4 149"
+
+# Флаги стран из макета — 🇳🇱 и 🇪🇪 картинками, а не текстом. Текстом их
+# рисовать нечем: цветной эмодзи-шрифт стоит далеко не на каждом VPS, а без
+# него librsvg подставит на месте флага пустые прямоугольники или голые буквы
+# NL/EE.
+#
+# Картинки взяты как есть, со всеми тенями и градиентом: обрезаны только
+# прозрачные поля, чтобы флаг занимал свою клетку целиком и размер задавался
+# явно. Цвета живут ровно до тех пор, пока хостинг не режет палитру, — за это
+# отвечает MT_IMGDB_TTL, см. комментарий у него. Плоскую заливку тут пробовали:
+# она квантование переживает, но выглядит ярче эмодзи и держится на волоске —
+# выживание красного переворачивалось от смены размера на один пиксель.
+AD_FLAG_NL="iVBORw0KGgoAAAANSUhEUgAAAEAAAAAuCAYAAACYlx/0AAAACXBIWXMAAAsSAAALEgHS3X78AAAJ6UlEQVRo3u2ae2yW1R3HX7c/lrhkIlll3FvoZdBWKJd1lHIpF5tSLVgEYqcy6FZg4yatUJgBMmDqRMvNcZGbYLFQQGwRBLcFlimJZC4BgUAwBBpShYBICCvy9j17Pqf9vZ6ePs/Tt52AS2jy7dv3ec/zPOfzOed3nvMmDTw+5fnAvcqhpUsf2DZjzg8lgcCDD7i147N3i1/86ZbJM7qWzZo9wkn+1qkzXy6dOmsbeWvKtEozHNtRWLyGNrTdXjg7jfO5jn1//atjp5E/uNuwvPcCpcN0HIjywjmHdxUVH90x84Xq8hlFQbJneqEiOwqmqvLxBTpvPzvRM+sn/LaGbJo09dN6KSO4D/d07aA24zEaXqE9sUG9RpZ2NqyAArf/+dnhVE6eriomTla7xj2ns31EbpBsfeyJWrI5fZjO2n4ZQTvrhmTVkg05Y7QMpPG6fPTTNW+MyZsbWJA+aBhTK5JR80tTwgR2+6zZ001YRtQGrcibUEv25uYFyb4nxtbuzcoN7R6SrbMnNUO90ytdZ1NSX531CT3V2ujualVMYqOs7JYSWpfUN4gkhImUxX36VQT4tSwrJ7Q0v+AARugkQux6iSScw7n1ozpCYJnGzYHdnzlKkX0Z2TqV6Y+pyn5DFeC7ew9U2x/tp95JTlVbu/VWm+N7qo1dkzX86o4JalWHeLWiXVe1rE1Mg3AcSchCxivde6m5sYnbAhMeiqrkDRLMetlQMOUYCwo1Q4Bhqkp4T2QxMiGlTv1gAXWD3T8gsw7YTD38nr6DtAA9+s0UwDHaIEEEzI5NKtMCilq3UxyQmqFepGZYYKgbrwAngLSVOiX2FHaD3ecANhUEaAn1Anam9NcCSrv39RRgS+C4r4A/tekcNOuFIIS6QYosOHZkQZL6NNNoJOsTCTRyJHYJIIAyMAW8WS+AtFiATBUaywLCCVI75K2UNB1ZhMzQMUInCSOmp64TGcXKCIDt7GtCAEGAXxk0S0BYghMuyIncANOEG1J/hE4wHQmdchNgw/vB2vnAEFD5i8GNBNAH6VckAuh7xAIEfq0F7yZA4EWA3+jbgH45MLBOwPv1AriuCIh0IRSeiAXYo+8lwG30bQFheCcy3b1AvdJSASLhngmgwwL/viXAD9hOuAycyONQngRuAmwJJkuLBDRV/8D7CWgO/EHn8WiG9py/11lky5377YjtoUqjE9WWDgnhbGgbq6P7G9VZlfykrXrtR60bBDZYzI1QIwG2MT8BwPvVv4ZvQoAJKiMNaGVSqg5/cy57h0NjnlUfTfy9Ojp3oTqxdqM6t/M9deqvf1dnPvq4QTj273ffU0e3lKq/lazQX5p4XPPk0rPZEQTXK3GP3gUBRu3rx5kBK6NqwvIZkMcWv6oBrx77TF2uvqBqvrqiamuDip/aUEjn1jffqGu3atSlr6/rfHnpkjr3RbVnzp49qz47flyLYeP2eq80VdS+y7cCFrdqG3Rb/d80BNj1bwtotPgZjy8TlvdusCao/XP79m1VU1Ojbty4oa5du6auXLmiLl++rKqrq9XFixfV+fPnNeSZM2fU6dOnQydPntTAEo5VVVVpWQg5fPiwWr1y5Z4AX4L4asgOUGqHV4IIE97r2U+kPu0AzhS2Yf9z42tXUD3CjgQ7CGDUb968qa5fvx6WwMgjAbhz5841kiDhPZ/R5vSJEyEE7Nq9syyAhcoP/xH6+MiRILWzf+ESvadnC6y/Yjo1Y0cWHRYgFiTg9TPe2fMLqNSpwALWJKxLG93uOxLA57TjbwS8vXVrWaCkpKSyvLxcIeDU5xca1A2mzIVFFhf5WxahL0+fUV9dvao7KDXaANIJABKvae71c6cElJaWNhQQrhfAnYtwAiK4iSw2LDxuoTbpGOFvQmepWxPca5S/NwKkMRfhYlI3dSdf0AsON+TGhIWI0adDAk8nBZ5Oh+H/HwVwEiusDQ+4CX9fwH0B9wXcEQHyqPSDl40QfaXfAm1vhL73AuSRGd4f+OwLCNdnj0HoB9tmO/RbZobwwHhPBTQC9YHlXK75edUVdfR4ldp76IRau+OIWrB8r8ov3qzGztikxk5bo7J/szIc3vNZ4aIt6vUNBxUbPdjkewUsrhuhOyVAEt4PeOwKBVQgf7dojwbMLNio0vLeUD1zl6vE7CUqPnORTvSQhTrt0+eF81DKzHAeTJwSIvydMHy+GvxMiRaHkAZb4YMfVOodndSLmwQ/AbYEUwTgbrBsqhjR0opP9CgVLNitQQc88xcNSoAmHBv03Gr9mv6rVarfuOUqdewylfLkn1WPnJe0lO5Zf9SQsUNfVDGD56nogcU6nQa8EI5I4vP+ufPUqPFzywJd+owrfyp/vtpUWhGUaWLWj4x+XaoaSQAeYNnx2dtcBMj0BZYRmPCHnWpo/vrwqArsoPFrVMav12kRhDaEYwgw4fuMfs0XHuAO/YvC4ThtOKdPzsJg4pBpCvbAw/HZFY8k5+npkjxifpD6oZN09p+fnNIzAQlAAyuLjgR4ZPA9gvZmjcoUNkFNWOBsWAEmYXinrT36kQpol1aoXzlGG9rCmTR8lkpIzy/TAtr2zg+2T50WorFZQ5zECb986qUQ9YMcvegYYdHp//QKPR2lPnlNylmqQ2fpvADZEVi/2AKA95r+5tS3BfC5qwBmAAI4iYZYFJti1KwfWXwEVk8rp1N0Dhl0VOo2HAdCpnhzc1cF2BKITB0iwIROEDpEGG066CriLguQ2v+fBIgELu4noSkBpoQWCahfALmm1L8twKv+75gAkeA1C7wERCpB2uo0IcBvAWyWABqKgKbKoEUCXGZBA1CPyPS3BUTyBLgnArwk2DPBM+biaYx+2ril+onUe9QSDaFn5pCiEIlJn1lL4HALXBEL8FoIWfVtAW7rgC3AqxRsUDdYwsaF9MyaozvOJqZr2qRgfP8JqlPvvHDgcAuPeYIgZHEdrtFsAZE8DWwBbqUgU5q9BRFYN9DugybpABuXWgfaNulJnai44dfstIoZXENax2YqM7SHk+uIvAYCZDNklkFLBNgSzNijCqiMhg0anZJ7Kzpl1BcxKaP+FdNz5IEOyY+va5eY9XLH5OxJUXFDR0YlZKT9rFtm16guGW3McOyRn2f24nPdLm5o8cMxg7dExQ37FEGI4NrcQ2+Fo+KHfyiGZKoggulii/B7GhBq04w5on6jGoZ1QAVSQzhA39U/cfJvfFqSIwWZ3E8L4IbmlJHpZdYOU0YWGakjM4AJnAkokAJaB1s3qtyc0aFDjFqHpNE/9us8Itwi/6Ap8WtnXpP7cV/9RswwVVp1HnjWTQgxFxyvSFtzCmOcUe3cIyfDb1S94L6rf9c1BX17zMOMWT+sE5RKXR1ZcY7Txq0+uVZzYO/mP2qL3P8CzAhAe9O30LsAAAAASUVORK5CYII="
+AD_FLAG_EE="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"
 
 # ============================================================
 #  Установка (--install)
@@ -905,9 +929,16 @@ capture_test() {
 # жизни ссылки задаётся параметром ttl (секунды). Допустимы только значения из
 # таблицы API: 3600 7200 18000 43200 86400 259200 604800 1209600 2592000 7776000
 # и 0 = бессрочно; любое другое хостинг молча превращает в 72 часа.
-# Ссылки дольше 72 ч он ужимает сильнее — карточку квантует до 9 цветов, но она
-# монохромная, так что фон, рамки и текст переживают это без потерь читаемости.
-MT_IMGDB_TTL="${MT_IMGDB_TTL:-0}"
+#
+# По умолчанию просим 72 часа, а не «бессрочно», и это не про место на диске.
+# Всё, что дольше, imgdb пережимает: одна и та же страница приезжает обратно с
+# 17 уникальными цветами вместо 825 (замерено — залил один файл с разными ttl
+# и сравнил ответы). Монохромной карточке это было безразлично, но в подписи
+# спонсора есть флаги, и на 17 цветах они выцветают в серое: слоты в палитре
+# достаются цветам по числу пикселей, а флаг занимает доли процента страницы.
+# На 72 часах палитру не трогают вовсе — 252 цвета, флаги и текст как были.
+# Кому нужна вечная ссылка, ставит MT_IMGDB_TTL=0 и мирится с флагами.
+MT_IMGDB_TTL="${MT_IMGDB_TTL:-259200}"
 
 up_imgdb() {
     local r url exp
@@ -1034,12 +1065,36 @@ ensure_rsvg() {
     return 1
 }
 
-# Best-effort: ставит шрифт для сводки. Приоритет — IBM Plex Sans: рисовался под
+# Качает шрифт и оставляет файл, только если это действительно TrueType
+# (магия 00 01 00 00): CDN на ошибке отдаёт HTML со статусом 200, а битый файл
+# в fontconfig ломает подбор молча — в картинке просто поедут метрики.
+mt_fetch_ttf() {
+    local url="$1" dst="$2"
+    if command -v curl &>/dev/null; then
+        curl -fsSL --max-time 30 "$url" -o "$dst" 2>/dev/null
+    else
+        wget -qO "$dst" "$url" 2>/dev/null
+    fi
+    [[ -s "$dst" ]] && [[ "$(head -c4 "$dst" 2>/dev/null | od -An -tx1 | tr -d ' \n')" == "00010000" ]] && return 0
+    rm -f "$dst"; return 1
+}
+
+# Каталог для шрифта: системный, если пускают, иначе пользовательский —
+# fontconfig подхватит оба.
+mt_font_dir() {
+    local d="/usr/share/fonts/truetype/$1"
+    mkdir -p "$d" 2>/dev/null && { printf '%s' "$d"; return 0; }
+    d="$HOME/.local/share/fonts/$1"
+    mkdir -p "$d" 2>/dev/null && printf '%s' "$d"
+}
+
+# Best-effort: ставит шрифты для сводки. Основной — IBM Plex Sans: рисовался под
 # технические интерфейсы, у него полная кириллица и ровные цифры, которые удобно
 # сканировать в столбик. Статические начертания качаем с CDN, в репозиториях
 # дистрибутивов его обычно нет. Запас — Roboto/Noto/DejaVu из пакетов; кириллица
 # есть во всех трёх. Никогда не фатальна: пакеты ставятся по одному, чтобы
 # отсутствие одного имени не валило остальные.
+# Второй — Google Sans Flex: им набрана подпись спонсора, так в макете.
 # librsvg игнорирует @font-face, поэтому шрифт обязан попасть в fontconfig.
 ensure_fonts() {
     command -v fc-list &>/dev/null || install_package fontconfig >/dev/null 2>&1
@@ -1049,24 +1104,28 @@ ensure_fonts() {
         got_plex=1
     else
         echo -e "${YELLOW}Загружаю шрифт IBM Plex Sans для сводки...${NC}"
-        local fdir="/usr/share/fonts/truetype/ibm-plex-sans"
-        mkdir -p "$fdir" 2>/dev/null || { fdir="$HOME/.local/share/fonts/ibm-plex-sans"; mkdir -p "$fdir" 2>/dev/null; }
-        local base="https://cdn.jsdelivr.net/npm/@expo-google-fonts/ibm-plex-sans" w f
+        local fdir; fdir=$(mt_font_dir ibm-plex-sans)
+        local base="https://cdn.jsdelivr.net/npm/@expo-google-fonts/ibm-plex-sans" w
         for w in 400Regular 600SemiBold 700Bold; do
-            f="$fdir/IBMPlexSans_${w}.ttf"
-            if command -v curl &>/dev/null; then
-                curl -fsSL --max-time 30 "$base/IBMPlexSans_${w}.ttf" -o "$f" 2>/dev/null
-            else
-                wget -qO "$f" "$base/IBMPlexSans_${w}.ttf" 2>/dev/null
-            fi
-            # держим только валидные TTF (магия 00 01 00 00), битые удаляем
-            if [[ -s "$f" ]] && [[ "$(head -c4 "$f" 2>/dev/null | od -An -tx1 | tr -d ' \n')" == "00010000" ]]; then
-                got_plex=1
-            else
-                rm -f "$f"
-            fi
+            mt_fetch_ttf "$base/IBMPlexSans_${w}.ttf" "$fdir/IBMPlexSans_${w}.ttf" && got_plex=1
         done
         [[ $got_plex -eq 1 ]] || echo -e "${YELLOW}IBM Plex Sans недоступен — использую запасной шрифт.${NC}"
+    fi
+
+    # Google Sans Flex — только для подписи спонсора, поэтому и без него сводка
+    # соберётся: не нашёлся — подпись наберётся тем же Plex.
+    # Адрес TTF спрашиваем у самого Google Fonts: статические файлы лежат по
+    # версионным путям с хэшем, зашить такой в скрипт — однажды получить 404.
+    # UA при этом не подменяем: браузерам API отдаёт woff2, а его fontconfig
+    # не понимает — «безымянному» клиенту вроде curl достаётся именно TTF.
+    if ! fc-list 2>/dev/null | grep -qi 'Google *Sans *Flex'; then
+        local gdir; gdir=$(mt_font_dir google-sans-flex)
+        local css u i=0
+        css=$(curl -fsSL --max-time 20 'https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@400' 2>/dev/null)
+        while read -r u; do
+            [[ -n "$u" ]] || continue
+            i=$((i+1)); mt_fetch_ttf "$u" "$gdir/GoogleSansFlex-${i}.ttf"
+        done < <(printf '%s' "$css" | grep -oE 'https://[^)]+\.ttf')
     fi
 
     # Запасные шрифты ставим только если Plex не получен и Roboto ещё нет.
@@ -1370,7 +1429,7 @@ parse_ipregion() {
     cons4=$(printf '%s\n' "$rows" | awk -F'\t' '$2 ~ /^[A-Z]{2}$/ {c[$2]++} END{m="";x=0;for(k in c)if(c[k]>x){x=c[k];m=k};print m}')
     cons6=$(printf '%s\n' "$rows" | awk -F'\t' '$3 ~ /^[A-Z]{2}$/ {c[$3]++} END{m="";x=0;for(k in c)if(c[k]>x){x=c[k];m=k};print m}')
     # cut -c резал байты и обрывал имя на полуслове без всякого знака, что оно
-    # продолжается («AS218914 Datagio Syste»); vcut считает символы и ставит многоточие
+    # продолжается («AS64496 Example Hostin»); vcut считает символы и ставит многоточие
     asn=$(printf '%s\n' "$txt" | grep -m1 -iE '^ASN:' | sed -E 's/^ASN:[[:space:]]*//I')
     [[ -n "$asn" ]] && asn=$(vcut "$asn" 32)
     # Считаем порознь: на карточке это и так два разных блока, а одно число на оба
@@ -1914,7 +1973,12 @@ mt_style_init() {
     C_LINE="#262626"; C_LINE2="#3D3D3D"
     C_TXT="#F2F2F2"; C_TXT2="#9C9C9C"; C_TXT3="#757575"; C_FOOT="#545454"
     C_INV="#E6E6E6"; C_INK="#0A0A0A"; C_MARK="#C6C6C6"
-    C_AD="#875FFF"
+    # Единственный цвет на всей карточке — фирменный фиолетовый спонсора.
+    # Оба тона сняты пипеткой с логотипа, а не подобраны на глаз.
+    C_AD_W="#FAF7FE"; C_AD_V="#935BF4"
+    # Шрифт подписи спонсора: в макете Google Sans Flex, но ставится он
+    # best-effort — если не встал, подпись наберётся основным шрифтом сводки.
+    F_AD="'Google Sans Flex', 'IBM Plex Sans', Roboto, 'Noto Sans', 'DejaVu Sans', sans-serif"
     W=1100; PAD=32; IPAD=28; CARDW=$((W-2*PAD))
     # колонки блока сервисов — их читают rs_flush/render_services
     colw=$(( (CARDW-2*IPAD-32)/2 ))
@@ -1977,7 +2041,8 @@ sv_head_full() {
     (( MT_SKIP > 0 )) && extra="пропущено: $MT_SKIP"
     (( MT_ERR  > 0 )) && extra="${extra:+$extra · }с ошибкой: $MT_ERR"
     [[ -n "$extra" ]] && sv "<text x=\"$xr\" y=\"$((Y+80))\" text-anchor=\"end\" fill=\"$C_TXT3\" font-size=\"12\">$extra</text>"
-    MT_Y=$((Y+96))
+    sv "<line x1=\"$PAD\" y1=\"$((Y+100))\" x2=\"$xr\" y2=\"$((Y+100))\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
+    MT_Y=$((Y+126))
 }
 
 # Шапка страницы теста: та же идентификация, но в одну полосу — на странице
@@ -1988,28 +2053,67 @@ sv_head_slim() {
     sv "<text x=\"$PAD\" y=\"$((Y+42))\" fill=\"$C_TXT3\" font-size=\"12\">$(sv_esc "$(mt_ident_line)")</text>"
     sv "<text x=\"$xr\" y=\"$((Y+22))\" text-anchor=\"end\" fill=\"$C_TXT\" font-size=\"20\" font-weight=\"700\">${MT_PAGE_I} / ${MT_PAGE_N}</text>"
     sv "<text x=\"$xr\" y=\"$((Y+42))\" text-anchor=\"end\" fill=\"$C_TXT3\" font-size=\"10.5\" letter-spacing=\"1.4\">СТРАНИЦА</text>"
-    # линейки-разделителя нет: под шапкой идёт плашка спонсора, и её рамка
-    # отбивает колонтитул сама — по той же причине, что и на обложке
-    MT_Y=$((Y+66))
+    sv "<line x1=\"$PAD\" y1=\"$((Y+66))\" x2=\"$xr\" y2=\"$((Y+66))\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
+    MT_Y=$((Y+88))
 }
 
-# Марка спонсора: x y высота. Ширина считается по пропорции контура.
-sv_ad_logo() {
-    local x="$1" y="$2" h="$3"
-    local scl; scl=$(awk "BEGIN{printf \"%.5f\", $h/$AD_LOGO_H}")
-    sv "<g transform=\"translate($x,$y) scale($scl)\"><path d=\"$AD_LOGO_PATH\" fill=\"$C_TXT\" fill-rule=\"evenodd\"/></g>"
+# --- Подпись спонсора -------------------------------------------------------
+# Раньше спонсор занимал полосу во всю ширину сразу под шапкой — первое, что
+# видел человек, открывший свою же диагностику. Теперь это подпись в подвале,
+# рядом с выходными данными: держится на каждой странице (из альбома пересылают
+# по одной картинке, и страница без упоминания уезжает в чужой чат ничьей),
+# но не спорит с содержимым.
+#
+# Раскладка из макета: две строки марки задают сетку, на верхнюю ложится
+# промокод, на нижнюю — флаги и скидка. Марка трёхцветная, поэтому рисуется
+# тремя путями поверх одной трансформации.
+AD_H=50                    # полная высота подписи, от «powered by» до низа марки
+AD_MARKH=36                # высота чернил марки
+AD_MARKW=71                # её ширина при этой высоте: 340 × 36 / 172.3
+AD_FLAGW=16; AD_FLAGH=11.5 # флаг: пропорции исходной картинки, 64 × 46
+
+# Ширина правой колонки. Считаем по символам, как остальные чипы карточки:
+# ширины строк известны (промокод и скидка — константы), а точных метрик
+# шрифта в bash всё равно нет. Оценка идёт с запасом по самому широкому из
+# возможных шрифтов, лишнее уходит в поле страницы и в глаза не бросается.
+sv_ad_rw() {
+    local wp wo
+    wp=$(( ($(vlen "$AD_PROMO")*164)/10 ))                        # 22px + трекинг
+    wo=$(( AD_FLAGW*2 + 11 + ($(vlen "$AD_DISCOUNT")*106)/10 ))   # флаги + 15.5px
+    (( wo > wp )) && wp=$wo
+    echo "$wp"
 }
 
-# Баннер спонсора (встаёт на место линейки-разделителя шапки: рамка блока сама
-# отбивает колонтитул от карточек, вторая линия рядом шумит). Слева внутри
-# плашки — марка: она заняла место прежней вертикальной полоски-акцента,
-# которая была ровно тем же «здесь начинается блок», только без имени.
-sv_banner() {
-    local Y="$1" ADH=42 LH=28
-    sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$ADH\" rx=\"6\" fill=\"$C_SC\" stroke=\"$C_AD\" stroke-width=\"2\"/>"
-    sv_ad_logo $((PAD+13)) $((Y+(ADH-LH)/2)) "$LH"
-    sv "<text x=\"$((PAD+CARDW/2))\" y=\"$((Y+27))\" text-anchor=\"middle\" fill=\"$C_TXT\" font-size=\"14\" font-weight=\"700\" letter-spacing=\"1.5\">$(sv_esc "$AD_TEXT")</text>"
-    MT_Y=$((Y+ADH+26))
+# Подпись целиком: xr — правый край (равняется по краю карточек), Y — верх.
+sv_sponsor() {
+    local xr="$1" Y="$2" rw x0 rx
+    rw=$(sv_ad_rw)
+    x0=$(( xr - rw - 18 - AD_MARKW )); rx=$(( xr - rw ))
+
+    # «powered by» тоном ниже марки: в макете оно белое, но там это отдельная
+    # заставка, а в подвале белая строка встаёт вровень с самим логотипом и
+    # читается его частью.
+    sv "<text x=\"$x0\" y=\"$((Y+11))\" fill=\"$C_TXT2\" font-family=\"$F_AD\" font-size=\"11\" letter-spacing=\"0.2\">powered by</text>"
+    # Контур начинается в нуле, так что верх чернил просто садится в (x0, Y+14).
+    # Дальше по строкам: центр STEN выходит на Y+23, центр CLOUD — на Y+42,
+    # от них и посчитаны базовые линии правой колонки.
+    sv "<g transform=\"translate($x0,$((Y+14))) scale($(awk "BEGIN{printf \"%.5f\", $AD_MARKH/$AD_INK_H}"))\">"
+    sv "<path d=\"$AD_LOGO_STEN\" fill=\"$C_AD_W\" fill-rule=\"evenodd\"/>"
+    sv "<path d=\"$AD_LOGO_CLOUD\" fill=\"$C_AD_V\" fill-rule=\"evenodd\"/>"
+    sv "<path d=\"$AD_LOGO_DOTS\" fill=\"$C_AD_W\" fill-rule=\"evenodd\"/></g>"
+
+    # строка STEN — промокод
+    sv "<text x=\"$rx\" y=\"$((Y+31))\" fill=\"$C_TXT\" font-family=\"$F_AD\" font-size=\"22\" letter-spacing=\"1.2\">$(sv_esc "$AD_PROMO")</text>"
+    # строка CLOUD — флаги и скидка; флаги центруются по её базовой линии
+    sv_ad_flag "$rx" $((Y+37)) "$AD_FLAG_NL"
+    sv_ad_flag $((rx+AD_FLAGW+5)) $((Y+37)) "$AD_FLAG_EE"
+    sv "<text x=\"$((rx+AD_FLAGW*2+11))\" y=\"$((Y+48))\" fill=\"$C_TXT\" font-family=\"$F_AD\" font-size=\"15.5\">$(sv_esc "$AD_DISCOUNT")</text>"
+}
+
+# Флаг: x y base64. xlink:href — ради librsvg старых веток, они знают
+# только его; современные понимают оба, и лишний атрибут им не мешает.
+sv_ad_flag() {
+    sv "<image x=\"$1\" y=\"$2\" width=\"$AD_FLAGW\" height=\"$AD_FLAGH\" href=\"data:image/png;base64,$3\" xlink:href=\"data:image/png;base64,$3\"/>"
 }
 
 # Карточка «Сервер» (label|value; подписи сразу заглавными — локале-прочно).
@@ -2160,17 +2264,24 @@ sv_test_card() {
 # холст до MT_PAGE_MINH, чтобы в ленте альбома все картинки были одного порядка.
 MT_PAGE_MINH="${MT_PAGE_MINH:-520}"
 
+# Подпись спонсора живёт здесь же, у правого края: выходные данные и «кто это
+# оплатил» — одна и та же строка мелкого шрифта, разносить их по разным углам
+# страницы незачем. Низ подписи садится на базовую линию выходных данных.
 sv_footer_and_close() {
     local Y="$1" note="$2"
     # отдельным оператором: bash раскрывает все слова `local` до присваиваний,
     # и в `local Y="$1" footY=$((Y+34))` подвал считался бы от пустого Y
-    local footY=$((Y+34)) SVGH
+    local footY=$((Y+34+AD_H)) SVGH
     (( footY + 14 < MT_PAGE_MINH )) && footY=$(( MT_PAGE_MINH - 14 ))
+    sv_sponsor $((PAD+CARDW)) $((footY-AD_H))
     sv "<text x=\"$PAD\" y=\"$footY\" fill=\"$C_FOOT\" font-size=\"12\">$(sv_esc "$note")</text>"
     SVGH=$((footY+24))
     MT_PAGE_H=$SVGH
+    # xmlns:xlink объявлен ради флагов в подписи: старые ветки librsvg знают у
+    # <image> только xlink:href, а без объявления пространства имён такой
+    # документ для них просто битый.
     cat <<HEAD
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 $W $SVGH" text-rendering="geometricPrecision" font-family="'IBM Plex Sans', Roboto, 'Noto Sans', 'DejaVu Sans', sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 $W $SVGH" text-rendering="geometricPrecision" font-family="'IBM Plex Sans', Roboto, 'Noto Sans', 'DejaVu Sans', sans-serif">
 <rect width="$W" height="$SVGH" fill="$C_BG"/>
 HEAD
     printf '%s' "$SVG_BODY"
@@ -2179,12 +2290,11 @@ HEAD
 
 # --- Страницы альбома -------------------------------------------------------
 
-# Обложка: шапка со счётом, баннер, характеристики сервера, оглавление альбома.
+# Обложка: шапка со счётом, характеристики сервера, оглавление альбома.
 build_page_cover() {
     SVG_BODY=""
     local date_e; date_e=$(date '+%Y-%m-%d %H:%M')
     sv_head_full "$PAD"
-    sv_banner "$MT_Y"
     sv_card_server "$MT_Y"
     sv_card_toc "$MT_Y"
     sv_offnames "$MT_Y"
@@ -2197,14 +2307,13 @@ build_page_test() {
     SVG_BODY=""
     local date_e; date_e=$(date '+%Y-%m-%d %H:%M')
     sv_head_slim "$PAD"
-    sv_banner "$MT_Y"
     local top=$MT_Y
     # Сперва меряем карточку вхолостую. Короткая страница (пропущенный тест —
     # это заголовок и строчка пояснения) иначе прижимала бы всё к шапке, а нижняя
     # треть картинки оставалась бы пустой: в ленте альбома это читается как
     # «страница не догрузилась». Остаток высоты делим поровну — поля сверху и снизу.
     sv_test_card "$idx" 0 0
-    local natural=$(( top + CARD_H + 58 ))
+    local natural=$(( top + CARD_H + 58 + AD_H ))
     (( natural < MT_PAGE_MINH )) && top=$(( top + (MT_PAGE_MINH - natural)/2 ))
     sv_test_card "$idx" "$top" 1
     sv_footer_and_close $((top+CARD_H)) "multitest v${SCRIPT_VERSION} · ${date_e} · страница ${MT_PAGE_I} из ${MT_PAGE_N}"
@@ -2220,7 +2329,6 @@ build_summary_svg() {
     local date_e; date_e=$(date '+%Y-%m-%d %H:%M')
 
     sv_head_full "$PAD"
-    sv_banner "$MT_Y"
     sv_card_server "$MT_Y"
 
     local Y=$MT_Y i idx
