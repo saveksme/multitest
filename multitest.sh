@@ -1429,7 +1429,7 @@ parse_ipregion() {
     cons4=$(printf '%s\n' "$rows" | awk -F'\t' '$2 ~ /^[A-Z]{2}$/ {c[$2]++} END{m="";x=0;for(k in c)if(c[k]>x){x=c[k];m=k};print m}')
     cons6=$(printf '%s\n' "$rows" | awk -F'\t' '$3 ~ /^[A-Z]{2}$/ {c[$3]++} END{m="";x=0;for(k in c)if(c[k]>x){x=c[k];m=k};print m}')
     # cut -c резал байты и обрывал имя на полуслове без всякого знака, что оно
-    # продолжается («AS218914 Datagio Syste»); vcut считает символы и ставит многоточие
+    # продолжается («AS64496 Example Hostin»); vcut считает символы и ставит многоточие
     asn=$(printf '%s\n' "$txt" | grep -m1 -iE '^ASN:' | sed -E 's/^ASN:[[:space:]]*//I')
     [[ -n "$asn" ]] && asn=$(vcut "$asn" 32)
     # Считаем порознь: на карточке это и так два разных блока, а одно число на оба
