@@ -1097,7 +1097,7 @@ show_utilities_menu() {
         echo -e "  ${RED}0)${NC}  Назад"
         echo ""
         echo -ne "  ${BOLD}Выберите пункт [0-2]: ${NC}"
-        read -r util_choice
+        read -r util_choice || return 0
 
         case "$util_choice" in
             1) if [[ $bbr_on -eq 1 ]]; then disable_bbr_cake; else enable_bbr_cake; fi; pause_prompt ;;
@@ -4163,6 +4163,24 @@ show_menu() {
 # Позволяет подключить функции для тестов: MULTITEST_TEST=1 source multitest.sh
 [[ "${MULTITEST_TEST:-0}" == "1" ]] && return 0 2>/dev/null
 
+mt_cli_help() {
+    echo "Использование: multitest [параметр]"
+    echo "  (без параметров)  интерактивное меню"
+    echo "  --install         установить как команду multitest"
+    echo "  --help            эта справка"
+}
+
+# Флаги разбираем здесь, а не в начале файла: ниже этой строки определено уже всё.
+# Каждый режим завершает процесс; незнакомый флаг в меню не проваливается.
+mt_cli_dispatch() {
+    case "${1:-}" in
+        "") return 0 ;;
+        -h|--help) mt_cli_help; exit 0 ;;
+        *) echo "Неизвестный параметр: $1" >&2; mt_cli_help >&2; exit 2 ;;
+    esac
+}
+mt_cli_dispatch "$@"
+
 # Ctrl+C на приглашении меню убивает скрипт прямо в read, мимо строки с
 # очисткой ниже: блок спонсора остаётся на экране, и шелл потом затирает его
 # по одной строке на каждую свою новую. Поэтому на выходе по сигналу стираем
@@ -4178,7 +4196,8 @@ while true; do
     # Ставим до отрисовки: сигнал может прийти и посреди печати блока.
     trap mt_menu_sigint INT
     show_menu
-    read -r choice
+    # Конец ввода (stdin закрыт, не терминал) — выходим, а не крутим меню вечно.
+    read -r choice || { [[ "${MT_PROMO_BELOW:-0}" == "1" ]] && printf '\033[J'; echo; exit 0; }
     trap - INT
     # Блок спонсора висит ниже строки ввода — стираем его до низа экрана,
     # иначе вывод теста ляжет прямо поверх букв.
