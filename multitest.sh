@@ -519,9 +519,36 @@ pad_to() {
     while (( l < w )); do printf ' '; l=$((l+1)); done
 }
 
+# Каталог тестов: порядок = нумерация в главном меню и порядок страниц альбома.
+# Это же белый список: capture_test и задания из Telegram запускают только эти
+# функции. Оценки времени грубые, порядок величины — прикинуть цену выбора.
+MT_CAT_FUNCS=( run_ip_region run_censorcheck_geoblock run_censorcheck_dpi \
+               run_censorcheck_tlab run_iperf3_ru run_iperf3_tlab run_yabs \
+               run_ip_check_place run_bench_sh run_ip_quality run_sysbench_cpu \
+               run_ping_map )
+MT_CAT_NAMES=( "IP Region" \
+               "Censorcheck — проверка геоблока" \
+               "Censorcheck — DPI (серверы РФ)" \
+               "Censorcheck — censorcheck.tlab.pw" \
+               "iPerf3 — тест до российских серверов" \
+               "iPerf3 — bench.tlab.pw (РФ)" \
+               "YABS — бенчмарк сервера" \
+               "IP Check Place — блокировки зарубежных сервисов" \
+               "bench.sh — параметры сервера и скорость" \
+               "IPQuality" \
+               "sysbench CPU — тест процессора" \
+               "Ping-карта — check-host.net" )
+MT_CAT_SECS=(  40 120 180 120 180 120 720 180 300 180 15 60 )
+
+mt_is_test_fn() {
+    local f
+    for f in "${MT_CAT_FUNCS[@]}"; do [[ "$1" == "$f" ]] && return 0; done
+    return 1
+}
+
 # Интерактивный выбор тестов: стрелки — навигация, пробел — отметить.
 # Заполняет MT_SEL (1 на выбранный тест). Возврат 1 — пользователь отменил.
-# Читает all_funcs/all_names/all_secs из вызывающей run_all.
+# Читает all_funcs/all_names/all_secs из вызывающей run_all (копии MT_CAT_*).
 mt_select_tests() {
     local n=${#all_funcs[@]} cur=0 i key rest need eta total selected
     MT_SEL=(); for ((i=0;i<n;i++)); do MT_SEL[$i]=1; done
@@ -597,25 +624,10 @@ mt_select_tests() {
 run_all() {
     print_separator "МУЛЬТИТЕСТ — выбор тестов"
 
-    # --- Полный каталог тестов (порядок = нумерация в главном меню) ---
-    # Оценки времени грубые, порядок величины: нужны, чтобы прикинуть цену выбора.
-    local all_funcs=( "run_ip_region" "run_censorcheck_geoblock" "run_censorcheck_dpi" \
-                      "run_censorcheck_tlab" "run_iperf3_ru" "run_iperf3_tlab" "run_yabs" \
-                      "run_ip_check_place" "run_bench_sh" "run_ip_quality" "run_sysbench_cpu" \
-                      "run_ping_map" )
-    local all_names=( "IP Region" \
-                      "Censorcheck — проверка геоблока" \
-                      "Censorcheck — DPI (серверы РФ)" \
-                      "Censorcheck — censorcheck.tlab.pw" \
-                      "iPerf3 — тест до российских серверов" \
-                      "iPerf3 — bench.tlab.pw (РФ)" \
-                      "YABS — бенчмарк сервера" \
-                      "IP Check Place — блокировки зарубежных сервисов" \
-                      "bench.sh — параметры сервера и скорость" \
-                      "IPQuality" \
-                      "sysbench CPU — тест процессора" \
-                      "Ping-карта — check-host.net" )
-    local all_secs=(  40 120 180 120 180 120 720 180 300 180 15 60 )
+    # --- Полный каталог тестов — MT_CAT_* (см. выше) ---
+    local all_funcs=( "${MT_CAT_FUNCS[@]}" )
+    local all_names=( "${MT_CAT_NAMES[@]}" )
+    local all_secs=( "${MT_CAT_SECS[@]}" )
     local catalog_total=${#all_funcs[@]}
 
     # --- Выбор тестов ---
@@ -693,9 +705,8 @@ run_all() {
     echo ""
     install_deps_for "${test_funcs[@]}"
 
-    # Каталог + статусы для сводки (в картинке показываем и невыбранные тесты)
-    MT_CAT_FUNCS=( "${all_funcs[@]}" )
-    MT_CAT_NAMES=( "${all_names[@]}" )
+    # Статусы для сводки (каталог MT_CAT_* — глобальный: в картинке показываем
+    # и невыбранные тесты)
     declare -gA MT_STATUS=()
     local _f
     for _f in "${test_funcs[@]}"; do MT_STATUS["$_f"]="пропущен"; done
@@ -1121,12 +1132,13 @@ capture_test() {
     local fn="$1"
     local logfile="$2"
 
+    # Имя теста ниже попадает в строку команды для script -c: только из каталога,
+    # иначе это инъекция (а с заданиями из Telegram имя приходит снаружи).
+    mt_is_test_fn "$fn" || { echo "capture_test: неизвестный тест «$fn»" >&2; return 2; }
+
     export RED GREEN YELLOW CYAN BOLD NC SCRIPT_VERSION
     export -f print_separator check_and_install install_package detect_pkg_manager
-    export -f run_ip_region run_censorcheck_geoblock run_censorcheck_dpi \
-              run_censorcheck_tlab run_iperf3_ru run_iperf3_tlab run_yabs \
-              run_ip_check_place run_bench_sh run_ip_quality run_sysbench_cpu \
-              run_ping_map
+    export -f "${MT_CAT_FUNCS[@]}"
 
     if [[ "$SCRIPT_CAPTURE" == "util" ]]; then
         COLUMNS=200 script -q -c "stty cols 200 2>/dev/null; bash -c '$fn'" "$logfile"
