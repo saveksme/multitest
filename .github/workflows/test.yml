@@ -1,0 +1,21 @@
+name: tests
+on: [push, pull_request]
+jobs:
+  ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash -n multitest.sh
+      - run: shellcheck -S error multitest.sh
+      - run: bash tests/run.sh
+  distros:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [debian:12, ubuntu:20.04, rockylinux:9, centos:7, alpine:3.20]
+    steps:
+      - uses: actions/checkout@v4
+      - run: >
+          docker run --rm -v "$PWD:/w" -w /w ${{ matrix.image }}
+          sh -c 'command -v bash >/dev/null || apk add --no-cache bash >/dev/null; bash tests/run.sh'
