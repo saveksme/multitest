@@ -27,6 +27,18 @@ AD_PROMO="BEDOLAGA"        # промокод
 AD_DISCOUNT="−20%"         # скидка по нему
 AD_BOT="@stencloudbot"     # куда идти за сервером
 
+# Telegram-бот Multitest: ссылка на бота зашита, пользователь бота не указывает.
+# Секретов в скрипте нет — ключ сервера создаётся на месте при привязке и живёт
+# в $MT_STATE_DIR/agent.conf (0600). Переопределение через окружение — для стенда.
+MT_BOT_USERNAME="${MT_BOT_USERNAME:-multitestus_bot}"
+MT_BOT_API="${MT_BOT_API:-https://mtbot.sixseven.cam}"
+MT_STATE_DIR="${MT_STATE_DIR:-/etc/multitest}"
+MT_CONF="$MT_STATE_DIR/agent.conf"
+MT_CURL="${MT_CURL:-curl}"         # тесты подменяют curl
+MT_TTY="${MT_TTY:-/dev/tty}"       # вопросы привязки — только с клавиатуры
+MT_SRV_ID=""; MT_SRV_TOKEN=""; MT_API=""; MT_BOT=""
+MT_RESP=""; MT_RESP_V=""; MT_RESP_A=()
+
 # Марка спонсора для подписи: контур обведён с растрового логотипа
 # (assets/brand/stencloud.png, там же лежит читаемая копия stencloud.svg) —
 # держать её вектором обязательно, скрипт качают одним файлом, а PNG в base64
@@ -1106,6 +1118,127 @@ show_utilities_menu() {
             *) echo -e "${RED}Неверный выбор.${NC}"; pause_prompt ;;
         esac
     done
+}
+
+# ============================================================
+#  Telegram-бот: ключ, запросы к API, конфиг
+# ============================================================
+# Протокол — docs/telegram-protocol.md. Ответы API — одна строка text/plain,
+# разбор регулярками, без eval/source/jq.
+
+mt_tg_configured() { [[ -n "$MT_BOT_API" && -n "$MT_BOT_USERNAME" ]]; }
+
+# Ключ сервера: mtk_ + 64 hex из /dev/urandom. Префикс — чтобы сканеры секретов
+# (gitleaks, GitHub) узнавали ключ, если он где-то утечёт.
+mt_tok_new() {
+    local h
+    h=$(od -An -N32 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n')
+    [[ ${#h} -eq 64 ]] || return 1
+    printf 'mtk_%s' "$h"
+}
+
+# Запрос к API бота: mt_api МЕТОД ПУТЬ ФАЙЛ_ОТВЕТА [аргументы curl…].
+# stdout — HTTP-код (000 — нет связи), код возврата — код curl. Ключ уходит
+# заголовком через конфиг curl из stdin (-K -): в argv и в ps его нет. Только
+# https, без редиректов (-L) и без -k. На время вызова xtrace выключаем — иначе
+# `bash -x` напечатал бы ключ.
+mt_api() {
+    local method="$1" path="$2" out="$3" xt=0 rc
+    shift 3
+    [[ $- == *x* ]] && { xt=1; set +x; }
+    local base="${MT_API:-$MT_BOT_API}"
+    local -a args=(-sS --proto =https --proto-redir =https --connect-timeout 10
+                   --max-time "${MT_API_MAXTIME:-30}" -A "$MT_UA" -o "$out" -w '%{http_code}')
+    [[ "$method" == GET ]] && args+=(-G)
+    [[ "$method" == POST && $# -eq 0 ]] && args+=(--data '')
+    if [[ -n "$MT_SRV_TOKEN" ]]; then
+        printf 'header = "Authorization: Bearer %s"\n' "$MT_SRV_TOKEN" \
+            | "$MT_CURL" -K - "${args[@]}" "$@" "${base%/}$path"
+    else
+        "$MT_CURL" "${args[@]}" "$@" "${base%/}$path" </dev/null
+    fi
+    rc=$?
+    (( xt )) && set -x
+    return $rc
+}
+
+# Первая строка ответа (≤ 2048 байт) → MT_RESP; первый токен → MT_RESP_V,
+# остальные → MT_RESP_A. 1 — ответ пустой.
+mt_resp() {
+    local line="" rest LC_ALL=C
+    MT_RESP=""; MT_RESP_V=""; MT_RESP_A=()
+    [[ -s "$1" ]] || return 1
+    IFS= read -r line < <(head -c 2048 "$1") || [[ -n "$line" ]] || return 1
+    MT_RESP="${line%$'\r'}"
+    read -r MT_RESP_V rest <<< "$MT_RESP"
+    read -ra MT_RESP_A <<< "$rest"
+    [[ -n "$MT_RESP_V" ]]
+}
+
+# Текст от бэкенда перед выводом в терминал: без ESC и прочих управляющих, без C1
+# в UTF-8 (CSI и компания). Иначе ответ сервера мог бы управлять терминалом.
+mt_clean() {
+    local s="$1" LC_ALL=C
+    s=${s//$'\xc2'[$'\x80'-$'\x9f']/}
+    s=${s//[$'\t\r\n\x1f']/}
+    s=${s//[$MT_SUM_CTRL]/}
+    printf '%s' "$s"
+}
+
+# Строки 2…61 ответа (QR и т. п.) — построчно через mt_clean.
+mt_resp_body() {
+    local l
+    tail -n +2 "$1" 2>/dev/null | head -n 60 | while IFS= read -r l || [[ -n "$l" ]]; do
+        mt_clean "$l"; echo
+    done
+}
+
+# agent.conf — данные, а не код: построчно KEY=value по белому списку ключей,
+# значения — по регуляркам, никакого source. 0 — прочитан, 1 — файла нет,
+# 78 — испорчен (тогда ничего не трогаем и не удаляем).
+mt_conf_load() {
+    local line k v id="" tok="" api="" bot="" LC_ALL=C
+    [[ -f "$MT_CONF" ]] || return 1
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line=${line%$'\r'}
+        [[ -z "$line" || "$line" == \#* ]] && continue
+        [[ "$line" =~ ^([A-Z_]+)=(.*)$ ]] || return 78
+        k="${BASH_REMATCH[1]}"; v="${BASH_REMATCH[2]}"
+        case "$k" in
+            MT_SRV_ID)    [[ "$v" =~ ^[A-Za-z0-9]{8,32}$ ]] || return 78; id="$v" ;;
+            MT_SRV_TOKEN) [[ "$v" =~ ^mtk_[0-9a-f]{64}$ ]] || return 78; tok="$v" ;;
+            MT_API)       [[ "$v" =~ ^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?$ ]] || return 78; api="$v" ;;
+            MT_BOT)       [[ "$v" =~ ^[A-Za-z0-9_]{5,32}$ ]] || return 78; bot="$v" ;;
+            *)            return 78 ;;
+        esac
+    done < "$MT_CONF"
+    [[ -n "$id" && -n "$tok" && -n "$api" && -n "$bot" ]] || return 78
+    MT_SRV_ID="$id"; MT_SRV_TOKEN="$tok"; MT_API="$api"; MT_BOT="$bot"
+}
+
+# Запись атомарно: временный файл в том же каталоге под umask 077, потом mv.
+mt_conf_save() {
+    local xt=0 rc
+    [[ $- == *x* ]] && { xt=1; set +x; }
+    (
+        umask 077
+        mkdir -p "$MT_STATE_DIR" && chmod 700 "$MT_STATE_DIR" || exit 1
+        tmp=$(mktemp "$MT_STATE_DIR/.agent.conf.XXXXXX") || exit 1
+        if printf 'MT_SRV_ID=%s\nMT_SRV_TOKEN=%s\nMT_API=%s\nMT_BOT=%s\n' \
+                "$MT_SRV_ID" "$MT_SRV_TOKEN" "$MT_API" "$MT_BOT" > "$tmp" \
+            && chmod 600 "$tmp" && mv -f "$tmp" "$MT_CONF"; then
+            exit 0
+        fi
+        rm -f "$tmp"; exit 1
+    )
+    rc=$?
+    (( xt )) && set -x
+    return $rc
+}
+
+mt_conf_wipe() {
+    rm -f "$MT_CONF"
+    MT_SRV_ID=""; MT_SRV_TOKEN=""; MT_API=""; MT_BOT=""
 }
 
 # ============================================================
