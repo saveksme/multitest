@@ -267,7 +267,7 @@ run_censorcheck_dpi() {
 run_censorcheck_tlab() {
     print_separator "Censorcheck — censorcheck.tlab.pw"
     check_and_install wget
-    wget -qO- censorcheck.tlab.pw | bash
+    wget -qO- https://censorcheck.tlab.pw | bash
 }
 
 run_iperf3_ru() {
@@ -283,13 +283,13 @@ run_iperf3_tlab() {
     check_and_install wget
     check_and_install iperf3
     check_and_install jq
-    wget -qO- bench.tlab.pw | bash
+    wget -qO- https://bench.tlab.pw | bash
 }
 
 run_yabs() {
     print_separator "YABS — бенчмарк сервера"
     check_and_install curl
-    curl -sL yabs.sh | bash -s -- -4
+    curl -sL https://yabs.sh | bash -s -- -4
 }
 
 run_ip_check_place() {
@@ -303,7 +303,7 @@ run_ip_check_place() {
 run_bench_sh() {
     print_separator "bench.sh — параметры сервера и скорость"
     check_and_install wget
-    wget -qO- bench.sh | bash
+    wget -qO- https://bench.sh | bash
 }
 
 run_ip_quality() {
