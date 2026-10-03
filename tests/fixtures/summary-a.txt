@@ -1,0 +1,94 @@
+v1
+sysversion2.0
+sysdate2026-01-02 03:04
+syscountryNL
+syscityAmsterdam
+sysasnAS64496 Example Hosting B.V.
+sysip4203.0.*.*
+sysip6
+syscpuAMD Ryzen 9 9950X
+syscores2
+sysram3.8 GiB
+sysdisk59G · 6%
+sysosUbuntu 24.04.4 LTS
+sysvirtkvm
+syskernel6.8.0-111-generic
+syscccubic
+sysqdiscfq_codel
+sysuptime_s1020
+testip_regionokNL · 26/301
+metricip_regionКонсенсусNL
+metricip_regionASNAS64496 Example Hosting B.V.
+metricip_regionСервисов21
+metricip_regionGeoIP-баз16
+metricip_regionСовпадений26/30
+testcensorcheck_geoblockok22 доступно · 2 блок1
+metriccensorcheck_geoblockДоступно22
+metriccensorcheck_geoblockЗаблокировано2
+svccensorcheck_geoblockspotify.comokдоступен
+svccensorcheck_geoblocknetflix.comokдоступен
+svccensorcheck_geoblockpatreon.comokдоступен
+svccensorcheck_geoblockswagger.iookдоступен
+svccensorcheck_geoblocksnyk.iookдоступен
+svccensorcheck_geoblockmongodb.comokдоступен
+svccensorcheck_geoblockautodesk.comokдоступен
+svccensorcheck_geoblockgraylog.orgokдоступен
+svccensorcheck_geoblockredis.iookдоступен
+svccensorcheck_geoblockcopilot.microsoft.comokдоступен
+svccensorcheck_geoblockintel.comokдоступен
+svccensorcheck_geoblockdocker.comokдоступен
+svccensorcheck_geoblockhashicorp.comokдоступен
+svccensorcheck_geoblockjetbrains.comokдоступен
+svccensorcheck_geoblocknvidia.comokдоступен
+svccensorcheck_geoblockamd.comokдоступен
+svccensorcheck_geoblockunity.comokдоступен
+svccensorcheck_geoblocknotion.sookдоступен
+svccensorcheck_geoblockfigma.comokдоступен
+svccensorcheck_geoblockcanva.comokдоступен
+svccensorcheck_geoblocktwitch.tvokдоступен
+svccensorcheck_geoblockoracle.combadблок
+svccensorcheck_geoblockcisco.combadблок
+svccensorcheck_geoblockdell.comokдоступен
+testiperf3_ruokдо 2140.5 Мбит/с1
+metriciperf3_ruМакс ↓2140.5 Mbps
+metriciperf3_ruМин ping46 ms
+metriciperf3_ruСерверов5
+bestiperf3_ru2140.5Chelyabinskup
+testyabsokfio 4k 1.09 GB/s1
+metricyabsCPUAMD Ryzen 9 9950X 16-Core Processor
+metricyabsЯдер2
+metricyabsRAM3.8 GiB
+metricyabsДиск59.0 GiB
+metricyabsfio 4k1.09 GB/s
+metricyabsfio 1m5.99 GB/s
+testip_check_placeokриск Low · 1 блок1
+metricip_check_placeРискLow
+metricip_check_placeБаз9
+metricip_check_placeDNSBL0
+svcip_check_placeTikTokokNL
+svcip_check_placeNetflixokNL
+svcip_check_placeYoutubeokGB
+svcip_check_placeAmazonPVbadблок
+svcip_check_placeRedditokNL
+svcip_check_placeChatGPTokNL
+svcip_check_placeDisney+okNL
+testip_qualityokHosting · DNSBL 01
+metricip_qualityUsageHosting
+metricip_qualityCompanyHosting
+metricip_qualityГеоconsistent
+metricip_qualityАнонимнет
+metricip_qualityPort 25закрыт
+metricip_qualityDNSBL0
+svcip_qualityTikTokokNL
+svcip_qualityNetflixokNL
+svcip_qualityYoutubeokGB
+svcip_qualityAmazonPVokNL
+svcip_qualityRedditokNL
+svcip_qualityChatGPTokNL
+svcip_qualityDisney+okNL
+testsysbench_cpuok6268.20 events/s1
+metricsysbench_cpuevents/s6268.20
+metricsysbench_cpuсобытий62701
+metricsysbench_cpuвремя10.0002 s
+metricsysbench_cpulat avg0.16 ms
+metricsysbench_cpulat 95th0.17 ms

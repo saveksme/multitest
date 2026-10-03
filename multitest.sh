@@ -3347,6 +3347,86 @@ mt_test_key() {
     [[ -n "$K" ]] || K="выполнен"
 }
 
+# --- summary.txt: данные для поста в Telegram ------------------------------------
+# Формат v1 (docs/telegram-protocol.md): строка на запись, поля через \x1f — как в
+# .metrics/.services. JSON в bash не строим: экранера нет, а jq стоит не везде.
+
+# Управляющие символы перечислены поштучно: диапазоны в скобках зависят от
+# collation glibc (см. MT_CC_RE) и в UTF-8-локали ловят лишнее.
+MT_SUM_CTRL=$(printf '\001\002\003\004\005\006\007\010\013\014\016\017\020\021\022\023\024\025\026\027\030\031\032\033\034\035\036\177')
+
+# Одна строка summary.txt: \x1f, перевод строки и таб в полях → пробел (на голом
+# железе SYS_VIRT бывает "none\nunknown"), прочие управляющие — прочь, ≤ 200 символов.
+mt_sum_put() {
+    local IFS=$'\x1f' f
+    local -a out=()
+    for f in "$@"; do
+        f=${f//[$'\x1f\r\n\t']/ }
+        f=${f//[$MT_SUM_CTRL]/}
+        (( ${#f} > 199 )) && f=$(vcut "$f" 199)
+        out+=( "$f" )
+    done
+    printf '%s\n' "${out[*]}"
+}
+
+mt_sum_svc() {
+    local i
+    for i in "${!LR_NAME[@]}"; do mt_sum_put svc "$1" "${LR_NAME[$i]}" "${LR_ST[$i]}" "${LR_VAL[$i]}"; done
+}
+
+# Пишет summary.txt по уже разобранным .metrics/.services и SYS_*. Вызывать после
+# gather_system_facts и mt_style_init (дата) — то есть внутри шага сборки страниц.
+mt_write_summary() {
+    local out="${1:-$SUMMARY_DIR/summary.txt}" idx fn id st has l dir
+    mt_album_plan
+    mt_cpu_split
+    {
+        mt_sum_put v 1
+        mt_sum_put sys version "$SCRIPT_VERSION"
+        mt_sum_put sys date "${MT_DATE:-$(date '+%Y-%m-%d %H:%M')}"
+        mt_sum_put sys country "$SYS_COUNTRY"
+        mt_sum_put sys city "$SYS_CITY"
+        mt_sum_put sys asn "$SYS_ASN"
+        mt_sum_put sys ip4 "$(mask_ip "$SYS_IP4")"
+        mt_sum_put sys ip6 "$(mask_ip "$SYS_IP6")"
+        mt_sum_put sys cpu "$CPU_NAME"
+        mt_sum_put sys cores "$SYS_CORES"
+        mt_sum_put sys ram "$SYS_RAM"
+        mt_sum_put sys disk "$SYS_DISK"
+        mt_sum_put sys os "$SYS_OS"
+        mt_sum_put sys virt "$SYS_VIRT"
+        mt_sum_put sys kernel "$SYS_KERNEL"
+        mt_sum_put sys cc "$SYS_CC"
+        mt_sum_put sys qdisc "$SYS_QDISC"
+        mt_sum_put sys uptime_s "$SYS_UP_S"
+        for idx in "${MT_PAGE_IDX[@]}"; do
+            fn="${MT_CAT_FUNCS[$idx]}"; id="${fn#run_}"
+            case "${MT_STATUS[$fn]:-}" in
+                выполнен) st=ok ;;
+                ошибка)   st=err ;;
+                *)        st=skip ;;
+            esac
+            has=0
+            [[ -s "$SUMMARY_DIR/$fn.metrics" || -s "$SUMMARY_DIR/$fn.services" ]] && has=1
+            mt_test_key "$fn"
+            mt_sum_put test "$id" "$st" "$K" "$has"
+            mt_read_metrics "$fn"
+            for l in "${ML[@]}"; do mt_sum_put metric "$id" "$l" "${M[$l]}"; done
+            mt_read_rows "$fn"
+            case "$fn" in
+                run_iperf3_ru|run_iperf3_tlab|run_bench_sh)
+                    mt_speed_rows
+                    if [[ -n "$IMX" ]]; then
+                        dir=down; [[ "$IMX_DIR" == "отдача" ]] && dir=up
+                        mt_sum_put best "$id" "$IMX" "$IMX_CITY" "$dir"
+                    fi ;;
+                run_censorcheck_*|run_ip_check_place) mt_rows_section 0; mt_sum_svc "$id" ;;
+                run_ip_quality) mt_rows_section 1; mt_sum_svc "$id" ;;
+            esac
+        done
+    } > "$out"
+}
+
 # --- Обложка ----------------------------------------------------------------------
 
 build_page_cover() {
@@ -3964,6 +4044,9 @@ step_build_pages() {
     mt_style_init
     mt_album_plan
     mt_run_counters
+    # Данные для Telegram — до рендера: ниже шаг выходит при первой же ошибке
+    # страницы, а сводку боту отправим и без картинок.
+    mt_write_summary || true
 
     local dir="$SUMMARY_DIR/pages" i idx fn base
     rm -rf "$dir"; mkdir -p "$dir" 2>/dev/null || return 1

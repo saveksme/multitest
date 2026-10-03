@@ -166,6 +166,7 @@ m run_sysbench_cpu events/s 6268.20 ok; m run_sysbench_cpu "событий" 6270
 m run_sysbench_cpu "время" "10.0002 s"; m run_sysbench_cpu "lat avg" "0.16 ms" pri; m run_sysbench_cpu "lat 95th" "0.17 ms" pri
 
 render a
+mt_write_summary "$SUMMARY_DIR/summary.txt"
 
 # ---------------- сценарий B: остальные виды страниц ----------------
 SUMMARY_DIR="$out/data-b"; mkdir -p "$SUMMARY_DIR"
@@ -237,6 +238,7 @@ jp1|Токио|bad|248.7|0%|Мир
 EOF
 
 render b
+mt_write_summary "$SUMMARY_DIR/summary.txt"
 
 # Одна длинная картинка (MT_ALBUM=0) — на данных сценария A
 SUMMARY_DIR="$out/data-a"

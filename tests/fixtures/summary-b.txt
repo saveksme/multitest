@@ -1,0 +1,51 @@
+v1
+sysversion2.0
+sysdate2026-01-02 03:04
+syscountryNL
+syscityAmsterdam
+sysasnAS64496 Example Hosting B.V.
+sysip4203.0.*.*
+sysip62001:db8::*
+syscpuIntel Xeon Gold 6248R
+syscores4
+sysram3.8 GiB
+sysdisk59G · 6%
+sysosUbuntu 24.04.4 LTS
+sysvirtkvm
+syskernel6.8.0-111-generic
+syscccubic
+sysqdiscfq_codel
+sysuptime_s277200
+testip_regionokDE · 9/121
+metricip_regionКонсенсус IPv4DE
+metricip_regionКонсенсус IPv6DE
+metricip_regionСовпадений v49/12
+metricip_regionСовпадений v68/10
+metricip_regionv4≠v62
+testcensorcheck_dpiskipпропущен0
+testcensorcheck_tlabok3 доступно · 3 блок1
+svccensorcheck_tlabyoutube.comokдоступен
+svccensorcheck_tlabinstagram.combadблок
+svccensorcheck_tlabx.combadблок
+svccensorcheck_tlabfacebook.combadблок
+svccensorcheck_tlabdiscord.comokдоступен
+svccensorcheck_tlablinkedin.comwarnредирект
+svccensorcheck_tlabrutracker.orgnaN/A
+svccensorcheck_tlabtelegram.orgokдоступен
+testiperf3_tlaberrошибка0
+testbench_shokI/O 1.2 GB/s1
+metricbench_shCPUIntel Xeon Gold 6248R CPU @ 3.00GHz
+metricbench_shЯдер4
+metricbench_shRAM7.8 GB
+metricbench_shДиск80.0 GB
+metricbench_shI/O сред.1.2 GB/s
+metricbench_shCCbbr
+metricbench_shСетьAS64496 Example Hosting B.V.
+bestbench_sh941.53Amsterdam, NLdown
+testping_mapokРФ 41.3 ms · потери 1/141
+metricping_mapРФ avg41.3 ms
+metricping_mapЕС avg8.2 ms
+metricping_mapСША avg112.6 ms
+metricping_mapАзия avg214.0 ms
+metricping_mapХудшийТокио · 248.7 ms
+metricping_mapПотери1/14 (Стамбул)
