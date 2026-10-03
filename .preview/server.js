@@ -1,4 +1,4 @@
-// Одноразовый статик-сервер: смотреть прототип плашки спонсора в браузере.
+// Одноразовый статик-сервер: смотреть страницы сводки (bash .preview/gen.sh) в браузере.
 const http = require('http'), fs = require('fs'), path = require('path');
 const root = __dirname;
 http.createServer((req, res) => {

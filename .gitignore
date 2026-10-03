@@ -1,0 +1,2 @@
+# Стенд превью сводки: bash .preview/gen.sh пишет сюда SVG (и PNG, если их отрендерить)
+.preview/out/

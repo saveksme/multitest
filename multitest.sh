@@ -21,40 +21,21 @@ SUMMARY_TS=""
 SCRIPT_CAPTURE="util"      # util | busybox
 MT_UA="Mozilla/5.0 (X11; Linux x86_64) multitest/${SCRIPT_VERSION}"  # User-Agent для хостингов
 
-# Спонсор: подпись в подвале сводки (см. sv_sponsor) и блок в главном меню
-# (см. print_stencloud_promo).
+# Спонсор: подпись в подвале каждой страницы сводки (см. pg_footer) и блок
+# в главном меню (см. print_stencloud_promo).
 AD_PROMO="BEDOLAGA"        # промокод
 AD_DISCOUNT="−20%"         # скидка по нему
+AD_BOT="@stencloudbot"     # куда идти за сервером
 
 # Марка спонсора для подписи: контур обведён с растрового логотипа
 # (assets/brand/stencloud.png, там же лежит читаемая копия stencloud.svg) —
 # держать её вектором обязательно, скрипт качают одним файлом, а PNG в base64
 # весил бы больше всей таблицы Simple Icons. Контур начинается в нуле и
-# занимает 340×172.3 единиц: от этого прямоугольника, а не от какой-то
-# отдельной системы координат, считается вся геометрия подписи. Логотип
-# трёхцветный, поэтому разрезан на три пути: слово STEN, фиолетовое CLOUD и
-# белая начинка облака поверх него (чёрточка и точки — они закрашены, а не
-# вырезаны, дыркой на тёмном фоне они читались бы провалом).
-# Центры строк от верха чернил: STEN 43.7, CLOUD 135.2 — по ним
-# равняется правая колонка подписи.
-AD_INK_W=340; AD_INK_H=172.3
+# занимает 340×172.3 единиц. В подвале сводки марка одноцветная, как
+# stencloud-white.png в макете: слово STEN и облако, у которого чёрточка и
+# точки вырезаны (evenodd) — сквозь них виден фон страницы.
 AD_LOGO_STEN="M 33.6 0.4 C 22.4 1.3, 12.7 9, 9.1 19.8 C 8.1 22.7, 7.7 27.3, 8.1 31 C 8.5 35, 9.3 37.5, 11.1 40.7 C 14.7 47, 20.7 51.5, 28.3 53.5 C 30.9 54.2, 31.5 54.2, 48.1 54.4 L 65.2 54.6 66.5 55.4 C 68.1 56.5, 69.1 58.4, 69.1 60.5 C 69.1 62.6, 68.2 64, 66.4 65.2 L 64.9 66.1 50.1 66.2 C 33.5 66.3, 33.6 66.3, 31.6 64.1 C 31 63.4, 30.4 62.4, 30.3 61.7 C 30.2 61, 29.9 60.4, 29.7 60.3 C 29.3 60, 7.4 60.3, 7.1 60.6 C 6.8 60.9, 7.4 66.3, 8 68.6 C 9.1 72.6, 10.9 75.9, 14.1 79.3 C 17.6 83, 21.3 85.1, 27 86.7 L 30 87.6 49.1 87.6 C 66.9 87.6, 68.4 87.5, 70.6 87 C 83.6 83.7, 91.8 73.4, 91.8 60.2 C 91.8 49.9, 85.5 40.4, 75.5 35.5 C 74.4 35, 72 34.2, 70 33.7 L 66.4 32.9 50.8 32.8 C 36.1 32.7, 35 32.7, 34 32.1 C 32.6 31.4, 31.5 29.9, 31.2 28.4 C 30.8 25.9, 32.6 23.1, 35.2 22.4 C 36 22.2, 40.9 22.1, 49.4 22.2 L 62.4 22.2 63.7 23 C 65.2 23.9, 66 24.9, 66.2 26.4 L 66.4 27.5 78.2 27.6 L 90 27.7 89.8 24.9 L 89.6 22.1 102.8 22.1 L 116 22.1 116.1 54.8 L 116.2 87.6 127.8 87.6 L 139.4 87.7 139.4 77.2 C 139.4 71.5, 139.4 57.4, 139.4 46 C 139.4 34.7, 139.4 24.6, 139.5 23.7 L 139.7 22.1 153.2 22.1 L 166.7 22.1 166.7 11.1 L 166.6 0.2 128 0.2 L 89.4 0.2 89.4 10.8 C 89.4 16.7, 89.3 21.2, 89.2 20.9 C 89.1 20.6, 88.7 19.2, 88.2 17.8 C 87.1 14.2, 84.9 10.9, 81.5 7.7 C 79.2 5.5, 78.2 4.8, 75.2 3.3 C 71.2 1.4, 69.1 0.8, 65.2 0.4 C 61.7 0, 37.7 0, 33.6 0.4 M 172.2 0.4 C 172.1 0.6, 172.1 20.3, 172.1 44.2 L 172.2 87.6 207.5 87.6 L 242.8 87.6 242.9 76.8 L 243 65.9 219.6 65.9 L 196.3 65.9 196.3 60.2 L 196.3 54.4 219.1 54.4 L 241.9 54.3 241.9 44.2 C 242 38.6, 242 33.7, 241.9 33.4 L 241.7 32.7 219 32.7 L 196.3 32.7 196.3 27.4 L 196.3 22.1 219.5 22 L 242.8 21.9 242.8 11 L 242.8 0.2 207.6 0.1 C 179.5 0, 172.3 0.1, 172.2 0.4 M 249.9 0.4 C 249.9 0.6, 249.8 20.3, 249.9 44.2 L 249.9 87.6 261.3 87.6 L 272.7 87.6 272.8 63.6 L 273 39.7 275.3 43.1 C 276.6 45, 278.6 48, 279.8 49.8 C 280.9 51.6, 283.7 55.8, 285.8 59.1 C 288 62.4, 290.8 66.8, 292.1 68.7 C 293.4 70.7, 296.7 75.8, 299.5 80 L 304.5 87.7 317 87.6 L 329.6 87.6 329.6 43.9 L 329.6 0.2 318.2 0.2 L 306.9 0.2 306.7 23.6 L 306.6 47.1 302.5 40.9 C 298.8 35.3, 295.7 30.5, 291.4 23.9 C 290.6 22.6, 288.5 19.4, 286.7 16.6 C 282.8 10.7, 280.1 6.4, 277.7 2.7 L 275.9 0 263 0 C 253 0, 250 0.1, 249.9 0.4"
 AD_LOGO_CLOUD="M 32 98.6 C 17.8 100.6, 6.3 110.1, 1.9 123.4 C 0.6 127.3, 0 131.4, 0 136.1 C 0 140.6, 0.3 143.3, 1.3 146.9 C 4.8 160.6, 16.5 170.3, 31.5 172 C 35.6 172.5, 38.2 172.4, 42.4 171.8 C 51.1 170.6, 59.2 166.2, 63.8 160.1 C 67.2 155.6, 69.3 150.2, 69.4 145.4 L 69.5 143.2 59.2 143.2 C 49.4 143.1, 48.8 143.1, 48.8 143.6 C 48.8 144, 48.5 145.1, 48.2 146.2 C 46.5 151, 41.4 153.7, 34.7 153.3 C 29 152.9, 24.7 150.1, 22.4 145.5 C 20.9 142.3, 20.5 140.6, 20.5 135.8 C 20.5 131.1, 20.9 129.3, 22.2 126.4 C 23.6 123.5, 24.9 121.9, 27.4 120.2 C 29.9 118.5, 32.4 117.6, 35.5 117.4 C 40 117, 44.4 118.5, 46.5 121.2 C 47.7 122.6, 48.8 125.5, 48.8 127 L 48.8 127.8 59.3 127.8 L 69.8 127.8 69.6 125.1 C 68.6 112.2, 59.8 102.2, 46.7 99.2 C 43.6 98.5, 35.3 98.2, 32 98.6 M 72.5 134.8 L 72.5 171.4 94.4 171.4 L 116.3 171.4 116.3 162.3 L 116.2 153.2 104.4 153.1 L 92.6 153 92.7 146.1 C 92.7 142.3, 92.8 130, 92.7 118.8 L 92.7 98.3 82.6 98.3 L 72.5 98.3 72.5 134.8 M 216.9 124.4 L 217 150.4 217.8 153.4 C 219.1 158.1, 220.8 161.1, 224.1 164.4 C 226.7 167, 227.3 167.5, 230.5 169 C 235.2 171.3, 238.2 172, 243.8 172.2 C 255.5 172.7, 265.2 168.4, 270.3 160.4 C 272.4 157.1, 273.4 154.7, 274.1 150.6 C 274.4 148.6, 274.8 105.2, 274.5 101 L 274.3 98.3 264.3 98.3 L 254.2 98.3 254.1 101.2 C 254 102.8, 253.9 113.8, 253.9 125.7 C 253.8 137.6, 253.7 147.6, 253.6 148.1 C 253.3 149.5, 252.2 151.2, 251.1 151.9 C 246.6 155.1, 240.2 153.8, 238.2 149.3 C 237.5 147.9, 237.5 147.5, 237.4 123.1 L 237.3 98.3 227.1 98.3 L 216.8 98.3 216.9 124.4 M 278.4 134.8 L 278.4 171.1 295 171 C 310.8 170.9, 311.7 170.9, 314.2 170.2 C 323.8 167.7, 329.5 164.2, 334.2 157.9 C 336.3 155, 337.5 152.7, 338.6 149.1 C 339.9 144.8, 340.1 142.3, 339.9 133.3 C 339.8 125.4, 339.7 124.7, 339 121.8 C 335.6 109.7, 326.9 101.9, 313.9 99.4 C 311.7 98.9, 308.3 98.8, 294.8 98.7 L 278.4 98.5 278.4 134.8 M 167 99.3 C 160.7 100.2, 155.1 103.1, 150.9 107.5 C 147.8 110.7, 145.9 113.7, 144.5 117.7 C 143.8 119.6, 143.3 120.1, 141.9 120.1 C 140 120.1, 135.6 121.3, 133.3 122.4 C 126 126.1, 121.4 131.7, 119.4 139.2 C 116.3 151.3, 121.7 163.5, 132.4 168.8 C 137.8 171.4, 135.5 171.2, 168.1 171.2 L 197.1 171.2 199.8 170.2 C 203.7 168.9, 205.7 167.6, 208.4 164.9 C 212.4 160.9, 214.5 156.2, 214.9 150.7 C 215.4 141, 210 132.4, 201.2 129.1 L 198.9 128.3 198.7 125.2 C 198.4 120.2, 197.1 116.2, 194.5 112.1 C 192.5 109, 191.2 107.6, 188.9 105.7 C 182.4 100.4, 174.6 98.1, 167 99.3 M 298.9 135 L 298.9 152.8 304.5 152.7 C 309.9 152.6, 310 152.6, 312.1 151.6 C 313.2 151, 314.9 149.9, 315.9 149 C 318.8 146.2, 319.8 142.6, 319.8 134.2 C 319.8 127.3, 318.9 123.9, 316.5 121.3 C 313.8 118.4, 310.1 117.3, 303.2 117.3 L 298.9 117.3 298.9 135 M 144.5 148.7 C 142.4 149.3, 141 151.9, 141.4 154.2 C 141.7 155.7, 143.2 157.3, 144.6 157.7 C 145.3 157.9, 149.9 158, 155.9 158 C 165.7 158, 166 158, 167.4 157.3 C 169.1 156.5, 169.9 155.1, 169.9 153.2 C 169.9 151.3, 169.1 149.9, 167.4 149.1 C 166 148.4, 165.8 148.4, 155.7 148.4 C 150.1 148.4, 145 148.6, 144.5 148.7 M 178.4 148.7 C 177.8 148.9, 177 149.5, 176.5 150.1 C 173.1 153.8, 177.2 159.5, 181.8 157.5 C 185.3 155.9, 185.4 150.9, 182 149.1 C 180.5 148.3, 179.9 148.3, 178.4 148.7 M 192.4 149 C 190 150.1, 189 153.1, 190.3 155.5 C 191.1 157.1, 193.3 158.2, 195.1 157.9 C 197.6 157.4, 199.4 154.8, 198.9 152.2 C 198.7 150.8, 197.1 149.1, 195.7 148.7 C 194.2 148.3, 193.8 148.3, 192.4 149"
-AD_LOGO_DOTS="M 144.5 148.7 C 142.4 149.3, 141 151.9, 141.4 154.2 C 141.7 155.7, 143.2 157.3, 144.6 157.7 C 145.3 157.9, 149.9 158, 155.9 158 C 165.7 158, 166 158, 167.4 157.3 C 169.1 156.5, 169.9 155.1, 169.9 153.2 C 169.9 151.3, 169.1 149.9, 167.4 149.1 C 166 148.4, 165.8 148.4, 155.7 148.4 C 150.1 148.4, 145 148.6, 144.5 148.7 M 178.4 148.7 C 177.8 148.9, 177 149.5, 176.5 150.1 C 173.1 153.8, 177.2 159.5, 181.8 157.5 C 185.3 155.9, 185.4 150.9, 182 149.1 C 180.5 148.3, 179.9 148.3, 178.4 148.7 M 192.4 149 C 190 150.1, 189 153.1, 190.3 155.5 C 191.1 157.1, 193.3 158.2, 195.1 157.9 C 197.6 157.4, 199.4 154.8, 198.9 152.2 C 198.7 150.8, 197.1 149.1, 195.7 148.7 C 194.2 148.3, 193.8 148.3, 192.4 149"
-
-# Флаги стран из макета — 🇳🇱 и 🇪🇪 картинками, а не текстом. Текстом их
-# рисовать нечем: цветной эмодзи-шрифт стоит далеко не на каждом VPS, а без
-# него librsvg подставит на месте флага пустые прямоугольники или голые буквы
-# NL/EE.
-#
-# Картинки взяты как есть, со всеми тенями и градиентом: обрезаны только
-# прозрачные поля, чтобы флаг занимал свою клетку целиком и размер задавался
-# явно. Цвета живут ровно до тех пор, пока хостинг не режет палитру, — за это
-# отвечает MT_IMGDB_TTL, см. комментарий у него. Плоскую заливку тут пробовали:
-# она квантование переживает, но выглядит ярче эмодзи и держится на волоске —
-# выживание красного переворачивалось от смены размера на один пиксель.
-AD_FLAG_NL="iVBORw0KGgoAAAANSUhEUgAAAEAAAAAuCAYAAACYlx/0AAAACXBIWXMAAAsSAAALEgHS3X78AAAJ6UlEQVRo3u2ae2yW1R3HX7c/lrhkIlll3FvoZdBWKJd1lHIpF5tSLVgEYqcy6FZg4yatUJgBMmDqRMvNcZGbYLFQQGwRBLcFlimJZC4BgUAwBBpShYBICCvy9j17Pqf9vZ6ePs/Tt52AS2jy7dv3ec/zPOfzOed3nvMmDTw+5fnAvcqhpUsf2DZjzg8lgcCDD7i147N3i1/86ZbJM7qWzZo9wkn+1qkzXy6dOmsbeWvKtEozHNtRWLyGNrTdXjg7jfO5jn1//atjp5E/uNuwvPcCpcN0HIjywjmHdxUVH90x84Xq8hlFQbJneqEiOwqmqvLxBTpvPzvRM+sn/LaGbJo09dN6KSO4D/d07aA24zEaXqE9sUG9RpZ2NqyAArf/+dnhVE6eriomTla7xj2ns31EbpBsfeyJWrI5fZjO2n4ZQTvrhmTVkg05Y7QMpPG6fPTTNW+MyZsbWJA+aBhTK5JR80tTwgR2+6zZ001YRtQGrcibUEv25uYFyb4nxtbuzcoN7R6SrbMnNUO90ytdZ1NSX531CT3V2ujualVMYqOs7JYSWpfUN4gkhImUxX36VQT4tSwrJ7Q0v+AARugkQux6iSScw7n1ozpCYJnGzYHdnzlKkX0Z2TqV6Y+pyn5DFeC7ew9U2x/tp95JTlVbu/VWm+N7qo1dkzX86o4JalWHeLWiXVe1rE1Mg3AcSchCxivde6m5sYnbAhMeiqrkDRLMetlQMOUYCwo1Q4Bhqkp4T2QxMiGlTv1gAXWD3T8gsw7YTD38nr6DtAA9+s0UwDHaIEEEzI5NKtMCilq3UxyQmqFepGZYYKgbrwAngLSVOiX2FHaD3ecANhUEaAn1Anam9NcCSrv39RRgS+C4r4A/tekcNOuFIIS6QYosOHZkQZL6NNNoJOsTCTRyJHYJIIAyMAW8WS+AtFiATBUaywLCCVI75K2UNB1ZhMzQMUInCSOmp64TGcXKCIDt7GtCAEGAXxk0S0BYghMuyIncANOEG1J/hE4wHQmdchNgw/vB2vnAEFD5i8GNBNAH6VckAuh7xAIEfq0F7yZA4EWA3+jbgH45MLBOwPv1AriuCIh0IRSeiAXYo+8lwG30bQFheCcy3b1AvdJSASLhngmgwwL/viXAD9hOuAycyONQngRuAmwJJkuLBDRV/8D7CWgO/EHn8WiG9py/11lky5377YjtoUqjE9WWDgnhbGgbq6P7G9VZlfykrXrtR60bBDZYzI1QIwG2MT8BwPvVv4ZvQoAJKiMNaGVSqg5/cy57h0NjnlUfTfy9Ojp3oTqxdqM6t/M9deqvf1dnPvq4QTj273ffU0e3lKq/lazQX5p4XPPk0rPZEQTXK3GP3gUBRu3rx5kBK6NqwvIZkMcWv6oBrx77TF2uvqBqvrqiamuDip/aUEjn1jffqGu3atSlr6/rfHnpkjr3RbVnzp49qz47flyLYeP2eq80VdS+y7cCFrdqG3Rb/d80BNj1bwtotPgZjy8TlvdusCao/XP79m1VU1Ojbty4oa5du6auXLmiLl++rKqrq9XFixfV+fPnNeSZM2fU6dOnQydPntTAEo5VVVVpWQg5fPiwWr1y5Z4AX4L4asgOUGqHV4IIE97r2U+kPu0AzhS2Yf9z42tXUD3CjgQ7CGDUb968qa5fvx6WwMgjAbhz5841kiDhPZ/R5vSJEyEE7Nq9syyAhcoP/xH6+MiRILWzf+ESvadnC6y/Yjo1Y0cWHRYgFiTg9TPe2fMLqNSpwALWJKxLG93uOxLA57TjbwS8vXVrWaCkpKSyvLxcIeDU5xca1A2mzIVFFhf5WxahL0+fUV9dvao7KDXaANIJABKvae71c6cElJaWNhQQrhfAnYtwAiK4iSw2LDxuoTbpGOFvQmepWxPca5S/NwKkMRfhYlI3dSdf0AsON+TGhIWI0adDAk8nBZ5Oh+H/HwVwEiusDQ+4CX9fwH0B9wXcEQHyqPSDl40QfaXfAm1vhL73AuSRGd4f+OwLCNdnj0HoB9tmO/RbZobwwHhPBTQC9YHlXK75edUVdfR4ldp76IRau+OIWrB8r8ov3qzGztikxk5bo7J/szIc3vNZ4aIt6vUNBxUbPdjkewUsrhuhOyVAEt4PeOwKBVQgf7dojwbMLNio0vLeUD1zl6vE7CUqPnORTvSQhTrt0+eF81DKzHAeTJwSIvydMHy+GvxMiRaHkAZb4YMfVOodndSLmwQ/AbYEUwTgbrBsqhjR0opP9CgVLNitQQc88xcNSoAmHBv03Gr9mv6rVarfuOUqdewylfLkn1WPnJe0lO5Zf9SQsUNfVDGD56nogcU6nQa8EI5I4vP+ufPUqPFzywJd+owrfyp/vtpUWhGUaWLWj4x+XaoaSQAeYNnx2dtcBMj0BZYRmPCHnWpo/vrwqArsoPFrVMav12kRhDaEYwgw4fuMfs0XHuAO/YvC4ThtOKdPzsJg4pBpCvbAw/HZFY8k5+npkjxifpD6oZN09p+fnNIzAQlAAyuLjgR4ZPA9gvZmjcoUNkFNWOBsWAEmYXinrT36kQpol1aoXzlGG9rCmTR8lkpIzy/TAtr2zg+2T50WorFZQ5zECb986qUQ9YMcvegYYdHp//QKPR2lPnlNylmqQ2fpvADZEVi/2AKA95r+5tS3BfC5qwBmAAI4iYZYFJti1KwfWXwEVk8rp1N0Dhl0VOo2HAdCpnhzc1cF2BKITB0iwIROEDpEGG066CriLguQ2v+fBIgELu4noSkBpoQWCahfALmm1L8twKv+75gAkeA1C7wERCpB2uo0IcBvAWyWABqKgKbKoEUCXGZBA1CPyPS3BUTyBLgnArwk2DPBM+biaYx+2ril+onUe9QSDaFn5pCiEIlJn1lL4HALXBEL8FoIWfVtAW7rgC3AqxRsUDdYwsaF9MyaozvOJqZr2qRgfP8JqlPvvHDgcAuPeYIgZHEdrtFsAZE8DWwBbqUgU5q9BRFYN9DugybpABuXWgfaNulJnai44dfstIoZXENax2YqM7SHk+uIvAYCZDNklkFLBNgSzNijCqiMhg0anZJ7Kzpl1BcxKaP+FdNz5IEOyY+va5eY9XLH5OxJUXFDR0YlZKT9rFtm16guGW3McOyRn2f24nPdLm5o8cMxg7dExQ37FEGI4NrcQ2+Fo+KHfyiGZKoggulii/B7GhBq04w5on6jGoZ1QAVSQzhA39U/cfJvfFqSIwWZ3E8L4IbmlJHpZdYOU0YWGakjM4AJnAkokAJaB1s3qtyc0aFDjFqHpNE/9us8Itwi/6Ap8WtnXpP7cV/9RswwVVp1HnjWTQgxFxyvSFtzCmOcUe3cIyfDb1S94L6rf9c1BX17zMOMWT+sE5RKXR1ZcY7Txq0+uVZzYO/mP2qL3P8CzAhAe9O30LsAAAAASUVORK5CYII="
-AD_FLAG_EE="iVBORw0KGgoAAAANSUhEUgAAAEAAAAAuCAYAAACYlx/0AAAACXBIWXMAAAsSAAALEgHS3X78AAAIl0lEQVRo3u2af2iVVRjHp/0iEYZkCiMxswyNiLDSisx+CiVmSD/1j4qybJmudLu2OVeuUoultfXDwKgtc2mxnFaDzApDIZAEERMREZGExARBUe9O93Pwe3nu2XnvvdOlBQpf977nPe95n+/nPM95z4W3ZPy0ipKzqTfe+ew8adykF3ol9alrXH5Jau6Cq+e+1zamtql9aqph5fxUw6rl6KUFX6y1om3WWysa6fPK4q8e4x7uZxw7Ls/z/yU9+EyblVGZfPXDbz+a27Tm57oP1v5W07jmr1mL17jqpo6sOJfKF7ZF9fzrrV7TXmv+u2LhF78DRkB4Zg4NBafz7pizIK3RfDMbmpVRzNV+/EtWL733o9dzb6/rRJPnf3dCenTu1+kJVbl6cFZzF9EPIMASkCerP5lTUjErNYHUSjIVmklSIWCnYvaZhl9PSFMWbXSP1P/kNaHuF3f/Kx1uXOUar9tntrlbp7e50dNWuhufXeFGTf08R7dP+8zdOeNLDwcQCCijH3ujtYT/OKF2IEKQVdWvloX1UmyKcy9jUHvV77a9qDTurlnpoTc3uUmvb3QT5//qjd9X86O7d84P7u7K793Yl7/tYn7k08vd9U81u+ue+DQrzgFxc/lXHhgwxjz9gfMAho+f8w0nQAjrBShaTDDD7GGMv5wjLUaYnPPuNztsrRYyGjMbypqPARhT0e4BYE4AYhBoAxLAcgAMvmNG+7AJrzlBUL0AQguJXWxCYVQGOVedWoVGk8wmAYhlgCBYAPmyIBHA5XdM9wCunfx+2taLakZS7Uh2IZJUo6EIXkakYgGEWTC+9uecLCgGAMfJGTD2hSwAWy8MxA0MzE1Ii47EQmRFYBKBKm0JXuoOgIcX/JY9PhUAgiBPRQMQMQazIHgQA/BQRA0SBFJa5gOQZByj+SQAKARg1wELwEJAtGsyE0vApovNghgAHhwCiGVA0swXMn1WABSa/RBAd2cfdcd4dwHoTRCWQY8C6E76h+ZPF0DSGhB7FcbeAj0GwKZ/zHy+9C/WcNh30sLfu2hc7UZ3Z+onL+IhvlHT13YR8UsRADNyAKh+YvVvZ7+nAIRmH1/8R44wyhh+y5t5Rd/yeH3nyPHT3RWjJrkh193lBlw52qu0bHhWakNDxpY7+cMDsIibsbq8BU4XQMx8bA+gGQ3N0s6eg9m5+YHn3U233eNG3nCTGzZsmLt88GA3uOxS17/04hz16dPHXXTRhe6CC8736tWrV1Rc69+/v4cGxGwGDB1X1X7NQw2d4abBAuhO/cfWgZhhZj00O2LEiKxRxPHQoUO9hgy5wou2QYMGubKyMm+oX79+rrS01PXt2zcvDM65hgDH/ZdcNvzrEv4jnYCA2bB2in0LYNjPtqlRpbB/I2TMQr6QWWYbcV3HV151VRfzAwcO9AAwj6z5pAwAEsAGDBhw/OT9K0p69+7dfrLTCerH11ambgDif05mQGBWiw0LTyjM219ZYZ1iQEZjZguppwDQJy+A8CaI2YUFM6F8eyY4pWS2PjPH1jAmijV81gCodlQrOrfSNQaTWQZlQAIjQAJFBK0aRhg5FRBnPANCo2SCz4bMgxgA+dnOiIFkXiJIgdDi9b8FEIMgEEkQzgE4B+AcgDMGQBshAUiC8L8GEIJgbJsBMp9vG8z1ghuh/wIAdoDaBXKPzIbbXc2mMkAx0Z6vDIjXbKXPHgAZlVm7mdK+gna2zRMnTnRTpkxxlZWV6SVLlrhVq1Z1rl+/3m3dutVt27YtR5s3b/bXVq9e7Zqbm11dXV2ae/lRxZjZXW/GQ+JGqCcBhFteANBOP80gx4DAaHl5ebqpqclt2rSpc8+ePe7o0aMu9u/YsWPu8OHD7uDBg+7AgQNu//79jv5We/fu9e2I4x07dngwPIPnJWaATEuFzMdmXQtWuFrTJrPMDrO0ZcsWbyKdTkfNHj9+3B05csQbPnTokO8r0/v27fPmdu/e7Xbu3Om2b9/uM4HsQIyNaKOPgG3YsCHd2NjYWtLQ0NC+aNGiTtKEwAq9RkIYti5txgAJCKQeY/MMUpegMBEzSxtmrdRGJoQQYgCY5RACoo1ru3bt8ueUSUtLywoPgLTgIgNwYdmyZb7emCUMACb7Y8fMvGaTOg1rFMKMl5TCGCONkTUbUwjApj0ASPdCADjnOv24ngOgtbXVpwQdIcSgPASpfnQjA4kkD6aPgk8yqeD5K8P5zIayYyQBIJ5CALgWBaAZszcobURNC4rqT4B0bkWKEigKjYepXYzC9LcAiCsGwK4BFgD9OM4LQJ11AwKCVla7ugoKQRFczLwUQsgn2zep/kMAsdm3i2AiAJWApaVFA6ohANIuBGAhCEAxELQOhLL3yHws/WMLYGhevrjWIwBCCGFZhFkQgxAzmqSk9A/r386+NW8B0K8gAHW2EACQlAUxADEIIYh8hqUw7Xk2hjXT7PwQGyeED0ltXFcZ4KXLa9ACON0sSCqFpGwoZJTnyygxapvLukXcbKQQr260dOlSL45ppw99Ozo6PBQB47woAEobC8BmQbGlEMqaZTwZZcYwSYAyKoMYY5/BpopdJEqlUn9bsReR1If+3Mf9AsLf7E6QwXmg0sW+DQothvkWRLtlDdNXaRszym8Bgq6vr/8zoy21tbXr5s2b11JTU/Nm5vhZvmyrrq6+ha/b+ChL4ks0/tLOdfrNnj07NXPmzJaqqqrNABIQYORshWmwqWJrx24lY9kg0WbfxwDkftWmzCp17Yxi9qTRRkxiADM99REn4zAeUHgGz/MAoKrUsalCgAAhYAInLcPFxS46Sls7ozIam1VmlNnRd4qFPssLv1lM+sJV7bZ/rK8+vfUnIkOqVFRU7FT9ELCgYMAuMHbBQVzXbKpGk2Y1yWwY9Kl8sVosRLV1eQAXIWPrB2GEOgqVVJ+qyXwfQBf7lem/IT3zHxRyvox7qdMhAAAAAElFTkSuQmCC"
 
 # ============================================================
 #  Установка (--install)
@@ -349,10 +330,13 @@ run_ping_map() {
     echo -e "  Публичный API check-host.net — без аккаунтов и токенов."
     echo ""
 
-    # Внешний IPv4 берём сами: в capture-подоболочке переменные скрипта не экспортируются
+    # Внешний IPv4 берём сами: в capture-подоболочке переменные скрипта не экспортируются.
+    # Именно -4: без него curl на dual-stack идёт по IPv6, и узлы без IPv6 (РФ,
+    # соседи) отвечали бы «нет ответа» вместо пинга до самого сервера.
     local ip
-    ip=$(curl -s --max-time 6 https://ifconfig.me 2>/dev/null)
-    [[ -z "$ip" ]] && ip=$(curl -s --max-time 6 https://api.ipify.org 2>/dev/null)
+    ip=$(curl -s4 --max-time 6 https://ifconfig.me 2>/dev/null)
+    [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || ip=$(curl -s4 --max-time 6 https://api.ipify.org 2>/dev/null)
+    [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || ip=""
     if [[ -z "$ip" ]]; then
         echo -e "  ${RED}[CH] ОШИБКА: не удалось определить внешний IPv4-адрес сервера.${NC}"
         return 1
@@ -1267,48 +1251,41 @@ mt_font_dir() {
     mkdir -p "$d" 2>/dev/null && printf '%s' "$d"
 }
 
-# Best-effort: ставит шрифты для сводки. Основной — IBM Plex Sans: рисовался под
-# технические интерфейсы, у него полная кириллица и ровные цифры, которые удобно
-# сканировать в столбик. Статические начертания качаем с CDN, в репозиториях
-# дистрибутивов его обычно нет. Запас — Roboto/Noto/DejaVu из пакетов; кириллица
-# есть во всех трёх. Никогда не фатальна: пакеты ставятся по одному, чтобы
-# отсутствие одного имени не валило остальные.
-# Второй — Google Sans Flex: им набрана подпись спонсора, так в макете.
+# Best-effort: ставит шрифт сводки — Onest, им набран макет 5b: полная кириллица
+# и все начертания 400–900 (900 — цифры в фигурах, 800 — заголовки, 700 —
+# пилюли). Адреса TTF спрашиваем у самого Google Fonts: статические файлы лежат
+# по версионным путям с хэшем, зашить такой в скрипт — однажды получить 404.
+# UA при этом не подменяем: браузерам API отдаёт woff2, а его fontconfig не
+# понимает — «безымянному» клиенту вроде curl достаётся именно TTF. Запасной
+# источник — npm-пакет @expo-google-fonts/onest на jsDelivr. Не вышло ни там,
+# ни там — Roboto/Noto/DejaVu из пакетов, кириллица есть во всех трёх.
 # librsvg игнорирует @font-face, поэтому шрифт обязан попасть в fontconfig.
+# Никогда не фатальна.
 ensure_fonts() {
     command -v fc-list &>/dev/null || install_package fontconfig >/dev/null 2>&1
 
-    local got_plex=0
-    if fc-list 2>/dev/null | grep -qi 'IBM *Plex *Sans'; then
-        got_plex=1
-    else
-        echo -e "${YELLOW}Загружаю шрифт IBM Plex Sans для сводки...${NC}"
-        local fdir; fdir=$(mt_font_dir ibm-plex-sans)
-        local base="https://cdn.jsdelivr.net/npm/@expo-google-fonts/ibm-plex-sans" w
-        for w in 400Regular 600SemiBold 700Bold; do
-            mt_fetch_ttf "$base/IBMPlexSans_${w}.ttf" "$fdir/IBMPlexSans_${w}.ttf" && got_plex=1
-        done
-        [[ $got_plex -eq 1 ]] || echo -e "${YELLOW}IBM Plex Sans недоступен — использую запасной шрифт.${NC}"
+    if (( $(fc-list 2>/dev/null | grep -ci 'onest') < 6 )); then
+        echo -e "${YELLOW}Загружаю шрифт Onest для сводки...${NC}"
+        local fdir css w u got=0
+        local -a pkg=( [400]=400Regular [500]=500Medium [600]=600SemiBold [700]=700Bold [800]=800ExtraBold [900]=900Black )
+        fdir=$(mt_font_dir onest)
+        if [[ -n "$fdir" ]]; then
+            css=$(curl -fsSL --max-time 20 'https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800;900' 2>/dev/null)
+            while read -r w u; do
+                [[ -n "$u" ]] && mt_fetch_ttf "$u" "$fdir/Onest-$w.ttf" && got=$((got+1))
+            done < <(printf '%s\n' "$css" | awk '/font-weight/ { w = $2; gsub(/;/, "", w) }
+                /src: url/ && match($0, /https:[^)]+\.ttf/) { print w, substr($0, RSTART, RLENGTH) }')
+            for w in 400 500 600 700 800 900; do
+                [[ -s "$fdir/Onest-$w.ttf" ]] && continue
+                mt_fetch_ttf "https://cdn.jsdelivr.net/npm/@expo-google-fonts/onest/${pkg[w]}/Onest_${pkg[w]}.ttf" \
+                    "$fdir/Onest-$w.ttf" && got=$((got+1))
+            done
+        fi
+        (( got > 0 )) || echo -e "${YELLOW}Onest недоступен — использую запасной шрифт.${NC}"
     fi
 
-    # Google Sans Flex — только для подписи спонсора, поэтому и без него сводка
-    # соберётся: не нашёлся — подпись наберётся тем же Plex.
-    # Адрес TTF спрашиваем у самого Google Fonts: статические файлы лежат по
-    # версионным путям с хэшем, зашить такой в скрипт — однажды получить 404.
-    # UA при этом не подменяем: браузерам API отдаёт woff2, а его fontconfig
-    # не понимает — «безымянному» клиенту вроде curl достаётся именно TTF.
-    if ! fc-list 2>/dev/null | grep -qi 'Google *Sans *Flex'; then
-        local gdir; gdir=$(mt_font_dir google-sans-flex)
-        local css u i=0
-        css=$(curl -fsSL --max-time 20 'https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@400' 2>/dev/null)
-        while read -r u; do
-            [[ -n "$u" ]] || continue
-            i=$((i+1)); mt_fetch_ttf "$u" "$gdir/GoogleSansFlex-${i}.ttf"
-        done < <(printf '%s' "$css" | grep -oE 'https://[^)]+\.ttf')
-    fi
-
-    # Запасные шрифты ставим только если Plex не получен и Roboto ещё нет.
-    if [[ $got_plex -eq 0 ]] && ! fc-list 2>/dev/null | grep -qi 'roboto'; then
+    # Запасные шрифты ставим только если Onest не встал и Roboto ещё нет.
+    if ! fc-list 2>/dev/null | grep -qi 'onest' && ! fc-list 2>/dev/null | grep -qi 'roboto'; then
         local pm; pm=$(detect_pkg_manager)
         case "$pm" in
             apt)
@@ -1347,6 +1324,8 @@ gather_system_facts() {
     SYS_UPTIME=$(uptime -p 2>/dev/null | sed 's/^up //')
     [[ -z "$SYS_UPTIME" ]] && SYS_UPTIME=$(awk '{d=int($1/86400);h=int(($1%86400)/3600);printf "%dd %dh", d, h}' /proc/uptime 2>/dev/null)
     [[ -z "$SYS_UPTIME" ]] && SYS_UPTIME="—"
+    # секундами — для сводки: там аптайм пишется по-русски (см. mt_uptime_ru)
+    SYS_UP_S=$(awk '{printf "%d", $1}' /proc/uptime 2>/dev/null)
     SYS_LOAD=$(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null)
     [[ -z "$SYS_LOAD" ]] && SYS_LOAD="—"
     # Адреса тянем порознь: без -4/-6 curl на dual-stack идёт по IPv6, и в сводке
@@ -1381,11 +1360,6 @@ mask_ip() {
     else
         printf '%s' "$ip"
     fi
-}
-
-# Экранирование для вставки текста в SVG/XML.
-xml_escape() {
-    sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e "s/'/\&apos;/g" -e 's/"/\&quot;/g'
 }
 
 # ============================================================
@@ -1470,6 +1444,8 @@ sinaweibo	#E6162D	M10.098 20.323c-3.977.391-7.414-1.406-7.672-4.02-.259-2.609 2.
 qq	#1EBAFC	M21.395 15.035a40 40 0 0 0-.803-2.264l-1.079-2.695c.001-.032.014-.562.014-.836C19.526 4.632 17.351 0 12 0S4.474 4.632 4.474 9.241c0 .274.013.804.014.836l-1.08 2.695a39 39 0 0 0-.802 2.264c-1.021 3.283-.69 4.643-.438 4.673.54.065 2.103-2.472 2.103-2.472 0 1.469.756 3.387 2.394 4.771-.612.188-1.363.479-1.845.835-.434.32-.379.646-.301.778.343.578 5.883.369 7.482.189 1.6.18 7.14.389 7.483-.189.078-.132.132-.458-.301-.778-.483-.356-1.233-.646-1.846-.836 1.637-1.384 2.393-3.302 2.393-4.771 0 0 1.563 2.537 2.103 2.472.251-.03.581-1.39-.438-4.673
 graylog	#FF3633	M6.93 11.369a.84.84 0 01.75.45h.705l1.112-2.675a.483.483 0 01.3-.278c.235-.042.47.086.513.321l1.177 5.177 1.198-6.974a.41.41 0 01.32-.342.44.44 0 01.535.321l1.284 5.24.663-1.946a.449.449 0 01.17-.235c.193-.129.471-.086.6.107l.556.791c.021.193.021.385.021.578a8.3 8.3 0 01-.043.748c-.085-.021-.15-.085-.213-.15l-.557-.77-.855 2.589a.448.448 0 01-.556.278.393.393 0 01-.278-.3l-1.156-4.663-1.219 7.08a.449.449 0 01-.492.364c-.192-.021-.32-.17-.363-.363l-1.305-5.99-.706 1.69a.439.439 0 01-.406.278H7.679a.863.863 0 01-.748.428.88.88 0 01-.877-.877c.02-.47.406-.877.877-.877zM12 .396c6.973 0 12 5.369 12 11.615 0 6.353-4.77 11.593-12 11.593S0 18.364 0 12.011C-.02 5.765 5.005.396 12 .396zM4.064 12.01c0 4.256 3.658 8 7.915 8 4.256 0 7.914-3.744 7.914-8 0-4.6-3.658-8.043-7.914-8.043-4.236 0-7.915 3.444-7.915 8.043z
 google	#4285F4	M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z
+bing	#000000	M20.176 15.406a6.48 6.48 0 01-1.736 4.414c1.338-1.47.803-3.869-1.003-4.635-.862-.305-2.488-.85-3.367-1.158a1.834 1.834 0 01-.932-.818c-.381-.975-1.163-2.968-1.548-3.948-.095-.285-.31-.625-.265-.938.046-.598.724-1.003 1.276-.754l3.682 1.888c.621.292 1.305.692 1.796 1.172a6.486 6.486 0 012.097 4.777zm-1.44 1.888c-.264-1.194-1.135-1.744-2.216-2.028-1.527.902-4.853 2.878-6.952 4.13-1.103.68-2.13 1.35-2.919 1.242a2.866 2.866 0 01-2.77-2.325c-.012-.048-.008-.03-.001.01a6.4 6.4 0 00.947 2.653 6.498 6.498 0 005.486 3.022c1.908.062 3.536-1.153 5.099-2.096.292-.188.804-.496 1.332-.831l1.423-1.51c.553-.577.764-1.426.571-2.267zm-12.04 2.97c.422 0 .822-.1 1.173-.29.355-.215.964-.579 1.7-1.018L9.57 4.502c0-.99-.497-1.864-1.257-2.382-.08-.059-2.91-1.901-2.99-1.956-.605-.432-1.523.045-1.5.797v14.887l.417 2.36a2.488 2.488 0 002.455 2.056z
+copilot	#000000	M23.922 16.997C23.061 18.492 18.063 22.02 12 22.02 5.937 22.02.939 18.492.078 16.997A.641.641 0 0 1 0 16.741v-2.869a.883.883 0 0 1 .053-.22c.372-.935 1.347-2.292 2.605-2.656.167-.429.414-1.055.644-1.517a10.098 10.098 0 0 1-.052-1.086c0-1.331.282-2.499 1.132-3.368.397-.406.89-.717 1.474-.952C7.255 2.937 9.248 1.98 11.978 1.98c2.731 0 4.767.957 6.166 2.093.584.235 1.077.546 1.474.952.85.869 1.132 2.037 1.132 3.368 0 .368-.014.733-.052 1.086.23.462.477 1.088.644 1.517 1.258.364 2.233 1.721 2.605 2.656a.841.841 0 0 1 .053.22v2.869a.641.641 0 0 1-.078.256Zm-11.75-5.992h-.344a4.359 4.359 0 0 1-.355.508c-.77.947-1.918 1.492-3.508 1.492-1.725 0-2.989-.359-3.782-1.259a2.137 2.137 0 0 1-.085-.104L4 11.746v6.585c1.435.779 4.514 2.179 8 2.179 3.486 0 6.565-1.4 8-2.179v-6.585l-.098-.104s-.033.045-.085.104c-.793.9-2.057 1.259-3.782 1.259-1.59 0-2.738-.545-3.508-1.492a4.359 4.359 0 0 1-.355-.508Zm2.328 3.25c.549 0 1 .451 1 1v2c0 .549-.451 1-1 1-.549 0-1-.451-1-1v-2c0-.549.451-1 1-1Zm-5 0c.549 0 1 .451 1 1v2c0 .549-.451 1-1 1-.549 0-1-.451-1-1v-2c0-.549.451-1 1-1Zm3.313-6.185c.136 1.057.403 1.913.878 2.497.442.544 1.134.938 2.344.938 1.573 0 2.292-.337 2.657-.751.384-.435.558-1.15.558-2.361 0-1.14-.243-1.847-.705-2.319-.477-.488-1.319-.862-2.824-1.025-1.487-.161-2.192.138-2.533.529-.269.307-.437.808-.438 1.578v.021c0 .265.021.562.063.893Zm-1.626 0c.042-.331.063-.628.063-.894v-.02c-.001-.77-.169-1.271-.438-1.578-.341-.391-1.046-.69-2.533-.529-1.505.163-2.347.537-2.824 1.025-.462.472-.705 1.179-.705 2.319 0 1.211.175 1.926.558 2.361.365.414 1.084.751 2.657.751 1.21 0 1.902-.394 2.344-.938.475-.584.742-1.44.878-2.497Z
 LOGOEOF
 }
 
@@ -1485,7 +1461,7 @@ brand_slug_for() {
     case "$n" in
         play.google.com)             echo googleplay; return ;;
         redirector.googlevideo.com|*.googlevideo.com) echo youtube; return ;;
-        copilot.microsoft.com)       echo ""; return ;;
+        copilot.microsoft.com)       echo copilot; return ;;
         # cloudflare.com у ipregion — это geo-эндпоинт speed.cloudflare.com,
         # такая же строка-источник, как ipinfo.io рядом. Марка там оставалась
         # единственной на всю группу GeoIP-баз и читалась как случайность.
@@ -1507,7 +1483,8 @@ brand_slug_for() {
     fi
     case "$n" in
         google|"google search captcha") echo google ;;
-        youtube|"youtube premium"|"youtube cdn"|"youtube music"|youtubemusic) echo youtube ;;
+        "youtube music"|youtubemusic) echo youtubemusic ;;
+        youtube|"youtube premium"|"youtube cdn") echo youtube ;;
         netflix|"netflix cdn") echo netflix ;;
         spotify|"spotify signup") echo spotify ;;
         chatgpt|openai) echo openai ;;
@@ -1542,6 +1519,8 @@ brand_slug_for() {
         github) echo github ;;
         graylog) echo graylog ;;
         gemini|"gemini supported"|"google gemini") echo googlegemini ;;
+        microsoft|bing|"microsoft bing") echo bing ;;
+        copilot) echo copilot ;;
         *) echo "" ;;
     esac
 }
@@ -1549,14 +1528,19 @@ brand_slug_for() {
 # ============================================================
 #  Парсеры вывода тестов -> .metrics / .services
 #  .metrics:  label \t value \t colorkey(ok|bad|warn|pri|"")
-#  .services: kind(chip|bar) \t name \t slug \t state(ok|bad|warn|na) \t value \t frac(0..1|-1)
+#  .services: kind \t name \t slug \t state(ok|bad|warn|na) \t value \t frac(0..1|-1) \t aux
+#    chip — строка-сервис: value — ответ (код страны, да/нет, блок…);
+#    bar  — скорость: value — приём, aux — отдача (Мбит/с, числом);
+#    net  — сеть YABS: name — место, value — Мбит/с, aux — провайдер;
+#    ping — узел пинга: slug — узел, value — avg ms, aux — «потери|группа»;
+#    sep  — разделитель секций (name — заголовок).
 # ============================================================
 
 # Поля разделяем US (\x1f), а НЕ табом: таб — IFS-пробельный, и пустое поле
 # (например, отсутствующий slug или slug у строк-шкал) при read «схлопывается»,
 # сдвигая остальные поля. \x1f непробельный — пустые поля сохраняются.
 mt_metric() { printf '%s\x1f%s\x1f%s\n' "$1" "$2" "${3:-}" >> "$MT_MFILE"; }
-mt_service() { printf '%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\n' "$1" "$2" "${3:-}" "${4:-na}" "${5:-}" "${6:--1}" >> "$MT_SFILE"; }
+mt_service() { printf '%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\n' "$1" "$2" "${3:-}" "${4:-na}" "${5:-}" "${6:--1}" "${7:-}" >> "$MT_SFILE"; }
 
 # Разбирает ячейку таблицы ipregion в «состояние<US>подпись».
 # inv=1 переворачивает Yes/No: у «Google Search Captcha» ipregion считает
@@ -1707,22 +1691,23 @@ parse_iperf3() {
     [[ -n "$minp" ]] && mt_metric "Мин ping" "${minp} ms" "pri"
     [[ -n "$cnt" && "$cnt" -gt 0 ]] && mt_metric "Серверов" "$cnt" ""
     [[ -z "$maxd" ]] && return
+    # Строка на город: приём и отдача числами. Шкалу страница строит сама —
+    # по максимуму обоих направлений, иначе отдача вылезала бы за край.
     printf '%s\n' "$data" | while read -r line; do
-        local city d u frac
+        local city d u
         city=$(printf '%s' "$line" | sed -E 's/[[:space:]]{2,}.*//' | sed 's/[[:space:]]*$//')
         [[ -z "$city" ]] && continue
         printf '%s' "$line" | grep -qE '[0-9].*Mbps' || continue
         d=$(printf '%s' "$line" | grep -oE '[0-9]+(\.[0-9]+)?[[:space:]]*Mbps' | grep -oE '[0-9]+(\.[0-9]+)?' | sed -n '1p')
         u=$(printf '%s' "$line" | grep -oE '[0-9]+(\.[0-9]+)?[[:space:]]*Mbps' | grep -oE '[0-9]+(\.[0-9]+)?' | sed -n '2p')
         [[ -z "$d" ]] && continue
-        frac=$(awk -v a="$d" -v b="$maxd" 'BEGIN{if(b>0)printf "%.3f", a/b; else print "0"}')
-        mt_service bar "$city" "" "ok" "↓${d}${u:+ ↑$u}" "$frac"
+        mt_service bar "$city" "" "ok" "$d" "-1" "$u"
     done
 }
 
 parse_yabs() {
     local txt="$1" cpu cores ram disk f4 f1 gs gm send
-    cpu=$(printf '%s\n' "$txt" | grep -m1 -E '^Processor' | sed -E 's/^[^:]*:[[:space:]]*//' | cut -c1-26)
+    cpu=$(printf '%s\n' "$txt" | grep -m1 -E '^Processor' | sed -E 's/^[^:]*:[[:space:]]*//')
     cores=$(printf '%s\n' "$txt" | grep -m1 -E 'CPU cores' | grep -oE '[0-9]+' | head -1)
     ram=$(printf '%s\n' "$txt" | grep -m1 -E '^RAM' | grep -oE '[0-9]+(\.[0-9]+)?[[:space:]]*[GM]iB' | head -1)
     disk=$(printf '%s\n' "$txt" | grep -m1 -E '^Disk' | grep -oE '[0-9]+(\.[0-9]+)?[[:space:]]*[GT]iB' | head -1)
@@ -1743,29 +1728,29 @@ parse_yabs() {
     [[ -n "$f1" ]] && mt_metric "fio 1m" "$f1" "pri"
     [[ -n "$gs" ]] && mt_metric "GB6 single" "$gs" "ok"
     [[ -n "$gm" ]] && mt_metric "GB6 multi" "$gm" "ok"
-    # iperf3 локации (recv для шкалы)
+    # iperf3 локации: место («London, UK» — без «(10G)»), провайдер и приём
+    # (Recv) в Мбит/с. Страница рисует флаг по коду страны в конце места.
     local loc; loc=$(printf '%s\n' "$txt" | awk '/iperf3 Network Speed Tests/{f=1;next} /Geekbench|YABS completed/{f=0} f' | grep -E '\|' | grep -viE 'Provider|----' || true)
-    local maxr; maxr=$(printf '%s\n' "$loc" | grep -oE '[0-9]+(\.[0-9]+)?[[:space:]]*[MG]bits/sec' | awk '{v=$1; if($0~/Gbit/)v*=1000; if(v>m)m=v} END{print m+0}')
     printf '%s\n' "$loc" | while IFS='|' read -r prov location send recv ping; do
-        local name r rn frac
-        name=$(printf '%s %s' "$prov" "$location" | sed -E 's/\(.*//; s/[[:space:]]+/ /g; s/^ //; s/ $//' | cut -c1-24)
-        [[ -z "$(printf '%s' "$name" | tr -d ' ')" ]] && continue
+        local place r rn
+        place=$(printf '%s' "$location" | sed -E 's/\(.*//; s/[[:space:]]+/ /g; s/^ //; s/ $//')
+        prov=$(printf '%s' "$prov" | sed -E 's/[[:space:]]+/ /g; s/^ //; s/ $//')
+        [[ -z "$place" ]] && continue
         r=$(printf '%s' "$recv" | grep -oE '[0-9]+(\.[0-9]+)?[[:space:]]*[MG]bits/sec' | head -1)
         [[ -z "$r" ]] && continue
-        rn=$(printf '%s' "$r" | grep -oE '[0-9]+(\.[0-9]+)?'); printf '%s' "$r" | grep -q Gbit && rn=$(awk -v v="$rn" 'BEGIN{print v*1000}')
-        frac=$(awk -v a="$rn" -v b="$maxr" 'BEGIN{if(b>0)printf "%.3f", a/b; else print "0"}')
-        mt_service bar "$name" "" "ok" "$(printf '%s' "$r" | sed 's/its\/sec//; s/[[:space:]]//g')" "$frac"
+        rn=$(printf '%s' "$r" | awk '{v=$1; if($0~/Gbit/)v*=1000; printf "%.0f", v}')
+        mt_service net "$place" "" "ok" "$rn" "-1" "$prov"
     done
 }
 
 parse_benchsh() {
     local txt="$1" cpu cores ram disk io org cc country
-    cpu=$(printf '%s\n' "$txt" | grep -m1 -E 'CPU Model' | sed -E 's/^[^:]*:[[:space:]]*//' | cut -c1-26)
+    cpu=$(printf '%s\n' "$txt" | grep -m1 -E 'CPU Model' | sed -E 's/^[^:]*:[[:space:]]*//')
     cores=$(printf '%s\n' "$txt" | grep -m1 -E 'CPU Cores' | grep -oE '[0-9]+' | head -1)
     ram=$(printf '%s\n' "$txt" | grep -m1 -E 'Total RAM' | sed -E 's/^[^:]*:[[:space:]]*//' | awk '{print $1" "$2}')
     disk=$(printf '%s\n' "$txt" | grep -m1 -E 'Total Disk' | sed -E 's/^[^:]*:[[:space:]]*//' | awk '{print $1" "$2}')
     io=$(printf '%s\n' "$txt" | grep -m1 -iE 'I/O Speed\(average\)' | grep -oE '[0-9]+(\.[0-9]+)?[[:space:]]*[MG]B/s' | head -1)
-    org=$(printf '%s\n' "$txt" | grep -m1 -E 'Organization' | sed -E 's/^[^:]*:[[:space:]]*//' | cut -c1-24)
+    org=$(printf '%s\n' "$txt" | grep -m1 -E 'Organization' | sed -E 's/^[^:]*:[[:space:]]*//')
     country=$(printf '%s\n' "$txt" | grep -m1 -E '^[[:space:]]*Location' | sed -E 's#.*/[[:space:]]*##' | cut -c1-6)
     cc=$(printf '%s\n' "$txt" | grep -m1 -E 'TCP Congestion' | sed -E 's/^[^:]*:[[:space:]]*//' | tr -d '[:space:]')
     [[ -n "$cpu" ]] && mt_metric "CPU" "$cpu" ""
@@ -1775,16 +1760,16 @@ parse_benchsh() {
     [[ -n "$io" ]] && mt_metric "I/O сред." "$io" "pri"
     [[ -n "$cc" ]] && mt_metric "CC" "$cc" ""
     [[ -n "$org" ]] && mt_metric "Сеть" "$org" ""
+    # Узлы speedtest: колонки Upload / Download / Latency — приём и отдача числами
     local nodes; nodes=$(printf '%s\n' "$txt" | grep -E ' Mbps' | grep -E ' ms' | sed -E 's/  +/\t/g' || true)
-    local maxd; maxd=$(printf '%s\n' "$nodes" | awk -F'\t' '{print $3}' | grep -oE '[0-9]+(\.[0-9]+)?' | sort -gr | head -1)
     printf '%s\n' "$nodes" | while IFS=$'\t' read -r node up down lat _; do
-        local nm d frac
-        nm=$(printf '%s' "$node" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | cut -c1-24)
+        local nm d u
+        nm=$(printf '%s' "$node" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
         [[ -z "$nm" ]] && continue
         d=$(printf '%s' "$down" | grep -oE '[0-9]+(\.[0-9]+)?' | head -1)
+        u=$(printf '%s' "$up" | grep -oE '[0-9]+(\.[0-9]+)?' | head -1)
         [[ -z "$d" ]] && continue
-        frac=$(awk -v a="$d" -v b="$maxd" 'BEGIN{if(b>0)printf "%.3f", a/b; else print "0"}')
-        mt_service bar "$nm" "" "ok" "↓${d}" "$frac"
+        mt_service bar "$nm" "" "ok" "$d" "-1" "$u"
     done
 }
 
@@ -1893,10 +1878,12 @@ parse_ipquality() {
 parse_sysbench() {
     local txt="$1" eps tev tt la l95
     eps=$(printf '%s\n' "$txt" | grep -m1 -iE 'events per second' | grep -oE '[0-9]+(\.[0-9]+)?' | tail -1)
-    tev=$(printf '%s\n' "$txt" | grep -m1 -iE 'total events' | grep -oE '[0-9]+' | tail -1)
+    # sysbench пишет «total number of events», старые версии — «total events»
+    tev=$(printf '%s\n' "$txt" | grep -m1 -iE 'total (number of )?events' | grep -oE '[0-9]+' | tail -1)
     tt=$(printf '%s\n' "$txt" | grep -m1 -iE 'total time' | grep -oE '[0-9]+(\.[0-9]+)?' | head -1)
     la=$(printf '%s\n' "$txt" | grep -m1 -iE '^[[:space:]]*avg:' | grep -oE '[0-9]+(\.[0-9]+)?' | head -1)
-    l95=$(printf '%s\n' "$txt" | grep -m1 -iE '95th percentile' | grep -oE '[0-9]+(\.[0-9]+)?' | head -1)
+    # последнее число строки: первое — это «95» из самого «95th percentile»
+    l95=$(printf '%s\n' "$txt" | grep -m1 -iE '95th percentile' | grep -oE '[0-9]+(\.[0-9]+)?' | tail -1)
     [[ -n "$eps" ]] && mt_metric "events/s" "$eps" "ok"
     [[ -n "$tev" ]] && mt_metric "событий" "$tev" ""
     [[ -n "$tt" ]] && mt_metric "время" "${tt} s" ""
@@ -1937,6 +1924,22 @@ parse_pingmap() {
         [[ "${v%%/*}" == "0" ]] && st="ok" || st="bad"
         mt_metric "Потери" "${v}${names:+ ($names)}" "$st"
     fi
+    # Строка на узел для страницы: группа (заголовок «── Россия ──»), узел,
+    # город, потери и min/avg/max. Разбираем ту же таблицу, что видна в консоли.
+    local node city loss rest grp avg
+    while IFS=$'\x1f' read -r node city loss rest grp; do
+        [[ -n "$node" ]] || continue
+        if [[ "$rest" =~ ^([0-9.]+)/([0-9.]+)/([0-9.]+)\ ms ]]; then
+            avg="${BASH_REMATCH[2]}"
+            st=$(LC_ALL=C awk -v x="$avg" -v l="${loss%\%}" 'BEGIN{ print (l+0>0)?"bad":(x+0<80)?"ok":(x+0<=200)?"warn":"bad" }')
+        elif [[ "$rest" == *"ответа"* ]]; then avg="—"; loss="нет ответа"; st="na"
+        else avg="—"; loss="все пакеты потеряны"; st="bad"; fi
+        mt_service ping "$city" "$node" "$st" "$avg" "-1" "$loss|$grp"
+    done < <(printf '%s\n' "$txt" | awk -F' · ' '
+        /──/ { g = $0; gsub(/^[[:space:]]*──[[:space:]]*|[[:space:]]*──[[:space:]]*$/, "", g); next }
+        NF >= 4 && $1 ~ /^[[:space:]]*[a-z]+[0-9]+[[:space:]]*$/ {
+            n = $1; gsub(/[[:space:]]/, "", n)
+            printf "%s\x1f%s\x1f%s\x1f%s\x1f%s\n", n, $2, $3, $4, g }')
 }
 
 # Диспетчер: читает лог, пишет .metrics/.services
@@ -1961,20 +1964,45 @@ parse_test_output() {
 }
 
 # ============================================================
-#  Рендер SVG-сводки («Server Scorecard»)
+#  Сводка-альбом: Material 3 Expressive, тёмная тема (концепт 5b)
 #
-#  Оформление монохромное: один фон, одна поверхность карточки,
-#  один волосяной контур, четыре ступени серого для текста.
-#  Цвета нет вовсе — состояние несут слово и контраст:
-#    норма    — приглушённый текст без плашки (не шумит);
-#    внимание — текст в рамке;
-#    ошибка   — инверсия (светлая плашка, тёмный текст): самое
-#               заметное пятно на карточке достаётся тому
-#               единственному, что требует реакции.
+#  Одна тональная схема M3 из оранжевого исходного цвета. Главную цифру
+#  страницы держит фигура M3 Expressive («печенька» или «солнце»), данные
+#  идут сегментированными списками, скорость — волнистыми шкалами.
+#  Холст — 1280 логических px, как в макете; PNG рендерится ×2.
+#
+#  Горячие функции написаны без форков: ширина строки считается по
+#  таблице ширин глифов Onest, экранирование — подстановками bash.
+#  На Linux разница невелика, а под Git Bash каждый $(…) стоит десятки
+#  миллисекунд — строк же на странице сотни.
+#
+#  Ассеты вшиты в скрипт: ширины глифов Onest (OFL), иконки Material
+#  Symbols Rounded (Apache-2.0), круглые флаги circle-flags (MIT).
 # ============================================================
 
-sv() { SVG_BODY="${SVG_BODY}$1"$'\n'; }
-sv_esc() { printf '%s' "$1" | xml_escape; }
+declare -A MT_GW4=() MT_GW9=()     # ширины глифов Onest, 1/1000 em: начертания 400 и 900
+declare -A MT_ICON=()              # Material Symbols Rounded: имя -> путь в 960-сетке
+declare -A MT_FLAG=()              # круглые флаги: код -> содержимое в 512-сетке
+declare -A MT_FLAG_USED=()         # флаги текущей страницы -> попадут в <defs>
+declare -A MT_FLAG_MISS=()         # коды, за которыми уже ходили в сеть и не нашли
+declare -A MT_CNAME=() MT_CACC=()  # страна по-русски: именительный и винительный
+declare -A MT_SHAPE=()             # кэш контуров фигур: «тип:размер» -> путь
+declare -A M=() MC=()              # метрики текущего теста: подпись -> значение / цвет
+MT_U8=0
+# Код страны в регулярках — явным перечнем букв: диапазон [A-Z] в части
+# UTF-8-локалей glibc сравнивается по правилам сортировки и ловит строчные.
+MT_CC_RE='[ABCDEFGHIJKLMNOPQRSTUVWXYZ][ABCDEFGHIJKLMNOPQRSTUVWXYZ]'
+
+sv() { SVG_BODY+="$1"$'\n'; }
+
+# Экранирование для SVG без форка -> XE. Замену берём в кавычки: в bash 5.2
+# (patsub_replacement) голый & в замене означает «найденный текст».
+xesc() {
+    local s="$1" q="'"
+    s=${s//&/"&amp;"}; s=${s//</"&lt;"}; s=${s//>/"&gt;"}; s=${s//\"/"&quot;"}; s=${s//"$q"/"&apos;"}
+    XE="$s"
+}
+
 
 # Длина строки В СИМВОЛАХ независимо от локали. В C/POSIX (а это типичная локаль
 # для `wget|bash`) ${#s} считает БАЙТЫ, и кириллица меряется ×2 — отсюда «съезжал»
@@ -1995,211 +2023,1023 @@ vcut() {
     printf '%s…' "${out%.}"
 }
 
-# Марка сервиса (Simple Icons) — монохромом и без плашки-подложки.
-# Пути нет — не рисуем ничего: имя стоит рядом и говорит всё само.
-sv_mark() {
-    local x="$1" y="$2" sz="$3" slug="$4" col="${5:-$C_MARK}" d=""
-    [[ -n "$slug" ]] && d="${LOGO_PATH[$slug]:-}"
-    [[ -z "$d" ]] && return 0
-    local scl; scl=$(awk "BEGIN{printf \"%.4f\", $sz/24}")
-    sv "<g transform=\"translate($x,$y) scale($scl)\"><path d=\"$d\" fill=\"$col\"/></g>"
+# a/b десятичной строкой -> FD: fdiv — 5 знаков (масштабы), fxd — 2 знака со знаком.
+fdiv() { printf -v FD '%d.%05d' $(( $1 / $2 )) $(( ($1 % $2) * 100000 / $2 )); }
+fxd() {
+    local a=$1 b=$2 s=""; (( a < 0 )) && { s="-"; a=$(( -a )); }
+    printf -v FD '%s%d.%02d' "$s" $(( a / b )) $(( (a % b) * 100 / b ))
 }
 
-# --- ЭКСПЕРИМЕНТ: «стена марок» -----------------------------------------
-# Сервисы, у которых есть фирменная марка, выкладываются плитками вместо
-# строк: знак крупнее, состояние читается заливкой плитки, и глаз находит
-# заблокированное одним движением. Остальные (GeoIP-базы, шкалы скорости)
-# остаются строками. MT_BRAND_WALL=0 возвращает прежний вид целиком.
-MT_BRAND_WALL="${MT_BRAND_WALL:-1}"
-WALL_COLS=6
-
-# Плитка бренда: x y w h slug name state value
-sv_brand_tile() {
-    local x="$1" y="$2" w="$3" h="$4" slug="$5" nm="$6" st="$7" val="$8"
-    local fill="$C_SCH" stroke="" mark="$C_MARK" tx="$C_TXT" vx="$C_TXT2"
-    case "$st" in
-        bad)  fill="$C_INV"; mark="$C_INK"; tx="$C_INK"; vx="#4A4A4A" ;;
-        warn) stroke=" stroke=\"$C_LINE2\" stroke-width=\"1\"" ;;
-        na)   fill="none"; stroke=" stroke=\"$C_LINE\" stroke-width=\"1\""
-              mark="$C_TXT3"; tx="$C_TXT3"; vx="$C_TXT3" ;;
-    esac
-    sv "<rect x=\"$x\" y=\"$y\" width=\"$w\" height=\"$h\" rx=\"2\" fill=\"$fill\"$stroke/>"
-    sv_mark "$((x + w/2 - 13))" "$((y+15))" 26 "$slug" "$mark"
-    sv "<text x=\"$((x+w/2))\" y=\"$((y+62))\" text-anchor=\"middle\" fill=\"$tx\" font-size=\"11\">$(sv_esc "$(vcut "$nm" 23)")</text>"
-    sv "<text x=\"$((x+w/2))\" y=\"$((y+80))\" text-anchor=\"middle\" fill=\"$vx\" font-size=\"11.5\" font-weight=\"600\">$(sv_esc "$val")</text>"
-}
-
-# Выкладывает накопленный сегмент: сперва стена плиток, затем строки.
-# Работает через RS_* — один и тот же код меряет высоту и рисует.
-rs_flush() {
-    local n=${#RS_WALL[@]} i col row bx TW TH=92
-    local kind name slug stt val frac
-    TW=$(( (CARDW - 2*IPAD - (WALL_COLS-1)*8) / WALL_COLS ))
-    # Стена из одной-двух плиток — не стена, а сирота посреди списка
-    # (так выглядел cloudflare.com среди GeoIP-баз). Меньше четырёх — строками.
-    if (( n > 0 && n < 4 )); then
-        local -a demoted=()
-        for ((i=0; i<n; i++)); do
-            IFS=$'\x1f' read -r slug name stt val <<< "${RS_WALL[$i]}"
-            demoted+=( "chip"$'\x1f'"$name"$'\x1f'"$slug"$'\x1f'"$stt"$'\x1f'"$val"$'\x1f'"-1" )
+# Строка -> массивы символов GC[] и их ширин GWD[] (1/1000 em) для начертания.
+# Ширина между 400 и 900 интерполируется линейно: у Onest это расходится с
+# настоящим начертанием меньше чем на 0.2 %. В UTF-8-локали ${s:i:1} отдаёт
+# символ, в C-локали — байт, и многобайтные символы собираем сами.
+mt_glyphs() {
+    local s="$1" t=$(( ${2:-400} - 400 )) n=${#1} i c q="" a b
+    GC=(); GWD=()
+    if (( MT_U8 )); then
+        for (( i=0; i<n; i++ )); do
+            c="${s:i:1}"; a=${MT_GW4["_$c"]:-600}; b=${MT_GW9["_$c"]:-640}
+            GC+=("$c"); GWD+=( $(( a + (b-a)*t/500 )) )
         done
-        RS_ROWS=( "${demoted[@]}" ${RS_ROWS[@]+"${RS_ROWS[@]}"} )
-        RS_WALL=(); n=0
-    fi
-    if (( n > 0 )); then
-        for ((i=0; i<n; i++)); do
-            [[ "$RS_DRAW" == "1" ]] || break
-            col=$(( i % WALL_COLS )); row=$(( i / WALL_COLS ))
-            IFS=$'\x1f' read -r slug name stt val <<< "${RS_WALL[$i]}"
-            sv_brand_tile $(( PAD+IPAD + col*(TW+8) )) $(( RS_CY + row*(TH+8) )) "$TW" "$TH" "$slug" "$name" "$stt" "$val"
-        done
-        RS_CY=$(( RS_CY + ((n + WALL_COLS - 1)/WALL_COLS)*(TH+8) ))
-        (( ${#RS_ROWS[@]} > 0 )) && RS_CY=$(( RS_CY + 6 ))
-    fi
-    col=0
-    for ((i=0; i<${#RS_ROWS[@]}; i++)); do
-        IFS=$'\x1f' read -r kind name slug stt val frac <<< "${RS_ROWS[$i]}"
-        (( col==0 )) && bx=$sx1 || bx=$sx2
-        if [[ "$RS_DRAW" == "1" ]]; then
-            if [[ "$kind" == "bar" ]]; then sv_row_bar "$bx" "$RS_CY" "$colw" "$name" "${frac:-0}" "$val"
-            else sv_row_chip "$bx" "$RS_CY" "$colw" "$slug" "$name" "$stt" "$val"; fi
-        fi
-        if (( col==1 )); then RS_CY=$((RS_CY+32)); col=0; else col=1; fi
-    done
-    (( col==1 )) && RS_CY=$((RS_CY+32))
-    RS_WALL=(); RS_ROWS=()
-}
-
-# Вердикт у правого края xr: xr y state text
-sv_vchip() {
-    local xr="$1" y="$2" st="$3" t="$4" w
-    case "$st" in
-        bad)
-            w=$(( ($(vlen "$t")*72)/10 + 22 ))
-            sv "<rect x=\"$((xr-w))\" y=\"$y\" width=\"$w\" height=\"20\" rx=\"2\" fill=\"$C_INV\"/>"
-            sv "<text x=\"$((xr-w/2))\" y=\"$((y+14))\" text-anchor=\"middle\" fill=\"$C_INK\" font-size=\"11.5\" font-weight=\"600\">$(sv_esc "$t")</text>" ;;
-        warn)
-            w=$(( ($(vlen "$t")*72)/10 + 22 ))
-            sv "<rect x=\"$((xr-w))\" y=\"$y\" width=\"$w\" height=\"20\" rx=\"2\" fill=\"none\" stroke=\"$C_LINE2\" stroke-width=\"1\"/>"
-            sv "<text x=\"$((xr-w/2))\" y=\"$((y+14))\" text-anchor=\"middle\" fill=\"$C_TXT\" font-size=\"11.5\">$(sv_esc "$t")</text>" ;;
-        ok)
-            sv "<text x=\"$xr\" y=\"$((y+14))\" text-anchor=\"end\" fill=\"$C_TXT2\" font-size=\"12\">$(sv_esc "$t")</text>" ;;
-        *)
-            sv "<text x=\"$xr\" y=\"$((y+14))\" text-anchor=\"end\" fill=\"$C_TXT3\" font-size=\"12\">$(sv_esc "$t")</text>" ;;
-    esac
-}
-
-# строка-сервис с вердиктом: x y colw slug name state value (высота строки 32)
-sv_row_chip() {
-    local x="$1" y="$2" cw="$3" slug="$4" nm="$5" st="$6" val="$7"
-    sv_mark "$x" "$((y+7))" 16 "$slug"
-    sv "<text x=\"$((x+26))\" y=\"$((y+20))\" fill=\"$C_TXT\" font-size=\"13.5\">$(sv_esc "$nm")</text>"
-    sv_vchip $((x+cw)) $((y+6)) "$st" "$val"
-}
-
-# строка-сервис со шкалой: x y colw name frac value (высота строки 32).
-# Длина полосы и есть данные — красить её нечем и незачем.
-sv_row_bar() {
-    local x="$1" y="$2" cw="$3" nm="$4" fr="$5" val="$6"
-    sv "<text x=\"$x\" y=\"$((y+13))\" fill=\"$C_TXT\" font-size=\"13\">$(sv_esc "$nm")</text>"
-    sv "<text x=\"$((x+cw))\" y=\"$((y+13))\" text-anchor=\"end\" fill=\"$C_TXT2\" font-size=\"12.5\">$(sv_esc "$val")</text>"
-    local fw; fw=$(awk "BEGIN{w=$cw*$fr; if(w<2)w=2; if(w>$cw)w=$cw; print int(w)}")
-    sv "<rect x=\"$x\" y=\"$((y+20))\" width=\"$cw\" height=\"4\" fill=\"$C_TRACK\"/>"
-    sv "<rect x=\"$x\" y=\"$((y+20))\" width=\"$fw\" height=\"4\" fill=\"$C_MARK\"/>"
-}
-
-# Ширина половинок метрики-чипа: подпись 11px, значение 13px.
-mc_lw() { echo $(( ($(vlen "$1")*67)/10 + 22 )); }
-mc_vw() { echo $(( ($(vlen "$1")*76)/10 + 24 )); }
-sv_chipw() { echo $(( $(mc_lw "$1") + $(mc_vw "$2") )); }
-
-# метрика-чип: x y label value colorkey
-sv_mchip() {
-    local x="$1" y="$2" l="$3" v="$4" ck="$5"
-    local lw vw cw; lw=$(mc_lw "$l"); vw=$(mc_vw "$v"); cw=$((lw+vw))
-    local bg="$C_SCH" lc="$C_TXT2" vc="$C_TXT" dv="$C_LINE2" so=""
-    case "$ck" in
-        bad)  bg="$C_INV"; lc="#4A4A4A"; vc="$C_INK"; dv="#B8B8B8" ;;
-        warn) so=" stroke=\"$C_LINE2\" stroke-width=\"1\"" ;;
-    esac
-    sv "<rect x=\"$x\" y=\"$y\" width=\"$cw\" height=\"30\" rx=\"2\" fill=\"$bg\"$so/>"
-    sv "<line x1=\"$((x+lw))\" y1=\"$((y+6))\" x2=\"$((x+lw))\" y2=\"$((y+24))\" stroke=\"$dv\" stroke-width=\"1\"/>"
-    sv "<text x=\"$((x+lw/2))\" y=\"$((y+19))\" text-anchor=\"middle\" fill=\"$lc\" font-size=\"11\">$(sv_esc "$l")</text>"
-    sv "<text x=\"$((x+lw+vw/2))\" y=\"$((y+19))\" text-anchor=\"middle\" fill=\"$vc\" font-size=\"13\" font-weight=\"600\">$(sv_esc "$v")</text>"
-}
-
-# Статус теста у правого края. «Выполнен» — ожидаемый исход, ему хватает
-# приглушённой подписи; рамка и инверсия достаются тому, что пошло не так.
-sv_status_chip() {
-    local xr="$1" y="$2" st="$3" t w
-    case "$st" in
-        done) sv "<text x=\"$xr\" y=\"$((y+15))\" text-anchor=\"end\" fill=\"$C_TXT3\" font-size=\"12\">выполнен</text>"; return ;;
-        skip) t="пропущен" ;;
-        err)  t="ошибка" ;;
-        *)    t="не запускался" ;;
-    esac
-    w=$(( ($(vlen "$t")*72)/10 + 24 ))
-    if [[ "$st" == "err" ]]; then
-        sv "<rect x=\"$((xr-w))\" y=\"$y\" width=\"$w\" height=\"22\" rx=\"2\" fill=\"$C_INV\"/>"
-        sv "<text x=\"$((xr-w/2))\" y=\"$((y+15))\" text-anchor=\"middle\" fill=\"$C_INK\" font-size=\"12\" font-weight=\"600\">$t</text>"
     else
-        sv "<rect x=\"$((xr-w))\" y=\"$y\" width=\"$w\" height=\"22\" rx=\"2\" fill=\"none\" stroke=\"$C_LINE2\" stroke-width=\"1\"/>"
-        sv "<text x=\"$((xr-w/2))\" y=\"$((y+15))\" text-anchor=\"middle\" fill=\"$C_TXT2\" font-size=\"12\">$t</text>"
+        for (( i=0; i<=n; i++ )); do
+            c="${s:i:1}"
+            if (( i < n )) && [[ -n "$q" && "$c" == [$'\x80'-$'\xbf'] ]]; then q+="$c"; continue; fi
+            if [[ -n "$q" ]]; then
+                a=${MT_GW4["_$q"]:-600}; b=${MT_GW9["_$q"]:-640}
+                GC+=("$q"); GWD+=( $(( a + (b-a)*t/500 )) )
+            fi
+            q="$c"
+        done
     fi
 }
 
-# Раскладка строк-сервисов в 2 колонки с поддержкой разделителей (kind=sep).
-# Аргументы: sfile, sy(старт Y), draw(0|1). Возвращает итоговый Y (echo) —
-# одна и та же логика для предпрохода (высота) и отрисовки.
-render_services() {
-    local sfile="$1" sy="$2" draw="$3"
-    local kind name slug stt val frac
-    RS_CY=$sy; RS_DRAW="$draw"; RS_WALL=(); RS_ROWS=()
-    while IFS=$'\x1f' read -r kind name slug stt val frac; do
-        [[ -z "$kind" ]] && continue
-        if [[ "$kind" == "sep" ]]; then
-            rs_flush          # sep режет сегменты: перенос марок через него сломал бы смысл
-            if [[ "$draw" == "1" ]]; then
-                RS_CY=$((RS_CY+16))
-                sv "<line x1=\"$sx1\" y1=\"$RS_CY\" x2=\"$((PAD+CARDW-IPAD))\" y2=\"$RS_CY\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
-                [[ -n "$name" ]] && sv "<text x=\"$sx1\" y=\"$((RS_CY+24))\" fill=\"$C_TXT2\" font-size=\"11\" letter-spacing=\"1\">$(sv_esc "$name")</text>"
-                RS_CY=$((RS_CY+34))
-            else
-                RS_CY=$((RS_CY+50))
-            fi
-            continue
-        fi
-        if [[ "$MT_BRAND_WALL" == "1" && "$kind" == "chip" && -n "$slug" && -n "${LOGO_PATH[$slug]:-}" ]]; then
-            RS_WALL+=( "$slug"$'\x1f'"$name"$'\x1f'"$stt"$'\x1f'"$val" )
-        else
-            RS_ROWS+=( "$kind"$'\x1f'"$name"$'\x1f'"$slug"$'\x1f'"$stt"$'\x1f'"$val"$'\x1f'"$frac" )
-        fi
-    done < "$sfile"
-    rs_flush
-    echo "$RS_CY"
+# Ширина строки в px -> TW: <текст> <кегль> [начертание] [трекинг, 1/1000 em]
+tw() {
+    mt_glyphs "$1" "${3:-400}"
+    local x sum=0
+    for x in "${GWD[@]}"; do sum=$((sum+x)); done
+    TW=$(( (sum + ${4:-0} * ${#GWD[@]}) * $2 / 1000 ))
 }
 
-# Палитра и геометрия карточки. Раньше это были local внутри build_summary_svg,
-# и вложенные sv_* видели их по динамической области видимости. Страниц у сводки
-# теперь несколько и рисуют их разные функции — общий набор вынесен в глобальные,
-# иначе каждая страница тащила бы копию шкалы.
+# Кегль, при котором строка влезает в ширину -> FS:
+# <текст> <ширина> <кегль> <начертание> [трекинг] [минимальный кегль]
+fitsz() {
+    tw "$1" "$3" "$4" "${5:-0}"
+    FS=$3
+    (( TW > $2 )) && FS=$(( $3 * $2 / TW ))
+    (( FS < ${6:-10} )) && FS=${6:-10}
+    return 0
+}
+
+# Обрезка по ширине с многоточием -> EL: <текст> <ширина> <кегль> [начертание]
+ellip() {
+    local mw=$2 sz=$3 sum=0 i lim
+    mt_glyphs "$1" "${4:-400}"
+    for (( i=0; i<${#GWD[@]}; i++ )); do sum=$((sum+GWD[i])); done
+    if (( sum * sz / 1000 <= mw )); then EL="$1"; return; fi
+    local e4=${MT_GW4[_…]:-700} e9=${MT_GW9[_…]:-800}
+    lim=$(( mw * 1000 / sz - (e4 + (e9 - e4) * (${4:-400} - 400) / 500) ))
+    EL=""; sum=0
+    for (( i=0; i<${#GWD[@]}; i++ )); do
+        (( sum + GWD[i] > lim )) && break
+        sum=$((sum+GWD[i])); EL+="${GC[i]}"
+    done
+    # хвост из пробелов и знаков препинания убираем; «·» — отдельно и целиком:
+    # в C-локали он в скобочном классе распался бы на байты, а последний байт
+    # «·» совпадает с последним байтом «з» — и буква рвалась бы пополам
+    while :; do
+        case "$EL" in
+            *" "|*","|*".") EL="${EL%?}" ;;
+            *"·")           EL="${EL%·}" ;;
+            *)              break ;;
+        esac
+    done
+    EL+="…"
+}
+
+# Перенос по словам -> WL[]: <текст> <ширина> <кегль> [начертание] [макс. строк]
+wrap() {
+    local mw=$2 sz=$3 wt="${4:-400}" mx="${5:-99}" w line="" cand
+    local -a words=()
+    WL=()
+    read -r -a words <<< "$1"
+    for w in "${words[@]}"; do
+        cand="${line:+$line }$w"
+        tw "$cand" "$sz" "$wt"
+        if (( TW <= mw )) || [[ -z "$line" ]]; then line="$cand"
+        else WL+=("$line"); line="$w"; fi
+    done
+    [[ -n "$line" ]] && WL+=("$line")
+    local i
+    for i in "${!WL[@]}"; do ellip "${WL[$i]}" "$mw" "$sz" "$wt"; WL[$i]="$EL"; done
+    if (( ${#WL[@]} > mx )); then
+        local rest="${WL[*]:mx-1}"
+        WL=("${WL[@]:0:mx-1}")
+        ellip "$rest" "$mw" "$sz" "$wt"; WL+=("$EL")
+    fi
+}
+
+# Текст: <x> <y> <кегль> <начертание> <цвет> <текст> [start|middle|end] [трекинг, 1/1000 em]
+t() {
+    xesc "$6"
+    local a="" l=""
+    [[ "${7:-start}" != start ]] && a=" text-anchor=\"$7\""
+    if [[ -n "${8:-}" && "${8:-0}" != 0 ]]; then fxd $(( $8 * $3 )) 1000; l=" letter-spacing=\"$FD\""; fi
+    sv "<text x=\"$1\" y=\"$2\" font-size=\"$3\" font-weight=\"$4\" fill=\"$5\"$a$l>$XE</text>"
+}
+
+# Прямоугольник с радиусом на каждый угол, порядок как у border-radius:
+# <x> <y> <w> <h> <tl> <tr> <br> <bl> <заливка> [доп. атрибуты]
+rr() {
+    local x=$1 y=$2 w=$3 h=$4 a=$5 b=$6 c=$7 d=$8 m
+    m=$(( (w < h ? w : h) / 2 ))
+    (( a > m )) && a=$m; (( b > m )) && b=$m; (( c > m )) && c=$m; (( d > m )) && d=$m
+    sv "<path d=\"M$((x+a)) ${y}H$((x+w-b))A$b $b 0 0 1 $((x+w)) $((y+b))V$((y+h-c))A$c $c 0 0 1 $((x+w-c)) $((y+h))H$((x+d))A$d $d 0 0 1 $x $((y+h-d))V$((y+a))A$a $a 0 0 1 $((x+a)) ${y}Z\" fill=\"$9\"${10:+ ${10}}/>"
+}
+
+# Радиусы элемента сегментированного списка -> R[]: <номер> <всего> <большой> <малый>
+segr() {
+    if (( $2 == 1 )); then R=($3 $3 $3 $3)
+    elif (( $1 == 0 )); then R=($3 $3 $4 $4)
+    elif (( $1 == $2 - 1 )); then R=($4 $4 $3 $3)
+    else R=($4 $4 $4 $4); fi
+}
+
+# Фигура M3 Expressive: <тип> <x> <y> <размер> <заливка>. Формулы — из макета:
+# r = 50 − a + a·cos(n·t) в процентах стороны; cookie12 (12 волн, 3 %),
+# cookie9 (9 волн, 5 %), sunny8 (8 волн, 5.5 %). Контур на размер считаем раз.
+mt_shape() {
+    local key="$1:$4" d n a p
+    d="${MT_SHAPE[$key]:-}"
+    if [[ -z "$d" ]]; then
+        case "$1" in
+            cookie9) n=9; a=5;   p=144 ;;
+            sunny8)  n=8; a=5.5; p=160 ;;
+            *)       n=12; a=3;  p=192 ;;
+        esac
+        # LC_ALL=C: в ru_RU mawk печатает «1,5», а запятая в пути SVG — разделитель чисел
+        d=$(LC_ALL=C awk -v n=$n -v a=$a -v p=$p -v s="$4" 'BEGIN{ pi = atan2(0, -1)
+            for (i = 0; i < p; i++) { t = i / p * 2 * pi; r = 50 - a + a * cos(n * t)
+                printf "%s%.1f %.1f", (i ? "L" : "M"), (50 + r * sin(t)) * s / 100, (50 - r * cos(t)) * s / 100 }
+            printf "Z" }')
+        MT_SHAPE[$key]="$d"
+    fi
+    sv "<path transform=\"translate($2 $3)\" d=\"$d\" fill=\"$5\"/>"
+}
+
+# Иконка Material Symbols: <имя> <x> <y> <размер> <цвет>. Путь лежит в сетке
+# 0…960 по x и −960…0 по y — отсюда сдвиг на размер вниз.
+mt_icon() {
+    local d="${MT_ICON[$1]:-}"
+    [[ -n "$d" ]] || return 0
+    fdiv "$4" 960
+    sv "<path transform=\"translate($2 $(( $3 + $4 ))) scale($FD)\" d=\"$d\" fill=\"$5\"/>"
+}
+
+# Марка сервиса (Simple Icons, сетка 24): <slug> <x> <y> <размер> <цвет>
+sv_mark() {
+    [[ -n "$1" ]] || return 1
+    local d="${LOGO_PATH[$1]:-}"
+    [[ -n "$d" ]] || return 1
+    fdiv "$4" 24
+    sv "<path transform=\"translate($2 $3) scale($FD)\" d=\"$d\" fill=\"$5\"/>"
+}
+
+# Круглый флаг: <код> <x> <y> <диаметр>. Вшитый — через <use> (содержимое уйдёт
+# в <defs> один раз на страницу), редкий — догружаем с jsDelivr, а без сети
+# рисуем кружок с буквами кода, чтобы строка не теряла выравнивание.
+mt_flag() {
+    local cc="${1,,}" x=$2 y=$3 d=$4
+    [[ "$cc" == "uk" ]] && cc="gb"
+    if [[ "$cc" =~ ^[a-z]{2}$ ]] && { [[ -n "${MT_FLAG[$cc]:-}" ]] || mt_flag_fetch "$cc"; }; then
+        MT_FLAG_USED[$cc]=1
+        fdiv "$d" 512
+        sv "<use href=\"#fl-$cc\" xlink:href=\"#fl-$cc\" transform=\"translate($x $y) scale($FD)\"/>"
+        return 0
+    fi
+    local r=$(( d / 2 ))
+    sv "<circle cx=\"$(( x + r ))\" cy=\"$(( y + r ))\" r=\"$r\" fill=\"$C_SECC\"/>"
+    t $(( x + r )) $(( y + r + d * 14 / 100 )) $(( d * 40 / 100 )) 700 "$C_ONSECC" "${cc^^}" middle
+}
+
+# Флаг, которого нет среди вшитых: один запрос на код за прогон. Версия пакета
+# прибита (тот же circle-flags, из которого взяты вшитые), а ответ проверяем:
+# обёртка — <svg> с маской-кругом, внутри — только простые фигуры без ссылок.
+# Всё, что вставляется в картинку как есть, не должно нести <image>, <text>
+# или внешних href — иначе — монограмма.
+mt_flag_fetch() {
+    local cc="$1" svg inner chk
+    [[ "${MT_FLAG_FETCH:-1}" == "1" && -z "${MT_FLAG_MISS[$cc]:-}" ]] || return 1
+    MT_FLAG_MISS[$cc]=1
+    command -v curl &>/dev/null || return 1
+    svg=$(curl -fsSL --max-time 5 "https://cdn.jsdelivr.net/npm/circle-flags@2.8.3/flags/${cc}.svg" 2>/dev/null) || return 1
+    [[ "$svg" == "<svg"*'<g mask="url(#a)">'*"</g></svg>"* ]] || return 1
+    inner="${svg#*<g mask=\"url(#a)\">}"; inner="${inner%</g></svg>*}"
+    [[ -n "$inner" ]] || return 1
+    chk="${inner//<path /}"; chk="${chk//<circle /}"; chk="${chk//<rect /}"; chk="${chk//<ellipse /}"
+    chk="${chk//<polygon /}"; chk="${chk//<g>/}"; chk="${chk//<g /}"; chk="${chk//<\/g>/}"
+    [[ "$chk" == *"<"* || "$chk" == *"href"* || "$chk" == *"url("* ]] && return 1
+    MT_FLAG[$cc]="$inner"
+}
+
+# Базовая линия по верху строки: верх + кегль·(lh/2 + 0.3325), lh в тысячных.
+# 0.3325 = (ascender − descender)/2 − descender для Onest (970 / 305 из 1000).
+blt() { BL=$(( $1 + $2 * ($3 + 665) / 2000 )); }
+
+# Вшитые таблицы: ширины глифов Onest (символ, 400, 900), иконки Material
+# Symbols Rounded (имя, путь), круглые флаги (код, содержимое 512-сетки),
+# страны по-русски (код, именительный, винительный — если отличается).
+# Флаги — частые страны хостинга и GeoIP; остальные догружает mt_flag_fetch.
+mt_load_assets() {
+    (( ${#MT_GW4[@]} )) && return 0
+    local a b c
+    while IFS=$'\t' read -r a b c; do [[ -n "$b" ]] && { MT_GW4["_$a"]=$b; MT_GW9["_$a"]=$c; }; done <<'MTGWEOF'
+ 	270	290
+!	273	325
+"	359	447
+#	653	700
+$	656	668
+%	804	941
+&	677	744
+'	222	263
+(	308	384
+)	308	384
+*	414	495
++	550	620
+,	261	328
+-	458	469
+.	254	299
+/	477	536
+0	665	657
+1	363	408
+2	566	557
+3	599	622
+4	633	639
+5	616	614
+6	623	624
+7	505	516
+8	622	627
+9	620	622
+:	253	305
+;	261	327
+<	550	620
+=	550	620
+>	550	620
+?	513	541
+@	983	1001
+A	670	739
+B	655	691
+C	704	721
+D	720	737
+E	610	629
+F	599	607
+G	720	740
+H	727	753
+I	261	315
+J	558	602
+K	625	704
+L	574	607
+M	856	928
+N	741	783
+O	761	781
+P	630	669
+Q	761	782
+R	658	710
+S	652	665
+T	569	612
+U	726	745
+V	683	736
+W	983	1018
+X	593	719
+Y	614	727
+Z	597	631
+[	321	374
+\	477	536
+]	321	375
+^	550	620
+_	463	432
+`	559	643
+a	555	576
+b	604	637
+c	553	568
+d	604	639
+e	573	576
+f	366	396
+g	604	639
+h	591	614
+i	219	272
+j	254	277
+k	520	585
+l	219	272
+m	819	874
+n	591	614
+o	595	601
+p	604	637
+q	604	639
+r	373	406
+s	509	515
+t	370	364
+u	576	591
+v	536	572
+w	843	883
+x	515	590
+y	597	629
+z	518	505
+{	389	413
+|	261	298
+}	389	413
+~	550	620
+А	670	739
+Б	654	692
+В	655	691
+Г	571	591
+Д	709	754
+Е	610	629
+Ж	860	1008
+З	626	676
+И	732	769
+Й	732	769
+К	625	705
+Л	693	706
+М	860	928
+Н	727	753
+О	761	781
+П	730	744
+Р	625	669
+С	710	727
+Т	569	612
+У	614	669
+Ф	837	892
+Х	593	719
+Ц	724	755
+Ч	661	703
+Ш	965	1015
+Щ	982	1037
+Ъ	731	765
+Ы	841	939
+Ь	633	681
+Э	708	724
+Ю	991	1029
+Я	660	730
+а	555	576
+б	576	626
+в	547	577
+г	454	445
+д	593	643
+е	573	576
+ж	761	838
+з	514	543
+и	596	622
+й	596	622
+к	519	605
+л	560	585
+м	699	748
+н	568	603
+о	595	601
+п	571	600
+р	600	633
+с	553	568
+т	465	524
+у	549	584
+ф	722	807
+х	515	590
+ц	584	628
+ч	529	558
+ш	787	866
+щ	811	888
+ъ	590	596
+ы	679	789
+ь	519	566
+э	548	561
+ю	785	839
+я	534	597
+Ё	610	629
+ё	573	576
+·	249	308
+—	759	854
+–	578	636
+−	550	620
+…	697	804
+≈	550	620
+№	1061	1108
+×	550	620
+°	370	432
+«	476	622
+»	476	622
+’	261	317
+↓	701	773
+↑	701	773
+→	701	773
+€	679	754
+₽	699	693
+±	550	620
+²	372	389
+é	573	576
+ü	576	591
+ö	595	601
+ä	555	576
+ç	553	568
+ş	509	515
+ı	219	272
+MTGWEOF
+    while IFS=$'\t' read -r a b; do [[ -n "$b" ]] && MT_ICON[$a]="$b"; done <<'MTICONEOF'
+public	M324-111.5Q251-143 197-197t-85.5-127Q80-397 80-480t31.5-156Q143-709 197-763t127-85.5Q397-880 480-880t156 31.5Q709-817 763-763t85.5 127Q880-563 880-480t-31.5 156Q817-251 763-197t-127 85.5Q563-80 480-80t-156-31.5ZM437-141v-82q-35 0-59-26t-24-61v-44L149-559q-5 20-7 39.5t-2 39.5q0 130 84.5 227T437-141Zm294-108q44-48 66.5-107.5T820-480q0-106-58-192.5T607-799v18q0 35-24 61t-59 26h-87v87q0 17-13.5 28T393-568h-83v88h258q17 0 28 13t11 30v127h43q29 0 51 17t30 44Z
+block	M324-111.5Q251-143 197-197t-85.5-127Q80-397 80-480t31.5-156Q143-709 197-763t127-85.5Q397-880 480-880t156 31.5Q709-817 763-763t85.5 127Q880-563 880-480t-31.5 156Q817-251 763-197t-127 85.5Q563-80 480-80t-156-31.5ZM699-220q11-9 21.5-18.86Q731-248.73 740-260L260-740q-11.27 9-21.14 19.5Q229-710 220-699l479 479Z
+policy	M470.5-84q-4.5-1-9.5-3-138-47-219.5-168.5T160-522v-196q0-19 11-34.5t28-22.5l260-97q11-4 21-4t21 4l260 97q17 7 28 22.5t11 34.5v196q0 64-18 125.5T731-279L604-402q13-17 19-38t6-42q0-63-43.5-106.5T480-632q-62 0-105.5 43.5T331-482q0 62 43.5 105T480-334q22 0 43-7t40-18l134 130q-42 52-88.5 86T499-87q-5 2-9.5 3t-9.5 1q-5 0-9.5-1ZM417-419.5Q391-445 391-482q0-38 26-64t63-26q37 0 63 26t26 64q0 37-26 62.5T480-394q-37 0-63-25.5Z
+travel_explore	M80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q137 0 241.5 80T863-595q4 13-2 24.5T842-556q-12 3-22-4.5T806-580q-22-74-74-131.5T607-799v18q0 35-24 61t-59 26h-87v87q0 17-13.5 28T393-568h-83v88h80q13 0 21.5 8.5T420-450v95h-67L149-559q-5 20-7 39.5t-2 39.5q0 128 82.5 223.5T431-144q12 2 19.5 11.5T458-111q0 13-9 21t-22 6q-148-20-247.5-131.5T80-480Zm749 351L716-241q-21 15-45.5 23t-50.5 8q-71 0-120.5-49.5T450-380q0-71 49.5-120.5T620-550q71 0 120.5 49.5T790-380q0 26-8.5 50.5T759-283l112 112q9 9 9.5 21t-8.5 21q-9 9-21.5 9t-21.5-9ZM698-302q32-32 32-78t-32-78q-32-32-78-32t-78 32q-32 32-32 78t32 78q32 32 78 32t78-32Z
+swap_vert	M331.5-458.5Q323-467 323-480v-286L223-666q-9 9-21 9t-21-9q-9-9-9-21t9-21l151-151q5-5 10-7t11-2q6 0 11 2t10 7l151 151q9 9 9 21t-9 21q-9 9-21 9t-21-9L383-766v286q0 13-8.5 21.5T353-450q-13 0-21.5-8.5ZM596-94q-5-2-10-7L435-252q-9-9-9-21t9-21q9-9 21-9t21 9l100 100v-286q0-13 8.5-21.5T607-510q13 0 21.5 8.5T637-480v286l100-100q9-9 21-9t21 9q9 9 9 21t-9 21L628-101q-5 5-10 7t-11 2q-6 0-11-2Z
+speed	M418-340q25 25 63 23.5t55-27.5l180-271q7-11-1.5-19.5T695-636L424-456q-26 18-28.5 54.5T418-340ZM192-160q-18 0-34-8.5T134-193q-26-48-40-100T80-399q0-83 31.5-156T197-682.5q54-54.5 126.5-86T478-800q83 0 156.5 31.5t128 86Q817-628 848.5-555T880-399q0 54-13 106.5T827-193q-9 16-25 24.5t-34 8.5H192Z
+shield	M470.5-85q-4.5-1-9.5-3-139-47-220-168.5T160-523v-196q0-19 11-34.5t28-22.5l260-97q11-4 21-4t21 4l260 97q17 7 28 22.5t11 34.5v196q0 145-81 266.5T499-88q-5 2-9.5 3t-9.5 1q-5 0-9.5-1Z
+verified_user	m439-442-79-79q-9-9-22-9t-22 9q-9 9-9 22t9 22l99 100q9 9 21 9t21-9l186-186q9-9 9-21.5t-9-20.5q-8-8-21-7.5t-21 8.5L439-442Zm31.5 357q-4.5-1-9.5-3-139-47-220-168.5T160-523v-196q0-19 11-34.5t28-22.5l260-97q11-4 21-4t21 4l260 97q17 7 28 22.5t11 34.5v196q0 145-81 266.5T499-88q-5 2-9.5 3t-9.5 1q-5 0-9.5-1Z
+memory	M377-407v-145q0-12.75 8.63-21.38Q394.25-582 407-582h145q12.75 0 21.38 8.62Q582-564.75 582-552v145q0 12.75-8.62 21.37Q564.75-377 552-377H407q-12.75 0-21.37-8.63Q377-394.25 377-407Zm-17 257v-50H260q-24 0-42-18t-18-42v-100h-50q-12.75 0-21.37-8.68-8.63-8.67-8.63-21.5 0-12.82 8.63-21.32 8.62-8.5 21.37-8.5h50v-124h-50q-12.75 0-21.37-8.68-8.63-8.67-8.63-21.5 0-12.82 8.63-21.32 8.62-8.5 21.37-8.5h50v-100q0-24 18-42t42-18h100v-46q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v46h124v-46q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v46h100q24 0 42 18t18 42v100h46q12.75 0 21.38 8.68 8.62 8.67 8.62 21.5 0 12.82-8.62 21.32-8.63 8.5-21.38 8.5h-46v124h46q12.75 0 21.38 8.68 8.62 8.67 8.62 21.5 0 12.82-8.62 21.32-8.63 8.5-21.38 8.5h-46v100q0 24-18 42t-42 18H604v50q0 12.75-8.68 21.37-8.67 8.63-21.5 8.63-12.82 0-21.32-8.63-8.5-8.62-8.5-21.37v-50H420v50q0 12.75-8.68 21.37-8.67 8.63-21.5 8.63-12.82 0-21.32-8.63-8.5-8.62-8.5-21.37Zm344-110v-444H260v444h444Z
+monitoring	M128.5-128.63Q120-137.25 120-150v-46q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v46q0 12.75-8.68 21.37-8.67 8.63-21.5 8.63-12.82 0-21.32-8.63Zm165 0Q285-137.25 285-150v-206q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v206q0 12.75-8.68 21.37-8.67 8.63-21.5 8.63-12.82 0-21.32-8.63Zm165 0Q450-137.25 450-150v-146q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v146q0 12.75-8.68 21.37-8.67 8.63-21.5 8.63-12.82 0-21.32-8.63Zm165 0Q615-137.25 615-150v-246q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v246q0 12.75-8.68 21.37-8.67 8.63-21.5 8.63-12.82 0-21.32-8.63Zm165 0Q780-137.25 780-150v-366q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v366q0 12.75-8.68 21.37-8.67 8.63-21.5 8.63-12.82 0-21.32-8.63ZM559.5-499q-11.5 0-22.46-4.7-10.97-4.69-20.04-13.3L400-634 172-407q-9.07 9-21.53 8.5-12.47-.5-21.34-9.5-8.13-9-8.63-21t8.5-21l229-227q9.07-8.87 20.04-12.93Q389-694 400-694t22.34 4.07Q433.68-685.87 442-677l118 118 229-229q9-9 21-9t20.87 9q8.13 9 8.63 21t-8.5 21L602-517q-8 9-19.5 13.5t-23 4.5Z
+network_ping	M190-240q-13 0-21.5-8.5T160-270q0-13 8.5-21.5T190-300h254L105-639q-9-9-9-21t9-21q9-9 21-9t21 9l332 332 234-233q-6-11-9.5-23.5T700-630q0-38 26-64t64-26q38 0 64 26t26 64q0 38-26 64t-64 26q-8 0-14.5-1t-14.5-4L516-300h254q13 0 21.5 8.5T800-270q0 13-8.5 21.5T770-240H190Z
+skip_next	M680-270v-420q0-13 8.5-21.5T710-720q13 0 21.5 8.5T740-690v420q0 13-8.5 21.5T710-240q-13 0-21.5-8.5T680-270Zm-460-27v-366q0-14 9-22t21-8q5 0 9 1.5t8 4.5l263 182q7 5 10 11.5t3 13.5q0 7-3 13.5T530-455L267-273q-4 3-8 4.5t-9 1.5q-12 0-21-8t-9-22Z
+error	M503.5-289.48q9.5-9.48 9.5-23.5t-9.48-23.52q-9.48-9.5-23.5-9.5t-23.52 9.48q-9.5 9.48-9.5 23.5t9.48 23.52q9.48 9.5 23.5 9.5t23.52-9.48Zm1-152.15q8.5-8.62 8.5-21.37v-193q0-12.75-8.68-21.38-8.67-8.62-21.5-8.62-12.82 0-21.32 8.62-8.5 8.63-8.5 21.38v193q0 12.75 8.68 21.37 8.67 8.63 21.5 8.63 12.82 0 21.32-8.63ZM480.27-80q-82.74 0-155.5-31.5Q252-143 197.5-197.5t-86-127.34Q80-397.68 80-480.5t31.5-155.66Q143-709 197.5-763t127.34-85.5Q397.68-880 480.5-880t155.66 31.5Q709-817 763-763t85.5 127Q880-563 880-480.27q0 82.74-31.5 155.5Q817-252 763-197.68q-54 54.31-127 86Q563-80 480.27-80Z
+dns	M286.88-717q-20.88 0-35.38 14.62-14.5 14.62-14.5 35.5 0 20.88 14.62 35.38 14.62 14.5 35.5 14.5 20.88 0 35.38-14.62 14.5-14.62 14.5-35.5 0-20.88-14.62-35.38-14.62-14.5-35.5-14.5Zm0 414q-20.88 0-35.38 14.62-14.5 14.62-14.5 35.5 0 20.88 14.62 35.38 14.62 14.5 35.5 14.5 20.88 0 35.38-14.62 14.5-14.62 14.5-35.5 0-20.88-14.62-35.38-14.62-14.5-35.5-14.5ZM154-839h651q16 0 25.5 9.5t9.5 25.81V-535q0 17.42-9.5 29.21T805-494H154q-15 0-24.5-11.79T120-535v-268.69q0-16.31 9.5-25.81T154-839Zm0 413h647q15 0 27 12.5t12 28.53V-121q0 20-12 30.5T801-80H159q-16 0-27.5-10.5T120-121v-263.97q0-16.03 9.5-28.53T154-426Z
+arrow_downward	M450-274v-496q0-13 8.5-21.5T480-800q13 0 21.5 8.5T510-770v496l227-227q9-9 21-9t21 9q9 9 9 21t-9 21L501-181q-5 5-10 7t-11 2q-6 0-11-2t-10-7L181-459q-9-9-9-21t9-21q9-9 21-9t21 9l227 227Z
+arrow_upward	M450-686 223-459q-9 9-21 9t-21-9q-9-9-9-21t9-21l278-278q5-5 10-7t11-2q6 0 11 2t10 7l278 278q9 9 9 21t-9 21q-9 9-21 9t-21-9L510-686v496q0 13-8.5 21.5T480-160q-13 0-21.5-8.5T450-190v-496Z
+language	M323-111.5Q250-143 196-197t-85-127.5Q80-398 80-482t31-156.5Q142-711 196-765t127-84.5Q396-880 480-880t157 30.5Q710-819 764-765t85 126.5Q880-566 880-482t-31 157.5Q818-251 764-197t-127 85.5Q564-80 480-80t-157-31.5ZM480-138q35-36 58.5-82.5T577-331H384q14 60 37.5 108t58.5 85Zm-85-12q-25-38-43-82t-30-99H172q38 71 88 111.5T395-150Zm171-1q72-23 129.5-69T788-331H639q-13 54-30.5 98T566-151ZM152-391h159q-3-27-3.5-48.5T307-482q0-25 1-44.5t4-43.5H152q-7 24-9.5 43t-2.5 45q0 26 2.5 46.5T152-391Zm221 0h215q4-31 5-50.5t1-40.5q0-20-1-38.5t-5-49.5H373q-4 31-5 49.5t-1 38.5q0 21 1 40.5t5 50.5Zm275 0h160q7-24 9.5-44.5T820-482q0-26-2.5-45t-9.5-43H649q3 35 4 53.5t1 34.5q0 22-1.5 41.5T648-391Zm-10-239h150q-33-69-90.5-115T565-810q25 37 42.5 80T638-630Zm-254 0h194q-11-53-37-102.5T480-820q-32 27-54 71t-42 119Zm-212 0h151q11-54 28-96.5t43-82.5q-75 19-131 64t-91 115Z
+check	m378-358 350-349q14-14 34-14t34 14q14 14 14 34t-14 34L412-256q-14 14-34 14t-34-14L164-436q-14-14-14-34t14-34q14-14 34-14t34 14l146 146Z
+close	M480-414 282-216q-14 14-33 14t-33-14q-14-14-14-33t14-33l198-198-198-198q-14-14-14-33t14-33q14-14 33-14t33 14l198 198 198-198q14-14 33-14t33 14q14 14 14 33t-14 33L546-480l198 198q14 14 14 33t-14 33q-14 14-33 14t-33-14L480-414Z
+database	M480-120q-151 0-255.5-46.5T120-280v-400q0-66 105.5-113T480-840q149 0 254.5 47T840-680v400q0 67-104.5 113.5T480-120Zm0-488q86 0 176.5-26.5T773-694q-27-32-117.5-59T480-780q-88 0-177 26t-117 60q28 35 116 60.5T480-608Zm-1 214q42 0 84-4.5t80.5-13.5q38.5-9 73.5-22t63-29v-155q-29 16-64 29t-74 22q-39 9-80 14t-83 5q-42 0-84-5t-80.5-14q-38.5-9-73-22T180-618v155q27 16 61 29t72.5 22q38.5 9 80.5 13.5t85 4.5Zm1 214q48 0 99-8.5t93.5-22.5q42.5-14 72-31t35.5-35v-125q-28 16-63 28.5T643.5-352q-38.5 9-80 13.5T479-334q-43 0-85-4.5T313.5-352q-38.5-9-72.5-21.5T180-402v126q5 17 34 34.5t72 31q43 13.5 94 22t100 8.5Z
+MTICONEOF
+    while IFS=$'\t' read -r a b; do [[ -n "$b" ]] && MT_FLAG[$a]="$b"; done <<'MTFLAGEOF'
+nl	<path fill="#eee" d="m0 167 253.8-19.3L512 167v178l-254.9 32.3L0 345z"/><path fill="#a2001d" d="M0 0h512v167H0z"/><path fill="#0052b4" d="M0 345h512v167H0z"/>
+de	<path fill="#ffda44" d="m0 345 256.7-25.5L512 345v167H0z"/><path fill="#d80027" d="m0 167 255-23 257 23v178H0z"/><path fill="#333" d="M0 0h512v167H0z"/>
+fi	<path fill="#eee" d="M0 0h133.6l35.3 16.7L200.3 0H512v222.6l-22.6 31.7 22.6 35.1V512H200.3l-32-19.8-34.7 19.8H0V289.4l22.1-33.3L0 222.6z"/><path fill="#0052b4" d="M133.6 0v222.6H0v66.8h133.6V512h66.7V289.4H512v-66.8H200.3V0h-66.7z"/>
+fr	<path fill="#eee" d="M167 0h178l25.9 252.3L345 512H167l-29.8-253.4z"/><path fill="#0052b4" d="M0 0h167v512H0z"/><path fill="#d80027" d="M345 0h167v512H345z"/>
+gb	<path fill="#eee" d="m0 0 8 22-8 23v23l32 54-32 54v32l32 48-32 48v32l32 54-32 54v68l22-8 23 8h23l54-32 54 32h32l48-32 48 32h32l54-32 54 32h68l-8-22 8-23v-23l-32-54 32-54v-32l-32-48 32-48v-32l-32-54 32-54V0l-22 8-23-8h-23l-54 32-54-32h-32l-48 32-48-32h-32l-54 32L68 0H0z"/><path fill="#0052b4" d="M336 0v108L444 0Zm176 68L404 176h108zM0 176h108L0 68ZM68 0l108 108V0Zm108 512V404L68 512ZM0 444l108-108H0Zm512-108H404l108 108Zm-68 176L336 404v108z"/><path fill="#d80027" d="M0 0v45l131 131h45L0 0zm208 0v208H0v96h208v208h96V304h208v-96H304V0h-96zm259 0L336 131v45L512 0h-45zM176 336 0 512h45l131-131v-45zm160 0 176 176v-45L381 336h-45z"/>
+ie	<path fill="#eee" d="M167 0h178l25.9 252.3L345 512H167l-29.8-253.4z"/><path fill="#6da544" d="M0 0h167v512H0z"/><path fill="#ff9811" d="M345 0h167v512H345z"/>
+be	<path fill="#333" d="M0 0h167l38.2 252.6L167 512H0z"/><path fill="#d80027" d="M345 0h167v512H345l-36.7-256z"/><path fill="#ffda44" d="M167 0h178v512H167z"/>
+lu	<path fill="#eee" d="m0 167 253.8-19.3L512 167v178l-254.9 32.3L0 345z"/><path fill="#d80027" d="M0 0h512v167H0z"/><path fill="#338af3" d="M0 345h512v167H0z"/>
+at	<path fill="#d80027" d="M0 0h512v167l-23.2 89.7L512 345v167H0V345l29.4-89L0 167z"/><path fill="#eee" d="M0 167h512v178H0z"/>
+ch	<path fill="#d80027" d="M0 0h512v512H0z"/><path fill="#eee" d="M389.6 211.5h-89v-89h-89.1v89h-89v89h89v89h89v-89h89z"/>
+it	<path fill="#eee" d="M167 0h178l25.9 252.3L345 512H167l-29.8-253.4z"/><path fill="#6da544" d="M0 0h167v512H0z"/><path fill="#d80027" d="M345 0h167v512H345z"/>
+es	<path fill="#ffda44" d="m0 128 256-32 256 32v256l-256 32L0 384Z"/><path fill="#eee" d="M196 168q-11 1-15 11l-5-1q-15 1-16 16c-1 15 7 16 16 16q11 0 15-11a16 16 0 0 0 17-4 16 16 0 0 0 17 4 16 16 0 1 0 10-20 16 16 0 0 0-27-5q-4-6-12-6m0 8q8 1 8 8 0 8-8 8-7 0-8-8 1-7 8-8m24 0q8 1 8 8 0 8-8 8-7 0-8-8 1-7 8-8m-44 10 4 1 4 8q-1 7-8 7-9 0-8-8 1-7 8-8m64 0q8 1 8 8 0 8-8 8-7 0-8-7l4-8zm-112 38v80h16v-80zm80 0v40c-26 0-48 14-48 32s22 32 48 32 48-14 48-32v-72zm64 0v80h16v-80z"/><path fill="#ff9811" d="M200 160h16v32h-16z"/><path fill="#d80027" d="M0 0v128h512V0zm208 184c-22 0-40 11-40 24l8 8h64l8-8c0-13-18-24-40-24m-72 8a8 8 0 0 0-8 8v8a8 8 0 1 0 16 0v-8a8 8 0 0 0-8-8m144 0a8 8 0 0 0-8 8v8a8 8 0 1 0 16 0v-8a8 8 0 0 0-8-8m-120 32v24h-38a4 4 0 0 0-4 4 4 4 0 0 0 4 4h38v40a24 24 0 0 0 24 24 24 24 0 0 0 24-24 24 24 0 0 0 24 24 24 24 0 0 0 24-24v-24h-48v-48zm72 8a10 10 0 0 0-10 10v12a10 10 0 1 0 20 0v-12a10 10 0 0 0-10-10m24 16v8h38a4 4 0 0 0 4-4 4 4 0 0 0-4-4zm-134 24a4 4 0 0 0-4 4 4 4 0 0 0 4 4h28a4 4 0 0 0 4-4 4 4 0 0 0-4-4zm144 0a4 4 0 0 0-4 4 4 4 0 0 0 4 4h28a4 4 0 0 0 4-4 4 4 0 0 0-4-4zM0 384v128h512V384z"/><path fill="#ffda44" d="M186 196a6 6 0 0 0-6 6 6 6 0 0 0 6 6 6 6 0 0 0 6-6 6 6 0 0 0-6-6m22 0a6 6 0 0 0-6 6 6 6 0 0 0 6 6 6 6 0 0 0 6-6 6 6 0 0 0-6-6m22 0a6 6 0 0 0-6 6 6 6 0 0 0 6 6 6 6 0 0 0 6-6 6 6 0 0 0-6-6"/><path fill="#ff9811" d="M128 208a8 8 0 1 0 0 16h16a8 8 0 1 0 0-16zm144 0a8 8 0 1 0 0 16h16a8 8 0 1 0 0-16zm-96 8v8h64v-8zm-8 16v8h8v16h-8v8h32v-8h-8v-16h8v-8zm-8 40v24q1 12 9 19v-43zm19 0v47h10v-47zm20 0v43q9-7 9-19v-24zm-71 32a8 8 0 1 0 0 16h16a8 8 0 1 0 0-16zm144 0a8 8 0 1 0 0 16h16a8 8 0 1 0 0-16z"/><path fill="#338af3" d="M208 256a16 16 0 0 0-16 16 16 16 0 0 0 16 16 16 16 0 0 0 16-16 16 16 0 0 0-16-16m-80 64a8 8 0 1 0 0 16h16a8 8 0 1 0 0-16zm144 0a8 8 0 1 0 0 16h16a8 8 0 1 0 0-16z"/>
+pt	<path fill="#6da544" d="M0 512h167l37.9-260.3L167 0H0z"/><path fill="#d80027" d="M512 0H167v512h345z"/><circle cx="167" cy="256" r="89" fill="#ffda44"/><path fill="#d80027" d="M116.9 211.5V267a50 50 0 1 0 100.1 0v-55.6H117z"/><path fill="#eee" d="M167 283.8c-9.2 0-16.7-7.5-16.7-16.7V245h33.4v22c0 9.2-7.5 16.7-16.7 16.7z"/>
+pl	<path fill="#d80027" d="m0 256 256.4-44.3L512 256v256H0z"/><path fill="#eee" d="M0 0h512v256H0z"/>
+cz	<path fill="#eee" d="M0 0h512v256l-265 45.2z"/><path fill="#d80027" d="M210 256h302v256H0z"/><path fill="#0052b4" d="M0 0v512l256-256L0 0z"/>
+sk	<path fill="#0052b4" d="m0 160 256-32 256 32v192l-256 32L0 352z"/><path fill="#eee" d="M0 0h512v160H0z"/><path fill="#d80027" d="M0 352h512v160H0z"/><path fill="#eee" d="M64 63v217c0 104 144 137 144 137s144-33 144-137V63z"/><path fill="#d80027" d="M96 95v185a83 78 0 0 0 9 34h206a83 77 0 0 0 9-34V95z"/><path fill="#eee" d="M288 224h-64v-32h32v-32h-32v-32h-32v32h-32v32h32v32h-64v32h64v32h32v-32h64z"/><path fill="#0052b4" d="M152 359a247 231 0 0 0 56 24c12-3 34-11 56-24a123 115 0 0 0 47-45 60 56 0 0 0-34-10l-14 2a60 56 0 0 0-110 0 60 56 0 0 0-14-2c-12 0-24 4-34 10a123 115 0 0 0 47 45z"/>
+hu	<path fill="#eee" d="m0 167 253.8-19.3L512 167v178l-254.9 32.3L0 345z"/><path fill="#d80027" d="M0 0h512v167H0z"/><path fill="#6da544" d="M0 345h512v167H0z"/>
+ro	<path fill="#ffda44" d="M167 0h178l25.9 252.3L345 512H167l-29.8-253.4z"/><path fill="#0052b4" d="M0 0h167v512H0z"/><path fill="#d80027" d="M345 0h167v512H345z"/>
+bg	<path fill="#496e2d" d="m0 166.9 258-31.7 254 31.7v178l-251.4 41.3L0 344.9z"/><path fill="#eee" d="M0 0h512v166.9H0z"/><path fill="#d80027" d="M0 344.9h512V512H0z"/>
+gr	<path fill="#0052b4" d="M0 0h99l29 32 28-32h356v57l-32 28 32 29v57l-32 28 32 29v57l-32 28 32 28v57l-32 29 32 28v57H0v-57l32-28-32-29v-56l32-29-32-28V171l32-29-32-28Z"/><path fill="#eee" d="M99 0v114H0v57h99v114H0v57h512v-57H156V171h100v-57H156V0Zm157 57v57h256V57Zm0 114v57h256v-57ZM0 398v57h512v-57z"/>
+se	<path fill="#0052b4" d="M0 0h133.6l35.3 16.7L200.3 0H512v222.6l-22.6 31.7 22.6 35.1V512H200.3l-32-19.8-34.7 19.8H0V289.4l22.1-33.3L0 222.6z"/><path fill="#ffda44" d="M133.6 0v222.6H0v66.8h133.6V512h66.7V289.4H512v-66.8H200.3V0z"/>
+no	<path fill="#d80027" d="M0 0h100.2l66.1 53.5L233.7 0H512v189.3L466.3 257l45.7 65.8V512H233.7l-68-50.7-65.5 50.7H0V322.8l51.4-68.5-51.4-65z"/><path fill="#eee" d="M100.2 0v189.3H0v33.4l24.6 33L0 289.5v33.4h100.2V512h33.4l30.6-26.3 36.1 26.3h33.4V322.8H512v-33.4l-24.6-33.7 24.6-33v-33.4H233.7V0h-33.4l-33.8 25.3L133.6 0z"/><path fill="#0052b4" d="M133.6 0v222.7H0v66.7h133.6V512h66.7V289.4H512v-66.7H200.3V0z"/>
+dk	<path fill="#d80027" d="M0 0h133.6l32.7 20.3 34-20.3H512v222.6L491.4 256l20.6 33.4V512H200.3l-31.7-20.4-35 20.4H0V289.4l29.4-33L0 222.7z"/><path fill="#eee" d="M133.6 0v222.6H0v66.8h133.6V512h66.7V289.4H512v-66.8H200.3V0h-66.7z"/>
+is	<path fill="#0052b4" d="M0 0h100.2l66.1 53.5L233.7 0H512v189.3L466.3 257l45.7 65.8V512H233.7l-68-50.7-65.5 50.7H0V322.8l51.4-68.5-51.4-65z"/><path fill="#eee" d="M100.2 0v189.3H0v33.4l24.6 33L0 289.5v33.4h100.2V512h33.4l30.6-26.3 36.1 26.3h33.4V322.8H512v-33.4l-24.6-33.7 24.6-33v-33.4H233.7V0h-33.4l-33.8 25.3L133.6 0z"/><path fill="#d80027" d="M133.6 0v222.7H0v66.7h133.6V512h66.7V289.4H512v-66.7H200.3V0z"/>
+ee	<path fill="#333" d="m0 167 254.6-36.6L512 166.9v178l-254.6 36.4L0 344.9z"/><path fill="#0052b4" d="M0 0h512v166.9H0z"/><path fill="#eee" d="M0 344.9h512V512H0z"/>
+lv	<path fill="#a2001d" d="M0 0h512v189.2l-38.5 70 38.5 63.6V512H0V322.8l39.4-63L0 189.1z"/><path fill="#eee" d="M0 189.2h512v133.6H0z"/>
+lt	<path fill="#6da544" d="m0 167 253.8-19.3L512 167v178l-254.9 32.3L0 345z"/><path fill="#ffda44" d="M0 0h512v167H0z"/><path fill="#d80027" d="M0 345h512v167H0z"/>
+md	<path fill="#0052b4" d="M0 0h144.7l36 254.6-36 257.4H0z"/><path fill="#d80027" d="M367.3 0H512v512H367.3l-29.7-257.3z"/><path fill="#ffda44" d="M144.7 0h222.6v512H144.7z"/><path fill="#ff9811" d="M345.1 201.4H284a27.8 27.8 0 1 0-55.6 0h-61.2a28.2 28.2 0 0 0 28.3 27.4h-1a27.4 27.4 0 0 0 27.5 27.4c0 13.4 9.6 24.5 22.3 27l-21.6 48.7a88.8 88.8 0 0 0 33.5 6.5 88.8 88.8 0 0 0 33.5-6.5L268.1 283a27.4 27.4 0 0 0 22.3-26.9 27.4 27.4 0 0 0 27.4-27.4h-.9a28.2 28.2 0 0 0 28.3-27.4z"/><path fill="#0052b4" d="M256.1 239.3 220 256v33.4l36.2 22.3 36.2-22.3V256z"/><path fill="#d80027" d="M220 222.6h72.3V256H220z"/>
+ua	<path fill="#ffda44" d="m0 256 258-39.4L512 256v256H0z"/><path fill="#338af3" d="M0 0h512v256H0z"/>
+by	<path fill="#eee" d="M0 0h155.8l35 254.6-35 257.4H0z"/><path fill="#a2001d" d="M155.8 0H512v345.1l-183 37.4-173.2-37.4z"/><path fill="#6da544" d="M155.8 345.1H512V512H155.8z"/><path fill="#a2001d" d="M50 .2 22.3 50l27.8 50.4L77.9 50zm55.8 0L78 50l27.7 50.4 28-50.4zM50 137.5l-27.7 49.6 27.8 50.5 27.7-50.5zm55.8 0L78 187.1l27.7 50.5 28-50.5zM50 274.7l-27.7 49.7 27.8 50.4 27.8-50.4zm55.8 0L78 324.4l27.7 50.4 28-50.4zM50 412l-27.7 49.6 27.8 50.5 27.7-50.5zm55.8 0L78 461.6l27.7 50.5 28-50.5z"/>
+rs	<path fill="#0052b4" d="m0 167 253.8-19.3L512 167v178l-254.9 32.3L0 345z"/><path fill="#d80027" d="M0 0h512v167H0z"/><path fill="#eee" d="M0 345h512v167H0z"/><path fill="#d80027" d="M66.2 144.7v127.7c0 72.6 94.9 95 94.9 95s94.9-22.4 94.9-95V144.7z"/><path fill="#ffda44" d="M105.4 167h111.4v-44.6l-22.3 11.2-33.4-33.4-33.4 33.4-22.3-11.2zm128.3 123.2-72.3-72.4L89 290.2l23.7 23.6 48.7-48.7 48.7 48.7z"/><path fill="#eee" d="M233.7 222.6H200a22.1 22.1 0 0 0 3-11.1 22.3 22.3 0 0 0-42-10.5 22.3 22.3 0 0 0-41.9 10.5 22.1 22.1 0 0 0 3 11.1H89a23 23 0 0 0 23 22.3h-.7c0 12.3 10 22.2 22.3 22.2 0 11 7.8 20 18.1 21.9l-17.5 39.6a72.1 72.1 0 0 0 27.2 5.3 72.1 72.1 0 0 0 27.2-5.3L171.1 289c10.3-2 18.1-11 18.1-21.9 12.3 0 22.3-10 22.3-22.2h-.8a23 23 0 0 0 23-22.3z"/>
+hr	<path fill="#eee" d="m0 167 253.8-19.3L512 167v178l-254.9 32.3L0 345z"/><path fill="#d80027" d="M0 0h512v167H0z"/><path fill="#0052b4" d="M0 345h512v167H0z"/><path fill="#338af3" d="M322.8 178h-44.5l7.4-55.7 29.7-22.2 29.6 22.2V167zm-133.6 0h44.5l-7.4-55.7-29.7-22.2-29.6 22.2V167z"/><path fill="#0052b4" d="M285.7 178h-59.4v-55.7l29.7-22.2 29.7 22.2z"/><path fill="#eee" d="M167 167v122.3a89 89 0 0 0 35.8 71.3l15.5-3.9 19.7 19.8a89.1 89.1 0 0 0 18 1.8 89 89 0 0 0 17.9-1.8l22.4-18.7 13 2.8a89 89 0 0 0 35.7-71.3V167z"/><path fill="#d80027" d="M167 167h35.6v35.5H167zm71.2 0h35.6v35.5h-35.6zm71.2 0H345v35.5h-35.6zm-106.8 35.5h35.6v35.6h-35.6zm71.2 0h35.6v35.6h-35.6zM167 238.1h35.6v35.6H167zm35.6 35.6h35.6v35.6h-35.6zm35.6-35.6h35.6v35.6h-35.6zm71.2 0H345v35.6h-35.6zm-35.6 35.6h35.6v35.6h-35.6zm-35.6 35.6h35.6V345h-35.6zm-35.6 0h-33.3c3 13.3 9 25.4 17.3 35.6h16zM309.4 345h16a88.8 88.8 0 0 0 17.3-35.6h-33.3zm-106.8 0v15.6a88.7 88.7 0 0 0 35.6 16V345zm71.2 0v31.6a88.7 88.7 0 0 0 35.6-16V345z"/>
+si	<path fill="#0052b4" d="m0 167 253.8-19.3L512 167v178l-254.9 32.3L0 345z"/><path fill="#eee" d="M0 0h512v167H0z"/><path fill="#d80027" d="M0 345h512v167H0z"/><path fill="#0052b4" d="M222.7 167v-66.8H89V167l67 82.6z"/><path fill="#eee" d="M89 167v22.2c0 51.1 66.8 66.8 66.8 66.8s66.8-15.7 66.8-66.8V167l-22.3 22.2-44.5-33.4-44.5 33.4z"/>
+cy	<path fill="#eee" d="M0 0h512v512H0z"/><path fill="#6da544" d="M400.7 222.6h-33.4a111.3 111.3 0 0 1-222.6 0h-33.4c0 66.2 44.5 122 105.2 139.2a37 37 0 0 0 3.9 40.5l36.3-29.2 36.4 29.2a37 37 0 0 0 3.7-40.8 144.8 144.8 0 0 0 103.9-138.9z"/><path fill="#ffda44" d="M167 211.5s0 55.6 55.6 55.6l11.1 11.2H256s11.1-33.4 33.4-33.4c0 0 0-22.3 22.3-22.3H345s-11-44.5 44.6-77.9l-22.3-11.1s-78 55.6-133.6 44.5v22.2h-22.2l-11.2-11-33.3 22.2z"/>
+ru	<path fill="#0052b4" d="M512 170v172l-256 32L0 342V170l256-32z"/><path fill="#eee" d="M512 0v170H0V0Z"/><path fill="#d80027" d="M512 342v170H0V342Z"/>
+kz	<path fill="#338af3" d="M0 0h512v512H0z"/><path fill="#ffda44" d="M400.7 258.8H111.3c0 20 17.4 36.2 37.4 36.2h-1.2c0 20 16.2 36.1 36.2 36.1 0 20 16.1 36.2 36.1 36.2h72.4c20 0 36.1-16.2 36.1-36.2 20 0 36.2-16.2 36.2-36.1h-1.2c20 0 37.4-16.2 37.4-36.2z"/><path fill="#338af3" d="M356.2 211.5a100.2 100.2 0 0 1-200.4 0"/><path fill="#ffda44" d="m332.5 211.5-31.3 14.7 16.7 30.3-34-6.5-4.3 34.3L256 259l-23.6 25.3L228 250l-34 6.5 16.6-30.3-31.2-14.7 31.2-14.7-16.6-30.3 34 6.5 4.3-34.3 23.6 25.2 23.6-25.2L284 173l34-6.5-16.6 30.3z"/>
+uz	<path fill="#d80027" d="m0 178 254.2-22L512 178v22.3l-40.2 54.1 40.2 57.3V334l-254 23.4L0 334v-22.3l36.7-59.4-36.7-52z"/><path fill="#338af3" d="M0 0h512v178H0z"/><path fill="#eee" d="M0 200.3h512v111.4H0z"/><path fill="#6da544" d="M0 334h512v178H0z"/><path fill="#eee" d="M117.2 105.7a50 50 0 0 1 39.3-48.9 50.2 50.2 0 0 0-10.7-1.1 50 50 0 1 0 10.7 99c-22.5-5-39.3-25-39.3-49zm69 22.8 3.3 10.4h11l-9 6.5 3.5 10.4-9-6.4-8.7 6.4 3.4-10.4-9-6.5h11zm35 0 3.4 10.4h11l-9 6.5 3.4 10.4-8.8-6.4-9 6.4 3.5-10.4-9-6.5h11zm35 0 3.4 10.4h11l-9 6.5 3.5 10.4-9-6.4-8.8 6.4 3.4-10.4-9-6.5h11zm35 0 3.4 10.4h11l-9 6.5 3.5 10.4-9-6.4-8.8 6.4 3.4-10.4-9-6.5h11zm35 0 3.4 10.4h11l-9 6.5 3.5 10.4-9-6.4-8.8 6.4 3.4-10.4-8.8-6.5h11zm-105-36.4 3.4 10.4h11l-9 6.5 3.4 10.4-8.8-6.5-9 6.5 3.5-10.4-9-6.5h11zm35 0 3.4 10.4h11l-9 6.5 3.5 10.4-9-6.5-8.8 6.5 3.4-10.4-9-6.5h11zm35 0 3.4 10.4h11l-9 6.5 3.5 10.4-9-6.5-8.8 6.5 3.4-10.4-9-6.5h11zm35 0 3.4 10.4h11l-9 6.5 3.5 10.4-9-6.5-8.8 6.5 3.4-10.4-8.8-6.5h11zm-70-36.4 3.4 10.4h11l-9 6.4 3.6 10.5-9-6.5-8.8 6.5 3.4-10.5-9-6.4h11zm35 0 3.4 10.4h11l-9 6.4 3.6 10.5-9-6.5-8.8 6.5 3.4-10.5-9-6.4h11zm35 0 3.4 10.4h11l-9 6.4 3.6 10.5-9-6.5-8.8 6.5 3.4-10.5-8.8-6.4h11z"/>
+kg	<path fill="#d80027" d="M0 0h512v512H0z"/><path fill="#ffda44" d="M381.2 256 330 280l27.3 49.6-55.6-10.6-7 56.1-38.7-41.3-38.7 41.3-7-56.1-55.6 10.6 27.3-49.5-51.2-24.1 51.2-24-27.3-49.6 55.6 10.6 7-56.1 38.7 41.3 38.7-41.3 7 56.1 55.6-10.6-27.3 49.5z"/><circle cx="256" cy="256" r="77.9" fill="#d80027"/><path fill="#ffda44" d="M217 256c-1.8 0-3.7.1-5.5.3a44.3 44.3 0 0 0 10.4 28.3 78 78 0 0 1 15-24.9A55.4 55.4 0 0 0 217 256zm24 42a44.4 44.4 0 0 0 30 0c-2.6-10-7.8-19-15-26-7.2 7-12.4 16-15 26zm53.6-64.3a44.5 44.5 0 0 0-77.2 0 77.4 77.4 0 0 1 38.6 10.5 77.4 77.4 0 0 1 38.6-10.5zm-19.6 26a78 78 0 0 1 15.1 25 44.3 44.3 0 0 0 10.4-28.4 55.8 55.8 0 0 0-5.5-.3 55.3 55.3 0 0 0-20 3.7z"/>
+tr	<path fill="#d80027" d="M0 0h512v512H0z"/><path fill="#eee" d="M208 115a141 141 0 1 0 106 242q-25 13-54 13a114 114 0 1 1 54-215 141 141 0 0 0-106-40m142 67v56l-54 18 54 17v57l33-46 54 18-33-46 33-46-54 18z"/>
+ge	<path fill="#eee" d="M0 0h224l32 32 32-32h224v224l-32 32 32 32v224H288l-32-32-32 32H0V288l32-32-32-32Z"/><path fill="#d80027" d="M224 0v224H0v64h224v224h64V288h224v-64H288V0h-64zm-96 96v32H96v32h32v32h32v-32h32v-32h-32V96h-32zm224 0v32h-32v32h32v32h32v-32h32v-32h-32V96h-32zM128 320v32H96v32h32v32h32v-32h32v-32h-32v-32h-32zm224 0v32h-32v32h32v32h32v-32h32v-32h-32v-32h-32z"/>
+am	<path fill="#0052b4" d="m0 171 256-32 256 32v170l-256 32L0 341Z"/><path fill="#d80027" d="M0 0h512v171H0Z"/><path fill="#ff9811" d="M0 341h512v171H0Z"/>
+az	<path fill="#d80027" d="m0 167 256-32 256 32v178l-256 32L0 345Z"/><path fill="#338af3" d="M0 0h512v167H0Z"/><path fill="#6da544" d="M0 345h512v167H0Z"/><path fill="#eee" d="M229 167a89 89 0 1 0 67 153 72 72 0 0 1-34 8 72 72 0 1 1 34-136 89 89 0 0 0-67-25m88 39-9 27-26-12 12 25-27 10 27 10-12 25 26-12 9 27 10-27 26 12-13-25 27-10-27-10 13-25-26 12z"/>
+ae	<path fill="#a2001d" d="M0 0h167l52.3 252L167 512H0z"/><path fill="#eee" d="m167 167 170.8-44.6L512 167v178l-173.2 36.9L167 345z"/><path fill="#6da544" d="M167 0h345v167H167z"/><path fill="#333" d="M167 345h345v167H167z"/>
+il	<path fill="#eee" d="M0 0h512v55.7l-25 32.7 25 34v267.2l-26 36 26 30.7V512H0v-55.7l24.8-34.1L0 389.6V122.4l27.2-33.2L0 55.7z"/><path fill="#0052b4" d="M0 55.7v66.7h512V55.7zm0 333.9v66.7h512v-66.7zm352.4-189.3H288l-32-55.6-32.1 55.6h-64.3l32.1 55.7-32 55.7h64.2l32.1 55.6 32.1-55.6h64.3L320.3 256l32-55.7zm-57 55.7-19.7 34.2h-39.4L216.5 256l19.8-34.2h39.4l19.8 34.2zM256 187.6l7.3 12.7h-14.6zm-59.2 34.2h14.7l-7.4 12.7zm0 68.4 7.3-12.7 7.4 12.7zm59.2 34.2-7.3-12.7h14.6zm59.2-34.2h-14.7l7.4-12.7zm-14.7-68.4h14.7l-7.3 12.7z"/>
+in	<path fill="#eee" d="m0 160 256-32 256 32v192l-256 32L0 352z"/><path fill="#ff9811" d="M0 0h512v160H0Z"/><path fill="#6da544" d="M0 352h512v160H0Z"/><circle cx="256" cy="256" r="72" fill="#0052b4"/><circle cx="256" cy="256" r="48" fill="#eee"/><circle cx="256" cy="256" r="24" fill="#0052b4"/>
+sg	<path fill="#d80027" d="M0 0h512v256l-256 32L0 256Z"/><path fill="#eee" d="M200 56a78 78 0 1 0 17 154 78 78 0 0 1 0-152q-8-2-17-2m56 5-5 17h-18l14 11-5 17 14-11 15 11-6-17 15-11h-18zm-43 34-6 17h-18l15 10-6 17 15-10 14 10-5-17 14-10h-18zm86 0-5 17h-18l14 10-5 17 14-10 15 10-6-17 15-10h-18zm-70 50-5 17h-18l14 10-5 17 14-10 15 10-6-17 15-10h-18zm54 0-6 17h-18l15 10-6 17 15-10 14 10-5-17 14-10h-18ZM0 256v256h512V256Z"/>
+hk	<path fill="#d80027" d="M0 0h512v512H0z"/><path fill="#eee" d="M282.4 193.7c-5.8 24.2-16.1 19.6-21.2 40.7a55.7 55.7 0 0 1 26-108.3c-10.1 42.2.4 46-4.8 67.6zM205 211.6c21.2 13 13.6 21.4 32.1 32.8a55.7 55.7 0 0 1-94.9-58.2c37 22.7 43.8 13.8 62.8 25.4zm-7 79.3c19-16.2 24.7-6.4 41.2-20.4a55.7 55.7 0 0 1-84.7 72.2c33-28.2 26.6-37.4 43.6-51.8zm73.4 31c-9.6-23 1.5-25.3-6.8-45.3a55.7 55.7 0 0 1 42.6 102.8c-16.6-40-27.3-36.9-35.8-57.4zm52.2-60c-24.9 2-23.7-9.3-45.3-7.6a55.7 55.7 0 0 1 111-8.7c-43.3 3.4-43.6 14.5-65.7 16.3z"/>
+jp	<path fill="#eee" d="M0 0h512v512H0z"/><circle cx="256" cy="256" r="111.3" fill="#d80027"/>
+kr	<path fill="#eee" d="M0 0h512v512H0Z"/><path fill="#333" d="m350 335 24-24 16 16-24 23zm-39 39 24-24 15 16-23 24zm87 8 23-24 16 16-24 24zm-40 39 24-23 16 15-24 24Zm16-63 24-23 15 15-23 24zm-39 40 23-24 16 16-24 23zm63-221-63-63 15-15 64 63zm-63-15-24-24 16-16 23 24zm39 39-24-24 16-15 24 23zm8-87-24-23 16-16 24 24Zm39 40-23-24 15-16 24 24ZM91 358l63 63-16 16-63-63zm63 16 23 24-15 15-24-23zm-40-39 24 23-16 16-23-24zm24-24 63 63-16 16-63-63zm16-220-63 63-16-16 63-63zm23 23-63 63-15-16 63-63zm24 24-63 63-16-16 63-63z"/><path fill="#d80027" d="M319 319 193 193a89 89 0 1 1 126 126z"/><path fill="#0052b4" d="M319 319a89 89 0 1 1-126-126z"/><circle cx="224.5" cy="224.5" r="44.5" fill="#d80027"/><circle cx="287.5" cy="287.5" r="44.5" fill="#0052b4"/>
+tw	<path fill="#d80027" d="M0 256 256 0h256v512H0z"/><path fill="#0052b4" d="M256 256V0H0v256z"/><path fill="#eee" d="m222.6 149.8-31.3 14.7 16.7 30.3-34-6.5-4.3 34.3-23.6-25.2-23.7 25.2-4.3-34.3-34 6.5 16.7-30.3-31.2-14.7 31.2-14.7-16.6-30.3 34 6.5 4.2-34.3 23.7 25.3L169.7 77l4.3 34.3 34-6.5-16.7 30.3z"/><circle cx="146.1" cy="149.8" r="47.7" fill="#0052b4"/><circle cx="146.1" cy="149.8" r="41.5" fill="#eee"/>
+cn	<path fill="#d80027" d="M0 0h512v512H0z"/><path fill="#ffda44" d="m140.1 155.8 22.1 68h71.5l-57.8 42.1 22.1 68-57.9-42-57.9 42 22.2-68-57.9-42.1H118zm163.4 240.7-16.9-20.8-25 9.7 14.5-22.5-16.9-20.9 25.9 6.9 14.6-22.5 1.4 26.8 26 6.9-25.1 9.6zm33.6-61 8-25.6-21.9-15.5 26.8-.4 7.9-25.6 8.7 25.4 26.8-.3-21.5 16 8.6 25.4-21.9-15.5zm45.3-147.6L370.6 212l19.2 18.7-26.5-3.8-11.8 24-4.6-26.4-26.6-3.8 23.8-12.5-4.6-26.5 19.2 18.7zm-78.2-73-2 26.7 24.9 10.1-26.1 6.4-1.9 26.8-14.1-22.8-26.1 6.4 17.3-20.5-14.2-22.7 24.9 10.1z"/>
+id	<path fill="#eee" d="m0 256 249.6-41.3L512 256v256H0z"/><path fill="#d80027" d="M0 0h512v256H0z"/>
+vn	<path fill="#d80027" d="M0 0h512v512H0Z"/><path fill="#ffda44" d="m176 378 208-150H128l208 150-80-244Z"/>
+th	<path fill="#d80027" d="M0 0h512v89l-79.2 163.7L512 423v89H0v-89l82.7-169.6L0 89z"/><path fill="#eee" d="M0 89h512v78l-42.6 91.2L512 345v78H0v-78l40-92.5L0 167z"/><path fill="#0052b4" d="M0 167h512v178H0z"/>
+my	<path fill="#eee" d="M256 0h256v64l-32 32 32 32v64l-32 32 32 32v64l-32 32 32 32v64l-256 32L0 448v-64l32-32-32-32v-64z"/><path fill="#d80027" d="M224 64h288v64H224Zm0 128h288v64H256ZM0 320h512v64H0Zm0 128h512v64H0Z"/><path fill="#0052b4" d="M0 0h256v256H0Z"/><path fill="#ffda44" d="M142 78a78 78 0 1 0 58 134 63 63 0 0 1-30 7 63 63 0 1 1 30-119 78 78 0 0 0-58-22m46 33-11 24-26-6 12 23-21 17 26 5v26l20-16 20 16v-26l26-5-21-17 12-23-26 6z"/>
+ph	<path fill="#0052b4" d="M0 0h512v256l-265 45.2z"/><path fill="#d80027" d="M210 256h302v256H0z"/><path fill="#eee" d="M0 0v512l256-256z"/><path fill="#ffda44" d="M175.3 256 144 241.3l16.7-30.3-34 6.5-4.3-34.3-23.6 25.2L75 183.2l-4.3 34.3-34-6.5 16.7 30.3L22.3 256l31.2 14.7L37 301l34-6.5 4.2 34.3 23.7-25.2 23.6 25.2 4.3-34.3 34 6.5-16.7-30.3zm-107-155.8 10.4 14.5 17-5.4-10.6 14.4 10.4 14.5-17-5.6L68 147l.2-17.9-17-5.6 17-5.4zm0 264.8 10.4 14.6 17-5.4-10.6 14.3 10.4 14.6-17-5.7L68 411.8l.2-17.9-17-5.6 17-5.4zm148.4-132.4L206.3 247l-17-5.4 10.5 14.4-10.4 14.6 17-5.7 10.6 14.4-.1-17.9 17-5.6-17.1-5.4z"/>
+us	<path fill="#eee" d="M256 0h256v64l-32 32 32 32v64l-32 32 32 32v64l-32 32 32 32v64l-256 32L0 448v-64l32-32-32-32v-64z"/><path fill="#d80027" d="M224 64h288v64H224Zm0 128h288v64H256ZM0 320h512v64H0Zm0 128h512v64H0Z"/><path fill="#0052b4" d="M0 0h256v256H0Z"/><path fill="#eee" d="m187 243 57-41h-70l57 41-22-67zm-81 0 57-41H93l57 41-22-67zm-81 0 57-41H12l57 41-22-67zm162-81 57-41h-70l57 41-22-67zm-81 0 57-41H93l57 41-22-67zm-81 0 57-41H12l57 41-22-67Zm162-82 57-41h-70l57 41-22-67Zm-81 0 57-41H93l57 41-22-67zm-81 0 57-41H12l57 41-22-67Z"/>
+ca	<path fill="#d80027" d="M0 0v512h144l112-64 112 64h144V0H368L256 64 144 0Z"/><path fill="#eee" d="M144 0h224v512H144Z"/><path fill="#d80027" d="m301 289 44-22-22-11v-22l-45 22 23-44h-23l-22-34-22 33h-23l23 45-45-22v22l-22 11 45 22-12 23h45v33h22v-33h45z"/>
+br	<path fill="#6da544" d="M0 0h512v512H0z"/><path fill="#ffda44" d="M256 100.2 467.5 256 256 411.8 44.5 256z"/><path fill="#eee" d="M174.2 221a87 87 0 0 0-7.2 36.3l162 49.8a88.5 88.5 0 0 0 14.4-34c-40.6-65.3-119.7-80.3-169.1-52z"/><path fill="#0052b4" d="M255.7 167a89 89 0 0 0-41.9 10.6 89 89 0 0 0-39.6 43.4 181.7 181.7 0 0 1 169.1 52.2 89 89 0 0 0-9-59.4 89 89 0 0 0-78.6-46.8zM212 250.5a149 149 0 0 0-45 6.8 89 89 0 0 0 10.5 40.9 89 89 0 0 0 120.6 36.2 89 89 0 0 0 30.7-27.3A151 151 0 0 0 212 250.5z"/>
+ar	<path fill="#338af3" d="M0 0h512v144.7L488 256l24 111.3V512H0V367.3L26 256 0 144.7z"/><path fill="#eee" d="M0 144.7h512v222.6H0z"/><path fill="#ffda44" d="m332.4 256-31.2 14.7 16.7 30.3-34-6.5-4.2 34.3-23.7-25.2-23.6 25.2-4.3-34.3-34 6.5 16.6-30.3-31.2-14.7 31.3-14.7L194 211l34 6.5 4.3-34.3 23.6 25.2 23.6-25.2 4.4 34.3 34-6.5-16.7 30.3z"/>
+mx	<path fill="#eee" d="M144 0h223l33 256-33 256H144l-32-256z"/><path fill="#d80027" d="M368 0h144v512H368z"/><path fill="#751a46" d="M256 174c22 11 12 33 11 34l-2-4c-4-15-13-33-31-18v11q10 1 11 11-11 12-4 26l4 8-13 23 29-7 18 18v-11l11 11 23-11-35-21-2-13c22-2 34 4 51 29 9-83-45-86-64-86Z"/><path fill="#6da544" d="M209 183q-5 4-4 12 1 11 10 15c3 2 8 0 10 3 3 3-2 5-4 6q-8 5-9 14 3 10 12 15c2 2 7 4 5 7q-4 2-9-2-12-6-19-19c-2-3-1-10-7-10-7 2-4 10-2 14q8 14 21 23 9 8 20 3 10-6 4-17c-3-6-11-8-14-14-2-3 2-4 4-6q8-4 9-11-2-13-14-15-6 1-7-6c-1-3 3-7 0-11q-2-3-6-1"/><path fill="#496e2d" d="M0 0v512h144V0zm164 235a5 5 0 0 0-5 5 97 97 0 0 0 194 0 5 5 0 0 0-5-5 5 5 0 0 0-5 5 87 87 0 1 1-174 0 5 5 0 0 0-5-5m35 25-4 1q-3 4 1 8 23 21 54 24v17h12v-17q31-3 54-24 4-4 1-8-4-3-8 0a78 78 0 0 1-106 0z"/><path fill="#338af3" d="M256 316q-21 0-40-13l6-9c20 13 48 13 68 0l7 9q-18 13-41 13"/><rect width="34" height="22" x="239" y="299" fill="#ff9811" rx="11" ry="11"/><path fill="#ffda44" d="m234 186-12 11v11l18-9q4-3 1-7zm-62 79a10 10 0 0 0-10 10 10 10 0 0 0 10 10 10 10 0 0 0 10-10 10 10 0 0 0-10-10m169 0a10 10 0 0 0-10 10 10 10 0 0 0 10 10 10 10 0 0 0 10-10 10 10 0 0 0-10-10m-69 4-16 8v5l15-1 4-9zm-83 23a10 10 0 0 0-10 10 10 10 0 0 0 10 10 10 10 0 0 0 10-10 10 10 0 0 0-10-10m135 0a10 10 0 0 0-10 10 10 10 0 0 0 10 10 10 10 0 0 0 10-10 10 10 0 0 0-10-10m-108 21a10 10 0 0 0-10 10 10 10 0 0 0 10 10 10 10 0 0 0 10-10 10 10 0 0 0-10-10m81 0a10 10 0 0 0-10 10 10 10 0 0 0 10 10 10 10 0 0 0 10-10 10 10 0 0 0-10-10"/>
+cl	<path fill="#d80027" d="m0 256 254.5-51.3L512 256v256H0z"/><path fill="#0052b4" d="M0 0h256l52.7 132.8L256 256H0z"/><path fill="#eee" d="M256 0h256v256H256zM152.4 89l16.6 51h53.6l-43.4 31.6 16.6 51-43.4-31.5-43.4 31.5 16.6-51L82.2 140h53.6z"/>
+co	<path fill="#d80027" d="m0 384 255.8-29.7L512 384v128H0z"/><path fill="#0052b4" d="m0 256 259.5-31L512 256v128H0z"/><path fill="#ffda44" d="M0 0h512v256H0z"/>
+au	<path fill="#0052b4" d="M0 0h512v512H0z"/><path fill="#eee" d="m154 300 14 30 32-8-14 30 25 20-32 7 1 33-26-21-26 21 1-33-33-7 26-20-14-30 32 8zm222-27h47l-38 27 15-44 14 44zm7-162 7 15 16-4-7 15 12 10-15 3v17l-13-11-13 11v-17l-15-3 12-10-7-15 16 4zm57 67 7 15 16-4-7 15 12 10-15 3v16l-13-10-13 11v-17l-15-3 12-10-7-15 16 4zm-122 22 7 15 16-4-7 15 12 10-15 3v16l-13-10-13 11v-17l-15-3 12-10-7-15 16 4zm65 156 7 15 16-4-7 15 12 10-15 3v17l-13-11-13 11v-17l-15-3 12-10-7-15 16 4zM0 0v32l32 32L0 96v160h32l32-32 32 32h32v-83l83 83h45l-8-16 8-15v-14l-83-83h83V96l-32-32 32-32V0H96L64 32 32 0Z"/><path fill="#d80027" d="M32 0v32H0v64h32v160h64V96h160V32H96V0Zm96 128 128 128v-31l-97-97z"/>
+nz	<path fill="#0052b4" d="M256 0h256v512H0V256Z"/><path fill="#eee" d="M0 0v32l32 32L0 96v160h32l32-32 32 32h32v-83l83 83h45l-8-16 8-15v-14l-83-83h83V96l-32-32 32-32V0H96L64 32 32 0Zm382 92-11 35h-37l30 21-12 35 30-22 30 22-12-35 30-21h-37l-11-35Zm61 72-11 35h-37l30 21-11 35 29-21 30 21-12-35 30-21h-37Zm-123 10-11 35h-37l30 22-11 35 29-22 30 22-11-35 29-22h-36zm59 130-11 35h-37l30 21-11 35 29-21 30 21-11-35 29-21h-36z"/><path fill="#d80027" d="M32 0v32H0v64h32v160h64V96h160V32H96V0Zm96 128 128 128v-31l-97-97zm251 201-5 18h-19l15 10-6 18 15-11 15 11-5-18 14-10h-18Zm-59-129-5 17h-19l15 11-6 17 15-11 15 11-6-17 15-11h-18l-6-17zm123-11-6 18h-18l15 11-6 17 15-11 15 11-6-17 15-11h-18l-6-18zm-61-72-6 17h-18l15 11-6 17 15-10 15 10-6-17 15-11h-18z"/>
+za	<path fill="#eee" d="m0 0 192 256L0 512h47l465-189v-34l-32-33 32-33v-34L47 0Z"/><path fill="#333" d="M0 142v228l140-114z"/><path fill="#ffda44" d="M192 256 0 95v47l114 114L0 370v47z"/><path fill="#6da544" d="M512 223H223L0 0v94l161 162L0 418v94l223-223h289z"/><path fill="#d80027" d="M512 0H47l189 189h276z"/><path fill="#0052b4" d="M512 512H47l189-189h276z"/>
+sc	<path fill="#0052b4" d="M0 0v332l150.9-138.5L225.2 0z"/><path fill="#ffda44" d="M273.1 253.3 512 0H225.2L0 332v80.2z"/><path fill="#d80027" d="M512 0 0 412.2v50.4L277.9 390 512 256z"/><path fill="#eee" d="M0 462.6 512 256v133.5l-223.9 78.8L0 488.4z"/><path fill="#6da544" d="m512 389.5-512 99V512h512z"/>
+pa	<path fill="#eee" d="M0 0h256l256 256v256H256L0 256z"/><path fill="#0052b4" d="M0 256v256h256V256z"/><path fill="#d80027" d="M256 0h256v256H256z"/><path fill="#0052b4" d="m152.4 89 16.6 51h53.6l-43.4 31.6 16.6 51-43.4-31.5-43.4 31.5 16.6-51L82.2 140h53.6z"/><path fill="#d80027" d="m359.6 289.4 16.6 51h53.6L386.4 372l16.6 51-43.4-31.5-43.4 31.6 16.6-51-43.4-31.6H343z"/>
+MTFLAGEOF
+    while IFS=$'\t' read -r a b c; do [[ -n "$b" ]] && { MT_CNAME[$a]="$b"; [[ -n "$c" ]] && MT_CACC[$a]="$c"; }; done <<'MTCNEOF'
+NL	Нидерланды
+DE	Германия	Германию
+FI	Финляндия	Финляндию
+FR	Франция	Францию
+GB	Великобритания	Великобританию
+IE	Ирландия	Ирландию
+BE	Бельгия	Бельгию
+LU	Люксембург
+AT	Австрия	Австрию
+CH	Швейцария	Швейцарию
+IT	Италия	Италию
+ES	Испания	Испанию
+PT	Португалия	Португалию
+PL	Польша	Польшу
+CZ	Чехия	Чехию
+SK	Словакия	Словакию
+HU	Венгрия	Венгрию
+RO	Румыния	Румынию
+BG	Болгария	Болгарию
+GR	Греция	Грецию
+SE	Швеция	Швецию
+NO	Норвегия	Норвегию
+DK	Дания	Данию
+IS	Исландия	Исландию
+EE	Эстония	Эстонию
+LV	Латвия	Латвию
+LT	Литва	Литву
+MD	Молдова	Молдову
+UA	Украина	Украину
+BY	Беларусь
+RS	Сербия	Сербию
+HR	Хорватия	Хорватию
+SI	Словения	Словению
+CY	Кипр
+MT	Мальта	Мальту
+AL	Албания	Албанию
+BA	Босния и Герцеговина	Боснию и Герцеговину
+MK	Северная Македония	Северную Македонию
+ME	Черногория	Черногорию
+XK	Косово
+LI	Лихтенштейн
+MC	Монако
+AD	Андорра	Андорру
+GI	Гибралтар
+IM	Остров Мэн
+RU	Россия	Россию
+KZ	Казахстан
+UZ	Узбекистан
+KG	Киргизия	Киргизию
+TJ	Таджикистан
+TM	Туркменистан
+MN	Монголия	Монголию
+TR	Турция	Турцию
+GE	Грузия	Грузию
+AM	Армения	Армению
+AZ	Азербайджан
+AE	ОАЭ
+IL	Израиль
+SA	Саудовская Аравия	Саудовскую Аравию
+QA	Катар
+KW	Кувейт
+BH	Бахрейн
+OM	Оман
+JO	Иордания	Иорданию
+LB	Ливан
+IR	Иран
+IQ	Ирак
+IN	Индия	Индию
+PK	Пакистан
+BD	Бангладеш
+LK	Шри-Ланка	Шри-Ланку
+NP	Непал
+SG	Сингапур
+HK	Гонконг
+MO	Макао
+JP	Япония	Японию
+KR	Южная Корея	Южную Корею
+TW	Тайвань
+CN	Китай
+ID	Индонезия	Индонезию
+VN	Вьетнам
+TH	Таиланд
+MY	Малайзия	Малайзию
+PH	Филиппины
+KH	Камбоджа	Камбоджу
+US	США
+CA	Канада	Канаду
+MX	Мексика	Мексику
+BR	Бразилия	Бразилию
+AR	Аргентина	Аргентину
+CL	Чили
+CO	Колумбия	Колумбию
+PE	Перу
+VE	Венесуэла	Венесуэлу
+UY	Уругвай
+EC	Эквадор
+CR	Коста-Рика	Коста-Рику
+PA	Панама	Панаму
+BZ	Белиз
+AU	Австралия	Австралию
+NZ	Новая Зеландия	Новую Зеландию
+ZA	ЮАР
+EG	Египет
+MA	Марокко
+TN	Тунис
+NG	Нигерия	Нигерию
+KE	Кения	Кению
+SC	Сейшелы
+MU	Маврикий
+VG	Британские Виргинские острова
+KY	Каймановы острова
+BM	Бермуды
+CW	Кюрасао
+MTCNEOF
+}
+
+# Палитра и геометрия. Тональная схема M3 (тёмная) из оранжевого исходного
+# цвета — как в макете 5b. Красного (error) в макете нет, а «блок» без него не
+# отличить от «да»: взят стандартный error container из M3.
 mt_style_init() {
-    C_BG="#0A0A0A"; C_SC="#131313"; C_SCH="#202020"; C_TRACK="#2E2E2E"
-    C_LINE="#262626"; C_LINE2="#3D3D3D"
-    C_TXT="#F2F2F2"; C_TXT2="#9C9C9C"; C_TXT3="#757575"; C_FOOT="#545454"
-    C_INV="#E6E6E6"; C_INK="#0A0A0A"; C_MARK="#C6C6C6"
-    # Единственный цвет на всей карточке — фирменный фиолетовый спонсора.
-    # Оба тона сняты пипеткой с логотипа, а не подобраны на глаз.
-    C_AD_W="#FAF7FE"; C_AD_V="#935BF4"
-    # Шрифт подписи спонсора: в макете Google Sans Flex, но ставится он
-    # best-effort — если не встал, подпись наберётся основным шрифтом сводки.
-    F_AD="'Google Sans Flex', 'IBM Plex Sans', Roboto, 'Noto Sans', 'DejaVu Sans', sans-serif"
-    W=1100; PAD=32; IPAD=28; CARDW=$((W-2*PAD))
-    # колонки блока сервисов — их читают rs_flush/render_services
-    colw=$(( (CARDW-2*IPAD-32)/2 ))
-    sx1=$((PAD+IPAD))
-    sx2=$((PAD+IPAD+(CARDW-2*IPAD-32)/2+32))
-    load_logos
+    C_BG="#0f0b09"; C_SURF="#231f1c"; C_ON="#e7e1de"; C_ON2="#d1c3bb"
+    C_OUT="#9b8e85"; C_OUTV="#50443d"; C_TRACK="#383431"; C_DIV="#2b2522"; C_DIV2="#3a332f"
+    C_PRI="#feb380"; C_ONPRI="#4d2300"; C_PRIC="#6d3500"; C_ONPRIC="#ffdac2"
+    C_SEC="#dfc0ab"; C_SECC="#5a402f"; C_ONSECC="#fbdbc7"
+    C_TER="#c4ce8a"; C_ONTER="#2f3300"
+    C_ERR="#ffb4ab"; C_ERRC="#93000a"; C_ONERRC="#ffdad6"
+    MT_FONT="Onest, Roboto, 'Noto Sans', 'DejaVu Sans', sans-serif"
+    W=1280; PX=48; PY=40; CW=$(( W - 2*PX )); GAP=16
+    local p=$'\xd0\x96'; MT_U8=0; (( ${#p} == 1 )) && MT_U8=1
+    MT_DATE=$(date '+%Y-%m-%d %H:%M')
+    load_logos; mt_load_assets
+}
+
+# --- Страница ----------------------------------------------------------------
+# Блоки идут сверху вниз; PG_Y — низ последнего блока, каждый следующий сам
+# отступает GAP. Высоту холста знаем только в конце, поэтому SVG собирается в
+# SVG_BODY, а шапка печатается последней.
+
+pg_begin() { SVG_BODY=""; MT_FLAG_USED=(); PG_Y=$PY; }
+
+pg_end() {
+    local H=$(( PG_Y + PY )) cc
+    MT_PAGE_H=$H
+    printf '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="%d" height="%d" viewBox="0 0 %d %d" font-family="%s" text-rendering="geometricPrecision">\n' "$W" "$H" "$W" "$H" "$MT_FONT"
+    printf '<rect width="%d" height="%d" fill="%s"/>\n' "$W" "$H" "$C_BG"
+    # Флаги — один раз на страницу; клип-круг применяется в их собственной
+    # 512-сетке, так что любой масштаб в <use> его не сбивает.
+    printf '<defs><clipPath id="fc"><circle cx="256" cy="256" r="256"/></clipPath>'
+    for cc in "${!MT_FLAG_USED[@]}"; do printf '<g id="fl-%s" clip-path="url(#fc)">%s</g>' "$cc" "${MT_FLAG[$cc]}"; done
+    printf '</defs>\n%s</svg>\n' "$SVG_BODY"
+}
+
+# Верхняя строка: «Multitest», подпись, пилюля справа (номер страницы).
+pg_topbar() {
+    local cy=$(( PG_Y + 22 )) x=$(( PX + 8 )) xr=$(( PX + CW - 8 )) pw sx
+    t $x $(( cy + 8 )) 24 800 "$C_ON" "Multitest"
+    tw "Multitest" 24 800; sx=$(( x + TW + 14 ))
+    tw "$2" 20 700; pw=$(( TW + 40 ))
+    rr $(( xr - pw )) $PG_Y $pw 44 22 22 22 22 "$C_SECC"
+    t $(( xr - pw/2 )) $(( cy + 7 )) 20 700 "$C_ONSECC" "$2" middle
+    ellip "$1" $(( xr - pw - 14 - sx )) 20
+    t $sx $(( cy + 7 )) 20 400 "$C_ON2" "$EL"
+    PG_Y=$(( PG_Y + 44 ))
+}
+
+# Заголовок страницы теста: 104 px, под ним описание до трёх строк.
+pg_title() {
+    local top=$(( PG_Y + GAP + 28 )) x=$(( PX + 8 )) fs i
+    fitsz "$1" $(( CW - 16 )) 104 800 -30 56; fs=$FS
+    blt $top $fs 950; t $x $BL $fs 800 "$C_ON" "$1" start -30
+    top=$(( top + (fs * 95 + 50) / 100 + 12 ))
+    wrap "$2" 860 26 400 3
+    for i in "${!WL[@]}"; do blt $(( top + i * 364 / 10 )) 26 1400; t $x $BL 26 400 "$C_ON2" "${WL[$i]}"; done
+    PG_Y=$(( top + (${#WL[@]} * 364 + 5) / 10 + 12 ))
+}
+
+# Заголовок секции: <заголовок> [счётчик] [примечание справа]
+pg_section() {
+    local top=$(( PG_Y + GAP )) x=$(( PX + 8 )) bl
+    bl=$(( top + 24 + 35 ))
+    t $x $bl 36 800 "$C_ON" "$1"
+    tw "$1" 36 800
+    local used=$(( x + TW + 14 ))
+    if [[ -n "${2:-}" ]]; then t $used $bl 28 800 "$C_PRI" "$2"; tw "$2" 28 800; used=$(( used + TW )); fi
+    if [[ -n "${3:-}" ]]; then
+        used=$(( used + 40 ))
+        ellip "$3" $(( PX + CW - 8 - used )) 20
+        t $(( PX + CW - 8 )) $bl 20 400 "$C_ON2" "$EL" end
+    fi
+    PG_Y=$(( top + 24 + 46 + 4 ))
+}
+
+# Марка спонсора одним белым цветом, как stencloud-white.png в макете: слово
+# STEN и облако с вырезанными чёрточкой и точками (evenodd) — сквозь них виден
+# фон, отдельный слой начинки не нужен. <x> <y> <высота>
+mt_stencloud() {
+    fdiv $(( $3 * 10 )) 1723
+    sv "<g transform=\"translate($1 $2) scale($FD)\" fill=\"#ffffff\" fill-opacity=\"0.92\"><path d=\"$AD_LOGO_STEN\" fill-rule=\"evenodd\"/><path d=\"$AD_LOGO_CLOUD\" fill-rule=\"evenodd\"/></g>"
+}
+
+# Подвал как в макете: «multitest vX» слева; справа «powered by» над маркой,
+# разделитель, промокод и строка флаги · скидка · бот.
+pg_footer() {
+    local top=$(( PG_Y + GAP + 20 )) cy x1 xd x3 w1 w3 wd wb wrow ry rc fx
+    sv "<rect x=\"$PX\" y=\"$top\" width=\"$CW\" height=\"1\" fill=\"$C_DIV\"/>"
+    cy=$(( top + 1 + 22 + 24 ))
+    t $(( PX + 8 )) $(( cy + 6 )) 17 400 "$C_OUT" "multitest v${SCRIPT_VERSION}"
+    tw "powered by" 14; w1=$TW; (( w1 < 60 )) && w1=60
+    tw "$AD_PROMO" 21 500 30; w3=$TW
+    tw "$AD_DISCOUNT" 15 600; wd=$TW
+    tw "· $AD_BOT" 14; wb=$TW
+    wrow=$(( 16 + 6 + 16 + 6 + wd + 6 + wb )); (( wrow > w3 )) && w3=$wrow
+    x3=$(( PX + CW - 8 - w3 )); xd=$(( x3 - 18 - 1 )); x1=$(( xd - 18 - w1 ))
+    t $x1 $(( cy - 12 )) 14 400 "$C_OUT" "powered by"
+    mt_stencloud $x1 $(( cy - 6 )) 30
+    sv "<rect x=\"$xd\" y=\"$(( cy - 19 ))\" width=\"1\" height=\"38\" fill=\"$C_DIV2\"/>"
+    t $x3 $(( cy - 4 )) 21 500 "$C_ON" "$AD_PROMO" start 30
+    ry=$(( cy + 5 )); rc=$(( cy + 13 )); fx=$x3
+    mt_flag nl $fx $ry 16; fx=$(( fx + 22 ))
+    mt_flag ee $fx $ry 16; fx=$(( fx + 22 ))
+    t $fx $(( rc + 5 )) 15 600 "$C_ON" "$AD_DISCOUNT"; fx=$(( fx + wd + 6 ))
+    t $fx $(( rc + 5 )) 14 400 "$C_OUT" "· $AD_BOT"
+    PG_Y=$(( top + 1 + 22 + 48 ))
+}
+
+# --- Пилюли значений -------------------------------------------------------
+
+# Вид пилюли по состоянию и значению -> PK (вид), PT (текст), PCC (флаг), PI (иконка).
+# cons — «своя» страна: совпадение с ней тихое, чужая страна — салатовая пилюля.
+mt_pill_kind() {
+    local st="$1" v="$2" cons="${3:-}" cc
+    # «—» вместо страны сервера (ipinfo не ответил) — сравнивать не с чем
+    [[ "$cons" =~ ^${MT_CC_RE}$ ]] || cons=""
+    PT="$v"; PCC=""; PI=""
+    if [[ "$v" == "да" ]]; then PK=yes; PI=check
+    elif [[ "$v" == "нет" ]]; then PK=no; PI=close
+    elif [[ "$v" =~ ^(${MT_CC_RE})([[:space:]]|$) ]]; then
+        cc="${BASH_REMATCH[1]}"; PCC="$cc"
+        # «FR (CDG)» — код точки присутствия CDN; скобки в пилюле лишние
+        [[ "$v" =~ ^(${MT_CC_RE})\ \((.+)\)$ ]] && PT="${BASH_REMATCH[1]} · ${BASH_REMATCH[2]}"
+        if [[ "$st" == "bad" ]]; then PK=bad
+        elif [[ "$st" == "ok" && ( -z "$cons" || "$cc" == "$cons" ) ]]; then PK=plain
+        else PK=diff; fi
+    elif [[ "$st" == "na" || "$v" == "N/A" || "$v" == "?" || -z "$v" ]]; then PK=muted; [[ -z "$v" ]] && PT="—"
+    elif [[ "$st" == "bad" ]]; then PK=bad; [[ "$v" == "блок" ]] && PI=block
+    elif [[ "$st" == "warn" ]]; then PK=warn
+    else PK=plain; fi
+}
+
+# Пилюля у правого края: <правый край> <центр y> <кегль 20|19> <вид> <текст> [флаг] [иконка] [макс. ширина текста]
+# Отдаёт ширину в PW. Геометрия — из макета: 20 px — отступы 8/14/6, флаг 24;
+# 19 px — 6/12/5, флаг 22. Длинный ответ режем, чтобы он не съел имя строки.
+mt_pill() {
+    local xr=$1 cy=$2 sz=$3 kind="$4" txt="$5" cc="${6:-}" ic="${7:-}" mx="${8:-0}"
+    local lead=24 pl=8 pr=14 pv=6 bg="" fg="$C_ON2" stroke="" h x tx
+    (( sz < 20 )) && { lead=22; pl=6; pr=12; pv=5; }
+    case "$kind" in
+        muted) fg="$C_OUT" ;;
+        diff|warn) bg="$C_TER"; fg="$C_ONTER" ;;
+        yes) bg="$C_PRIC"; fg="$C_ONPRIC" ;;
+        no) stroke="$C_OUTV" ;;
+        bad) bg="$C_ERRC"; fg="$C_ONERRC" ;;
+    esac
+    if (( mx > 0 )); then ellip "$txt" $mx $sz 700; txt="$EL"; fi
+    tw "$txt" $sz 700
+    PW=$(( pl + pr + TW )); [[ -n "$cc$ic" ]] && PW=$(( PW + lead + 8 ))
+    h=$(( 2*pv + sz * 1275 / 1000 )); (( h < 2*pv + lead )) && h=$(( 2*pv + lead ))
+    x=$(( xr - PW ))
+    [[ -n "$bg" ]] && rr $x $(( cy - h/2 )) $PW $h $(( h/2 )) $(( h/2 )) $(( h/2 )) $(( h/2 )) "$bg"
+    [[ -n "$stroke" ]] && sv "<rect x=\"$x.75\" y=\"$(( cy - h/2 )).75\" width=\"$(( PW - 2 )).5\" height=\"$(( h - 2 )).5\" rx=\"$(( h/2 - 1 ))\" fill=\"none\" stroke=\"$stroke\" stroke-width=\"1.5\"/>"
+    tx=$(( x + pl ))
+    if [[ -n "$cc" ]]; then mt_flag "$cc" $tx $(( cy - lead/2 )) $lead; tx=$(( tx + lead + 8 ))
+    elif [[ -n "$ic" ]]; then mt_icon "$ic" $(( tx + 1 )) $(( cy - lead/2 + 1 )) $(( lead - 2 )) "$fg"; tx=$(( tx + lead + 8 )); fi
+    t $tx $(( cy + sz * 133 / 400 )) $sz 700 "$fg" "$txt"
+}
+
+# Иконка строки списка: логотип сервиса, иначе запасная по типу строки —
+# глобус у доменов, «база данных» у баз риска, буква в кружке у остальных.
+# <slug> <имя> <x> <y> <размер> <logo|globe|db>
+mt_rowicon() {
+    sv_mark "$1" "$3" "$4" "$5" "$C_ON2" && return 0
+    case "$6" in
+        globe) mt_icon language "$3" "$4" "$5" "$C_ON2" ;;
+        db)    mt_icon database "$3" "$4" "$5" "$C_ON2" ;;
+        *)
+            local r=$(( $5 / 2 )) ch
+            mt_glyphs "$2"; ch="${GC[0]:-?}"
+            sv "<circle cx=\"$(( $3 + r ))\" cy=\"$(( $4 + r ))\" r=\"$r\" fill=\"$C_TRACK\"/>"
+            t $(( $3 + r )) $(( $4 + r + 5 )) 15 700 "$C_ON2" "${ch^^}" middle ;;
+    esac
+}
+
+# --- Списки -------------------------------------------------------------------
+# Строки берутся из глобальных LR_NAME / LR_SLUG / LR_ST / LR_VAL.
+
+# Две колонки «иконка · имя · пилюля» (сервисы, сайты, базы риска). Половина
+# строк — в левую колонку, у каждой колонки свои скругления сегментов.
+# <своя страна> <запасная иконка>
+mt_list2() {
+    local n=${#LR_NAME[@]} cw=$(( (CW - 12) / 2 )) top=$(( PG_Y + GAP )) half col s e cnt j i cx y
+    half=$(( (n + 1) / 2 ))
+    for col in 0 1; do
+        cx=$(( PX + col * (cw + 12) ))
+        if (( col == 0 )); then s=0; e=$half; else s=$half; e=$n; fi
+        cnt=$(( e - s ))
+        for (( j=0; j<cnt; j++ )); do
+            i=$(( s + j )); y=$(( top + j * 68 ))
+            segr $j $cnt 28 8; rr $cx $y $cw 64 "${R[@]}" "$C_SURF"
+            mt_rowicon "${LR_SLUG[i]}" "${LR_NAME[i]}" $(( cx + 22 )) $(( y + 19 )) 26 "$2"
+            mt_pill_kind "${LR_ST[i]}" "${LR_VAL[i]}" "$1"
+            mt_pill $(( cx + cw - 14 )) $(( y + 32 )) 20 "$PK" "$PT" "$PCC" "$PI" $(( cw * 45 / 100 ))
+            ellip "${LR_NAME[i]}" $(( cw - 64 - 14 - PW - 16 )) 22
+            t $(( cx + 64 )) $(( y + 39 )) 22 400 "$C_ON" "$EL"
+        done
+    done
+    PG_Y=$(( top + half * 68 - 4 ))
+}
+
+# Четыре колонки «имя · пилюля» (GeoIP-базы): заполняем по столбцам, как в макете.
+mt_list4() {
+    local n=${#LR_NAME[@]} cw=$(( (CW - 36) / 4 )) top=$(( PG_Y + GAP )) per col s e cnt j i cx y
+    per=$(( (n + 3) / 4 ))
+    for col in 0 1 2 3; do
+        cx=$(( PX + col * (cw + 12) )); s=$(( col * per )); e=$(( s + per )); (( e > n )) && e=$n
+        cnt=$(( e - s )); (( cnt > 0 )) || continue
+        for (( j=0; j<cnt; j++ )); do
+            i=$(( s + j )); y=$(( top + j * 64 ))
+            segr $j $cnt 28 8; rr $cx $y $cw 60 "${R[@]}" "$C_SURF"
+            mt_pill_kind "${LR_ST[i]}" "${LR_VAL[i]}" "$1"
+            mt_pill $(( cx + cw - 12 )) $(( y + 30 )) 19 "$PK" "$PT" "$PCC" "$PI" $(( cw * 45 / 100 ))
+            ellip "${LR_NAME[i]}" $(( cw - 20 - 12 - PW - 10 )) 20
+            t $(( cx + 20 )) $(( y + 37 )) 20 400 "$C_ON" "$EL"
+        done
+    done
+    PG_Y=$(( top + per * 64 - 4 ))
+}
+
+# Сетка «подпись / значение [/ подстрочник]» (характеристики, показатели).
+# Ячейки — из G_L / G_V / G_S; ширины колонок — веса G_FR (по умолчанию равные).
+# Скругляем только внешние углы всей сетки, как у карточки «Сервер» в макете.
+# <колонок> <кегль значения>
+mt_grid() {
+    local cols=$1 vs=$2 n=${#G_L[@]} top=$(( PG_Y + GAP )) rows r c i k x y h rh fr sum=0 lh part
+    (( n > 0 )) || return 0
+    (( cols > n )) && cols=$n
+    rows=$(( (n + cols - 1) / cols )); lh=$(( vs * 125 / 100 ))
+    local -a cx=() cw=() frs=()
+    for (( c=0; c<cols; c++ )); do frs[c]=${G_FR[c]:-10}; sum=$(( sum + frs[c] )); done
+    x=$PX
+    for (( c=0; c<cols; c++ )); do
+        cw[c]=$(( (CW - (cols - 1) * 4) * frs[c] / sum )); cx[c]=$x; x=$(( x + cw[c] + 4 ))
+    done
+    cw[cols-1]=$(( PX + CW - cx[cols-1] ))
+    y=$top
+    for (( r=0; r<rows; r++ )); do
+        # высота ряда — по самой высокой ячейке: значение переносится до двух строк
+        rh=0; local -a lines=() nl=()
+        for (( c=0; c<cols; c++ )); do
+            i=$(( r * cols + c )); (( i < n )) || break
+            wrap "${G_V[i]:-—}" $(( cw[c] - 52 )) $vs 700 2; nl[c]=${#WL[@]}
+            printf -v part '%s\x1e' "${WL[@]}"; lines[c]="$part"
+            h=$(( 22 + 22 + 4 + nl[c] * lh + 22 )); [[ -n "${G_S[i]:-}" ]] && h=$(( h + 4 + 22 ))
+            (( h > rh )) && rh=$h
+        done
+        for (( c=0; c<cols; c++ )); do
+            i=$(( r * cols + c )); (( i < n )) || break
+            local tl=8 tr=8 br=8 bl=8 lastc=$(( (r == rows - 1) ? (n - 1 - r * cols) : (cols - 1) ))
+            (( r == 0 && c == 0 )) && tl=28
+            (( r == 0 && c == cols - 1 )) && tr=28
+            (( r == rows - 1 && c == 0 )) && bl=28
+            (( r == rows - 1 && c == lastc )) && br=28
+            rr ${cx[c]} $y ${cw[c]} $rh $tl $tr $br $bl "$C_SURF"
+            t $(( cx[c] + 26 )) $(( y + 22 + 17 )) 18 400 "$C_ON2" "${G_L[i]}"
+            local ln=0 ystart=$(( y + 22 + 22 + 4 )) rest="${lines[c]}"
+            while [[ -n "$rest" ]]; do
+                part="${rest%%$'\x1e'*}"; rest="${rest#*$'\x1e'}"
+                blt $(( ystart + ln * lh )) $vs 1250; t $(( cx[c] + 26 )) $BL $vs 700 "$C_ON" "$part"
+                ln=$(( ln + 1 ))
+            done
+            if [[ -n "${G_S[i]:-}" ]]; then
+                ellip "${G_S[i]}" $(( cw[c] - 52 )) 18
+                t $(( cx[c] + 26 )) $(( ystart + ln * lh + 4 + 17 )) 18 400 "$C_ON2" "$EL"
+            fi
+        done
+        y=$(( y + rh + 4 ))
+    done
+    PG_Y=$(( y - 4 ))
+    G_FR=()
+}
+
+# --- Волнистые шкалы ------------------------------------------------------------
+
+# Волна M3 Expressive: <x> <центр y> <длина> <цвет>. Узор — из макета:
+# «M0 10 Q8 3 16 10 T32 10», период 32, толщина 5, круглые концы. Концы
+# поджимаем на 3 px, чтобы скругление не вылезало за начало шкалы, а хвост
+# дорисовываем частью полуволны (подкривая той же квадратичной Безье).
+mt_wave() {
+    local x=$(( $1 + 3 )) cy=$2 xe=$(( $1 + $3 - 3 )) col="$4" d s=-1 rem
+    (( xe <= x )) && xe=$(( x + 1 ))
+    d="M$x $cy"
+    while (( x + 16 <= xe )); do d+="q8 $(( s * 7 )) 16 0"; x=$(( x + 16 )); s=$(( -s )); done
+    rem=$(( xe - x ))
+    (( rem > 0 )) && d+="q$(( rem / 2 )) $(( s * 7 * rem / 16 )) $rem $(( s * 14 * rem * (16 - rem) / 256 ))"
+    sv "<path d=\"$d\" fill=\"none\" stroke=\"$col\" stroke-width=\"5\" stroke-linecap=\"round\"/>"
+}
+
+# Шкала со «стоп-точкой» M3: волна на долю, дальше трек и точка на конце.
+# <x> <центр y> <ширина> <доля в тысячных> <цвет волны и точки>
+mt_bar() {
+    local x=$1 cy=$2 w=$3 f=$4 col="$5" ww tx
+    (( f < 0 )) && f=0; (( f > 1000 )) && f=1000
+    ww=$(( w * f / 1000 ))
+    tx=$(( x + ww + 8 ))
+    (( tx < x + w - 6 )) && sv "<rect x=\"$tx\" y=\"$(( cy - 3 ))\" width=\"$(( x + w - tx ))\" height=\"6\" rx=\"3\" fill=\"$C_TRACK\"/>"
+    (( ww >= 6 )) && mt_wave $x $cy $ww "$col"
+    sv "<circle cx=\"$(( x + w - 4 ))\" cy=\"$cy\" r=\"4\" fill=\"$col\"/>"
+}
+
+# Число с точкой -> N10 (десятые доли, целое): «2065.4» -> 20654.
+num10() {
+    local v="${1//[^0-9.]/}" i f
+    [[ -n "$v" ]] || { N10=0; return; }
+    i="${v%%.*}"; f="${v#"$i"}"; f="${f#.}"; f="${f:0:1}"
+    N10=$(( 10#${i:-0} * 10 + 10#${f:-0} ))
+}
+
+# «Круглый» потолок шкалы -> NICE: 2140 -> 2500, 941 -> 1000. <значение> <ряд…>
+mt_nice() {
+    local v=$1 s; shift
+    for s in "$@"; do (( v <= s )) && { NICE=$s; return; }; done
+    NICE=$v
+}
+
+# Мбит/с -> «1.93» «Гбит/с» или «436» «Мбит/с»: <Мбит/с·10> -> SPD_N, SPD_U
+mt_speed() {
+    local n=$1 g
+    if (( n >= 10000 )); then g=$(( (n + 50) / 100 )); printf -v SPD_N '%d.%02d' $(( g / 100 )) $(( g % 100 )); SPD_U="Гбит/с"
+    else SPD_N=$(( (n + 5) / 10 )); SPD_U="Мбит/с"; fi
+}
+
+# --- Hero ---------------------------------------------------------------------
+
+# Есть ли в строке буквы с нижним выносным элементом. Кириллицу ищем
+# подстрокой, а не скобочным классом: в C-локали [дру] — это набор байтов,
+# и под него попала бы любая русская буква.
+mt_has_desc() {
+    local s="$1" c
+    [[ "$s" == *[gjpqy]* ]] && return 0
+    for c in д р у ф ц щ; do [[ "$s" == *"$c"* ]] && return 0; done
+    return 1
+}
+
+# Hero с фигурой справа (iPerf3, sysbench, IPQuality …):
+# <фигура> <надпись> <число> <единица> <строка под числом> <текст в фигуре> <подпись в фигуре> [заливка фигуры] [цвет текста фигуры] [иконка вместо текста]
+hero_right() {
+    local top=$(( PG_Y + GAP )) sz=280 lx=$(( PX + 52 )) lw h fs ub uw cx cy y0 c
+    local shf="${8:-$C_PRI}" shc="${9:-$C_ONPRI}"
+    lw=$(( CW - 52 - 40 - sz - 40 ))
+    # главное число вместе с единицей должно уместиться в колонку
+    tw "$4" 34 700; uw=$TW
+    fitsz "$3" $(( lw - (uw > 0 ? uw + 14 : 0) )) 148 800 -40 56; fs=$FS
+    h=$(( 26 + 14 + fs * 85 / 100 + 14 + 30 ))
+    mt_has_desc "$3" && h=$(( h + fs * 15 / 100 ))
+    [[ -z "$2" ]] && h=$(( h - 40 )); [[ -z "$5" ]] && h=$(( h - 44 ))
+    c=$(( h > sz ? h : sz ))
+    rr $PX $top $CW $(( c + 80 )) 56 56 56 56 "$C_SURF"
+    y0=$(( top + 40 + (c - h) / 2 ))
+    if [[ -n "$2" ]]; then ellip "$2" $lw 21; t $lx $(( y0 + 20 )) 21 400 "$C_ON2" "$EL"; y0=$(( y0 + 40 )); fi
+    blt $y0 $fs 850
+    xesc "$3"; local big="$XE"; fxd $(( -40 * fs )) 1000
+    if [[ -n "$4" ]]; then xesc "$4"
+        sv "<text x=\"$lx\" y=\"$BL\" fill=\"$C_ON\"><tspan font-size=\"$fs\" font-weight=\"800\" letter-spacing=\"$FD\">$big</tspan><tspan dx=\"14\" font-size=\"34\" font-weight=\"700\" fill=\"$C_ON2\">$XE</tspan></text>"
+    else
+        sv "<text x=\"$lx\" y=\"$BL\" fill=\"$C_ON\" font-size=\"$fs\" font-weight=\"800\" letter-spacing=\"$FD\">$big</text>"
+    fi
+    y0=$(( y0 + fs * 85 / 100 + 14 ))
+    # у «Hosting» хвост «g» уходит ниже строки межстрочного 0.85 — даём ему место
+    mt_has_desc "$3" && y0=$(( y0 + fs * 15 / 100 ))
+    if [[ -n "$5" ]]; then ellip "$5" $lw 24 600; t $lx $(( y0 + 23 )) 24 600 "$C_ON" "$EL"; fi
+    cx=$(( PX + CW - 40 - sz )); cy=$(( top + 40 + c / 2 ))
+    mt_shape "$1" $cx $(( cy - sz / 2 )) $sz "$shf"
+    if [[ -n "${10:-}" ]]; then
+        mt_icon "${10}" $(( cx + sz / 2 - 60 )) $(( cy - 60 )) 120 "$shc"
+    else
+        fitsz "$6" $(( sz * 70 / 100 )) 104 900 -40 40; fs=$FS
+        ellip "$7" $(( sz * 78 / 100 )) 21 700
+        local th=$(( fs * 9 / 10 + 4 + 27 ))
+        blt $(( cy - th / 2 )) $fs 900; t $(( cx + sz / 2 )) $BL $fs 900 "$shc" "$6" middle -40
+        t $(( cx + sz / 2 )) $(( cy + th / 2 - 6 )) 21 700 "$shc" "$EL" middle
+    fi
+    PG_Y=$(( top + c + 80 ))
+}
+
+# Hero с «печенькой» слева (IP Region, Censorcheck):
+# <текст в фигуре> <число> <«/ всего»> <заголовок> <пояснение> [подпись в фигуре]
+hero_left() {
+    local top=$(( PG_Y + GAP )) sz=340 rx rw h c fs i y0 sl
+    rx=$(( PX + 36 + sz + 48 )); rw=$(( PX + CW - 48 - rx ))
+    wrap "$5" $rw 21 400 4; sl=${#WL[@]}
+    h=$(( 109 + 14 + 36 )); (( sl > 0 )) && h=$(( h + 14 + sl * 3045 / 100 ))
+    c=$(( h > sz ? h : sz ))
+    rr $PX $top $CW $(( c + 72 )) 56 56 56 56 "$C_SURF"
+    local sx=$(( PX + 36 )) sy=$(( top + 36 + (c - sz) / 2 ))
+    mt_shape cookie12 $sx $sy $sz "$C_PRI"
+    if [[ -n "${6:-}" ]]; then
+        # число с подписью, как «7/7 тестов» на обложке
+        fitsz "$1" $(( sz * 70 / 100 )) 128 900 -40 48; fs=$FS
+        local th=$(( fs * 9 / 10 + 4 + 28 ))
+        blt $(( sy + sz / 2 - th / 2 )) $fs 900; t $(( sx + sz / 2 )) $BL $fs 900 "$C_ONPRI" "$1" middle -40
+        ellip "$6" $(( sz * 70 / 100 )) 22 700
+        t $(( sx + sz / 2 )) $(( sy + sz / 2 + th / 2 - 7 )) 22 700 "$C_ONPRI" "$EL" middle
+    else
+        fitsz "$1" $(( sz * 76 / 100 )) 150 900 -40 48; fs=$FS
+        t $(( sx + sz / 2 )) $(( sy + sz / 2 + fs * 333 / 1000 )) $fs 900 "$C_ONPRI" "$1" middle -40
+    fi
+    y0=$(( top + 36 + (c - h) / 2 ))
+    xesc "$2"; local big="$XE"; xesc "$3"; fxd $(( -30 * 128 )) 1000
+    sv "<text x=\"$rx\" y=\"$(( y0 + 97 ))\" fill=\"$C_ON\"><tspan font-size=\"128\" font-weight=\"800\" letter-spacing=\"$FD\">$big</tspan><tspan dx=\"16\" font-size=\"40\" font-weight=\"700\" fill=\"$C_ON2\">$XE</tspan></text>"
+    y0=$(( y0 + 109 + 14 ))
+    ellip "$4" $rw 28 600; t $rx $(( y0 + 27 )) 28 600 "$C_ON" "$EL"
+    y0=$(( y0 + 36 + 14 ))
+    for i in "${!WL[@]}"; do blt $(( y0 + i * 3045 / 100 )) 21 1450; t $rx $BL 21 400 "$C_ON2" "${WL[$i]}"; done
+    PG_Y=$(( top + c + 72 ))
 }
 
 # Кто попал в прогон (по странице на тест), а кого не выбирали (сноска на обложке).
@@ -2242,322 +3082,701 @@ mt_ident_line() {
     printf '%s · %s/%s · %s' "$ip" "$SYS_COUNTRY" "$SYS_CITY" "$(date '+%Y-%m-%d %H:%M')"
 }
 
-# Шапка обложки: логотип, подпись, идентификация и крупная дробь «выполнено».
-# Возвращает Y под шапкой в MT_Y.
-sv_head_full() {
-    local Y="$1" xr=$((PAD+CARDW))
-    sv "<text x=\"$PAD\" y=\"$((Y+28))\" fill=\"$C_TXT\" font-size=\"26\" font-weight=\"600\" letter-spacing=\"3\">MULTITEST</text>"
-    sv "<text x=\"$PAD\" y=\"$((Y+52))\" fill=\"$C_TXT2\" font-size=\"13\">Сводка диагностики сервера · v${SCRIPT_VERSION}</text>"
-    sv "<text x=\"$PAD\" y=\"$((Y+74))\" fill=\"$C_TXT3\" font-size=\"12.5\">$(sv_esc "$(mt_ident_line)")</text>"
-    # главное число сводки — крупнее логотипа: это и есть результат прогона
-    sv "<text x=\"$xr\" y=\"$((Y+38))\" text-anchor=\"end\" fill=\"$C_TXT\" font-size=\"40\" font-weight=\"700\">${MT_DONE}/${MT_TOT}</text>"
-    sv "<text x=\"$xr\" y=\"$((Y+58))\" text-anchor=\"end\" fill=\"$C_TXT3\" font-size=\"10.5\" letter-spacing=\"1.4\">ВЫПОЛНЕНО</text>"
-    local extra=""
-    (( MT_SKIP > 0 )) && extra="пропущено: $MT_SKIP"
-    (( MT_ERR  > 0 )) && extra="${extra:+$extra · }с ошибкой: $MT_ERR"
-    [[ -n "$extra" ]] && sv "<text x=\"$xr\" y=\"$((Y+80))\" text-anchor=\"end\" fill=\"$C_TXT3\" font-size=\"12\">$extra</text>"
-    sv "<line x1=\"$PAD\" y1=\"$((Y+100))\" x2=\"$xr\" y2=\"$((Y+100))\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
-    MT_Y=$((Y+126))
+# --- Мелочи без форков ------------------------------------------------------
+
+# Склонение без подоболочки -> RP: <n> <один> <два> <пять>
+rp() {
+    [[ "${1:-}" =~ ^-?[0-9]+$ ]] || { RP="$4"; return 0; }
+    local n=$(( 10#${1#-} ))
+    if (( n % 100 >= 11 && n % 100 <= 14 )); then RP="$4"
+    elif (( n % 10 == 1 )); then RP="$2"
+    elif (( n % 10 >= 2 && n % 10 <= 4 )); then RP="$3"
+    else RP="$4"; fi
 }
 
-# Шапка страницы теста: та же идентификация, но в одну полосу — на странице
-# главное сама карточка, шапка тут только чтобы картинка не потеряла хозяина.
-sv_head_slim() {
-    local Y="$1" xr=$((PAD+CARDW))
-    sv "<text x=\"$PAD\" y=\"$((Y+20))\" fill=\"$C_TXT\" font-size=\"17\" font-weight=\"600\" letter-spacing=\"2.4\">MULTITEST</text>"
-    sv "<text x=\"$PAD\" y=\"$((Y+42))\" fill=\"$C_TXT3\" font-size=\"12\">$(sv_esc "$(mt_ident_line)")</text>"
-    sv "<text x=\"$xr\" y=\"$((Y+22))\" text-anchor=\"end\" fill=\"$C_TXT\" font-size=\"20\" font-weight=\"700\">${MT_PAGE_I} / ${MT_PAGE_N}</text>"
-    sv "<text x=\"$xr\" y=\"$((Y+42))\" text-anchor=\"end\" fill=\"$C_TXT3\" font-size=\"10.5\" letter-spacing=\"1.4\">СТРАНИЦА</text>"
-    sv "<line x1=\"$PAD\" y1=\"$((Y+66))\" x2=\"$xr\" y2=\"$((Y+66))\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
-    MT_Y=$((Y+88))
+# Страна по-русски -> CN_NOM (именительный), CN_ACC (винительный); нет в таблице — код.
+mt_country() {
+    local cc="${1^^}"; [[ "$cc" == "UK" ]] && cc="GB"
+    CN_NOM="${MT_CNAME[$cc]:-$cc}"; CN_ACC="${MT_CACC[$cc]:-$CN_NOM}"
 }
 
-# --- Подпись спонсора -------------------------------------------------------
-# Раньше спонсор занимал полосу во всю ширину сразу под шапкой — первое, что
-# видел человек, открывший свою же диагностику. Теперь это подпись в подвале,
-# рядом с выходными данными: держится на каждой странице (из альбома пересылают
-# по одной картинке, и страница без упоминания уезжает в чужой чат ничьей),
-# но не спорит с содержимым.
-#
-# Раскладка из макета: две строки марки задают сетку, на верхнюю ложится
-# промокод, на нижнюю — флаги и скидка. Марка трёхцветная, поэтому рисуется
-# тремя путями поверх одной трансформации.
-AD_H=50                    # полная высота подписи, от «powered by» до низа марки
-AD_MARKH=36                # высота чернил марки
-AD_MARKW=71                # её ширина при этой высоте: 340 × 36 / 172.3
-AD_FLAGW=16; AD_FLAGH=11.5 # флаг: пропорции исходной картинки, 64 × 46
-
-# Ширина правой колонки. Считаем по символам, как остальные чипы карточки:
-# ширины строк известны (промокод и скидка — константы), а точных метрик
-# шрифта в bash всё равно нет. Оценка идёт с запасом по самому широкому из
-# возможных шрифтов, лишнее уходит в поле страницы и в глаза не бросается.
-sv_ad_rw() {
-    local wp wo
-    wp=$(( ($(vlen "$AD_PROMO")*164)/10 ))                        # 22px + трекинг
-    wo=$(( AD_FLAGW*2 + 11 + ($(vlen "$AD_DISCOUNT")*106)/10 ))   # флаги + 15.5px
-    (( wo > wp )) && wp=$wo
-    echo "$wp"
+# «A и B», «A, B и C», «A, B и ещё N» -> JN
+mt_join_names() {
+    local n=$#
+    if (( n == 1 )); then JN="$1"
+    elif (( n == 2 )); then JN="$1 и $2"
+    elif (( n == 3 )); then JN="$1, $2 и $3"
+    else JN="$1, $2 и ещё $(( n - 2 ))"; fi
 }
 
-# Подпись целиком: xr — правый край (равняется по краю карточек), Y — верх.
-sv_sponsor() {
-    local xr="$1" Y="$2" rw x0 rx
-    rw=$(sv_ad_rw)
-    x0=$(( xr - rw - 18 - AD_MARKW )); rx=$(( xr - rw ))
-
-    # «powered by» тоном ниже марки: в макете оно белое, но там это отдельная
-    # заставка, а в подвале белая строка встаёт вровень с самим логотипом и
-    # читается его частью.
-    sv "<text x=\"$x0\" y=\"$((Y+11))\" fill=\"$C_TXT2\" font-family=\"$F_AD\" font-size=\"11\" letter-spacing=\"0.2\">powered by</text>"
-    # Контур начинается в нуле, так что верх чернил просто садится в (x0, Y+14).
-    # Дальше по строкам: центр STEN выходит на Y+23, центр CLOUD — на Y+42,
-    # от них и посчитаны базовые линии правой колонки.
-    sv "<g transform=\"translate($x0,$((Y+14))) scale($(awk "BEGIN{printf \"%.5f\", $AD_MARKH/$AD_INK_H}"))\">"
-    sv "<path d=\"$AD_LOGO_STEN\" fill=\"$C_AD_W\" fill-rule=\"evenodd\"/>"
-    sv "<path d=\"$AD_LOGO_CLOUD\" fill=\"$C_AD_V\" fill-rule=\"evenodd\"/>"
-    sv "<path d=\"$AD_LOGO_DOTS\" fill=\"$C_AD_W\" fill-rule=\"evenodd\"/></g>"
-
-    # строка STEN — промокод
-    sv "<text x=\"$rx\" y=\"$((Y+31))\" fill=\"$C_TXT\" font-family=\"$F_AD\" font-size=\"22\" letter-spacing=\"1.2\">$(sv_esc "$AD_PROMO")</text>"
-    # строка CLOUD — флаги и скидка; флаги центруются по её базовой линии
-    sv_ad_flag "$rx" $((Y+37)) "$AD_FLAG_NL"
-    sv_ad_flag $((rx+AD_FLAGW+5)) $((Y+37)) "$AD_FLAG_EE"
-    sv "<text x=\"$((rx+AD_FLAGW*2+11))\" y=\"$((Y+48))\" fill=\"$C_TXT\" font-family=\"$F_AD\" font-size=\"15.5\">$(sv_esc "$AD_DISCOUNT")</text>"
+# Название процессора без шума -> CPUC: «Intel(R) Xeon(R) Gold 6248R CPU @ 3.00GHz»
+# -> «Intel Xeon Gold 6248R», «… 16-Core Processor» -> «… 16-Core». Частота есть
+# на обложке, а в ячейке сетки она переносила название на вторую строку.
+mt_cpu_clean() {
+    local c="$1"
+    c="${c//(R)/}"; c="${c//(r)/}"; c="${c//(TM)/}"; c="${c//(tm)/}"; c="${c// Processor/}"; c="${c// CPU/}"
+    c="${c%%@*}"
+    while [[ "$c" == *"  "* ]]; do c="${c//  / }"; done
+    c="${c#"${c%%[! ]*}"}"; CPUC="${c%"${c##*[! ]}"}"
 }
 
-# Флаг: x y base64. xlink:href — ради librsvg старых веток, они знают
-# только его; современные понимают оба, и лишний атрибут им не мешает.
-sv_ad_flag() {
-    sv "<image x=\"$1\" y=\"$2\" width=\"$AD_FLAGW\" height=\"$AD_FLAGH\" href=\"data:image/png;base64,$3\" xlink:href=\"data:image/png;base64,$3\"/>"
+# Процессор: «AMD Ryzen 9 9950X 16-Core Processor» -> CPU_NAME «AMD Ryzen 9 9950X»,
+# CPU_SUB «16-Core · 2 ядра» — как в макете: модель отдельно, ядра подстрочником.
+mt_cpu_split() {
+    local c="$SYS_CPU" core="" ghz="" sub=""
+    c="${c//(R)/}"; c="${c//(r)/}"; c="${c//(TM)/}"; c="${c//(tm)/}"
+    if [[ "$c" =~ @[[:space:]]*([0-9.]+)[[:space:]]*GHz ]]; then ghz="${BASH_REMATCH[1]} GHz"; c="${c%%@*}"; fi
+    if [[ "$c" =~ ([0-9]+)-Core ]]; then core="${BASH_REMATCH[1]}-Core"; c="${c/"${BASH_REMATCH[0]}"/}"; fi
+    c="${c// Processor/}"; c="${c// CPU/}"
+    while [[ "$c" == *"  "* ]]; do c="${c//  / }"; done
+    c="${c#"${c%%[! ]*}"}"; c="${c%"${c##*[! ]}"}"
+    CPU_NAME="${c:-${SYS_CPU:-—}}"
+    rp "${SYS_CORES:-0}" ядро ядра ядер
+    [[ "${SYS_CORES:-}" =~ ^[0-9]+$ ]] && sub="$SYS_CORES $RP"
+    CPU_SUB="$core"; [[ -n "$ghz" ]] && CPU_SUB="${CPU_SUB:+$CPU_SUB · }$ghz"
+    [[ -n "$sub" ]] && CPU_SUB="${CPU_SUB:+$CPU_SUB · }$sub"
 }
 
-# Карточка «Сервер» (label|value; подписи сразу заглавными — локале-прочно).
-sv_card_server() {
-    local Y="$1"
-    local ip4_disp ip6_disp
-    ip4_disp=$(mask_ip "$SYS_IP4"); ip6_disp=$(mask_ip "$SYS_IP6")
-    local -a SF=( "CPU|$SYS_CPU · $SYS_CORES ядер" "RAM|$SYS_RAM" "ДИСК|$SYS_DISK" \
-        "ОС|$SYS_OS" "ЯДРО|$SYS_KERNEL" "VIRT|$SYS_VIRT" "IPv4|${ip4_disp:-—}" )
-    [[ -n "$ip6_disp" ]] && SF+=( "IPv6|$ip6_disp" )
-    SF+=( "ГЕО|$SYS_COUNTRY / $SYS_CITY" "ASN|$SYS_ASN" "BBR / QDISC|$SYS_CC / $SYS_QDISC" \
-        "UPTIME|$SYS_UPTIME" "LOAD AVG|$SYS_LOAD" )
-    local SR=$(( (${#SF[@]}+1)/2 )) SH
-    SH=$(( 66 + SR*30 + 14 ))
-    sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$SH\" rx=\"6\" fill=\"$C_SC\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
-    sv "<text x=\"$((PAD+IPAD))\" y=\"$((Y+34))\" fill=\"$C_TXT\" font-size=\"19\" font-weight=\"700\">Сервер</text>"
-    sv "<line x1=\"$((PAD+IPAD))\" y1=\"$((Y+52))\" x2=\"$((PAD+CARDW-IPAD))\" y2=\"$((Y+52))\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
-    local c1=$((PAD+IPAD)) c2=$((PAD+IPAD+(CARDW-2*IPAD)/2)) ry=$((Y+66)) i lbl val cx
-    for i in "${!SF[@]}"; do
-        lbl="${SF[$i]%%|*}"; val="${SF[$i]#*|}"
-        if ((i%2==0)); then cx=$c1; else cx=$c2; fi
-        sv "<text x=\"$cx\" y=\"$((ry+20))\" fill=\"$C_TXT2\" font-size=\"11\" letter-spacing=\"0.7\">$(sv_esc "$lbl")</text>"
-        sv "<text x=\"$((cx+104))\" y=\"$((ry+20))\" fill=\"$C_TXT\" font-size=\"14\">$(sv_esc "$(vcut "$val" 46)")</text>"
-        ((i%2==1)) && ry=$((ry+30))
+# Аптайм по-русски -> UPT: «17 минут», «3 часа 5 минут», «2 дня 4 часа».
+mt_uptime_ru() {
+    local s="${SYS_UP_S:-}" d h m
+    if [[ ! "$s" =~ ^[0-9]+$ ]]; then UPT="${SYS_UPTIME:-—}"; return; fi
+    d=$(( s / 86400 )); h=$(( s % 86400 / 3600 )); m=$(( s % 3600 / 60 ))
+    if (( d > 0 )); then rp $d день дня дней; UPT="$d $RP"; (( h > 0 )) && { rp $h час часа часов; UPT+=" $h $RP"; }
+    elif (( h > 0 )); then rp $h час часа часов; UPT="$h $RP"; (( m > 0 )) && { rp $m минута минуты минут; UPT+=" $m $RP"; }
+    else rp $m минута минуты минут; UPT="$m $RP"; fi
+}
+
+# --- Данные теста ------------------------------------------------------------
+
+# Метрики -> M[подпись]=значение, MC[подпись]=цвет, порядок — ML[]
+mt_read_metrics() {
+    M=(); MC=(); ML=()
+    local f="$SUMMARY_DIR/$1.metrics" l v c
+    [[ -s "$f" ]] || return 0
+    while IFS=$'\x1f' read -r l v c; do
+        [[ -n "$l" ]] || continue
+        M["$l"]="$v"; MC["$l"]="$c"; ML+=("$l")
+    done < "$f"
+}
+
+# Строки -> RK RN RS RT RV RF RA (вид, имя, slug, состояние, значение, доля, доп. поле)
+mt_read_rows() {
+    RK=(); RN=(); RS=(); RT=(); RV=(); RF=(); RA=()
+    local f="$SUMMARY_DIR/$1.services" k n s st v fr a
+    [[ -s "$f" ]] || return 0
+    while IFS=$'\x1f' read -r k n s st v fr a; do
+        [[ -n "$k" ]] || continue
+        RK+=("$k"); RN+=("$n"); RS+=("$s"); RT+=("$st"); RV+=("$v"); RF+=("$fr"); RA+=("$a")
+    done < "$f"
+}
+
+# chip-строки секции <n> (0 — до первого разделителя) -> LR_NAME LR_SLUG LR_ST LR_VAL
+mt_rows_section() {
+    LR_NAME=(); LR_SLUG=(); LR_ST=(); LR_VAL=()
+    local i sec=0
+    for i in "${!RK[@]}"; do
+        if [[ "${RK[i]}" == sep ]]; then sec=$(( sec + 1 )); continue; fi
+        (( sec == $1 )) && [[ "${RK[i]}" == chip ]] || continue
+        LR_NAME+=("${RN[i]}"); LR_SLUG+=("${RS[i]}"); LR_ST+=("${RT[i]}"); LR_VAL+=("${RV[i]}")
     done
-    MT_Y=$((Y+SH+30))
 }
 
-# Оглавление альбома: тест — его страница — его статус. Только на обложке и
-# только в альбоме: в одной длинной картинке карточки идут следом, и список
-# перед ними дублировал бы сам себя.
-sv_card_toc() {
-    local Y="$1" n=${#MT_PAGE_IDX[@]}
-    (( n > 0 )) || { MT_Y=$Y; return 0; }
-    local SR=$(( (n+1)/2 )) SH
-    SH=$(( 66 + SR*30 + 14 ))
-    sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$SH\" rx=\"6\" fill=\"$C_SC\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
-    sv "<text x=\"$((PAD+IPAD))\" y=\"$((Y+34))\" fill=\"$C_TXT\" font-size=\"19\" font-weight=\"700\">Тесты</text>"
-    sv "<text x=\"$((PAD+CARDW-IPAD))\" y=\"$((Y+33))\" text-anchor=\"end\" fill=\"$C_TXT3\" font-size=\"12\">страниц в альбоме: ${MT_PAGE_N}</text>"
-    sv "<line x1=\"$((PAD+IPAD))\" y1=\"$((Y+52))\" x2=\"$((PAD+CARDW-IPAD))\" y2=\"$((Y+52))\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
-    local tw=$(( (CARDW-2*IPAD)/2 )) ry=$((Y+66)) i idx fn st sstate cx
-    for i in "${!MT_PAGE_IDX[@]}"; do
-        idx="${MT_PAGE_IDX[$i]}"; fn="${MT_CAT_FUNCS[$idx]}"; st="${MT_STATUS[$fn]:-}"
-        case "$st" in выполнен) sstate="done";; ошибка) sstate="err";; *) sstate="skip";; esac
-        if ((i%2==0)); then cx=$((PAD+IPAD)); else cx=$((PAD+IPAD+tw)); fi
-        sv "<text x=\"$cx\" y=\"$((ry+20))\" fill=\"$C_TXT3\" font-size=\"12\">$(printf '%02d' $((i+2)))</text>"
-        sv "<text x=\"$((cx+30))\" y=\"$((ry+20))\" fill=\"$C_TXT\" font-size=\"13.5\">$(sv_esc "$(vcut "${MT_CAT_NAMES[$idx]}" 26)")</text>"
-        sv_status_chip $((cx+tw-16)) $((ry+2)) "$sstate"
-        ((i%2==1)) && ry=$((ry+30))
+# Счётчики по LR_ST -> CNT_ALL CNT_OK CNT_BAD CNT_WARN CNT_NA
+mt_count_states() {
+    CNT_ALL=${#LR_ST[@]}; CNT_OK=0; CNT_BAD=0; CNT_WARN=0; CNT_NA=0
+    local s
+    for s in "${LR_ST[@]}"; do
+        case "$s" in ok) CNT_OK=$(( CNT_OK + 1 )) ;; bad) CNT_BAD=$(( CNT_BAD + 1 )) ;; warn) CNT_WARN=$(( CNT_WARN + 1 )) ;; *) CNT_NA=$(( CNT_NA + 1 )) ;; esac
     done
-    MT_Y=$((Y+SH+30))
 }
 
-# Сноска «не запускались»: пустая карточка на каждый невыбранный тест — трата места.
-sv_offnames() {
-    local Y="$1" n=${#MT_OFF_NAMES[@]}
-    (( n > 0 )) || { MT_Y=$Y; return 0; }
-    Y=$((Y+10))
-    sv "<line x1=\"$PAD\" y1=\"$Y\" x2=\"$((PAD+CARDW))\" y2=\"$Y\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
-    sv "<text x=\"$PAD\" y=\"$((Y+24))\" fill=\"$C_TXT3\" font-size=\"11\" letter-spacing=\"1.2\">НЕ ЗАПУСКАЛИСЬ</text>"
-    local oy=$((Y+50)) oi ox
-    for oi in "${!MT_OFF_NAMES[@]}"; do
-        ox=$PAD; ((oi%2==1)) && ox=$((PAD+CARDW/2))
-        sv "<text x=\"$ox\" y=\"$oy\" fill=\"$C_TXT3\" font-size=\"13\">$(sv_esc "${MT_OFF_NAMES[$oi]}")</text>"
-        ((oi%2==1)) && oy=$((oy+24))
+# Имена строк LR_* с заданным состоянием -> JN («A, B и ещё N»), пусто если нет
+mt_names_with() {
+    local -a a=(); local i
+    for i in "${!LR_ST[@]}"; do [[ "${LR_ST[i]}" == "$1" ]] && a+=("${LR_NAME[i]}"); done
+    JN=""; (( ${#a[@]} )) && mt_join_names "${a[@]}"
+}
+
+# Название, иконка, подпись для оглавления и описание страницы теста
+mt_test_meta() {
+    case "$1" in
+        run_ip_region) T_NAME="IP Region"; T_ICON=public; T_WHAT="страна IP глазами сервисов"
+            T_DESC="Какую страну видят популярные сервисы и GeoIP-базы по IP этого сервера." ;;
+        run_censorcheck_geoblock) T_NAME="Censorcheck"; T_ICON=block; T_WHAT="проверка геоблока"
+            T_DESC="Пускают ли зарубежные сайты, которые закрываются для России, на IP этого сервера." ;;
+        run_censorcheck_dpi) T_NAME="Censorcheck DPI"; T_ICON=policy; T_WHAT="DPI-блокировки, серверы РФ"
+            T_DESC="Режут ли DPI-фильтры соединения с сайтами — проверка для серверов в России." ;;
+        run_censorcheck_tlab) T_NAME="Censorcheck tlab"; T_ICON=travel_explore; T_WHAT="блокировки по списку tlab.pw"
+            T_DESC="Доступность популярных сайтов и сервисов с этого сервера по списку censorcheck.tlab.pw." ;;
+        run_iperf3_ru) T_NAME="iPerf3"; T_ICON=swap_vert; T_WHAT="тест до российских серверов"
+            T_DESC="Реальная скорость канала между этим сервером и серверами в России, в обе стороны." ;;
+        run_iperf3_tlab) T_NAME="iPerf3 tlab"; T_ICON=swap_vert; T_WHAT="скорость до РФ через tlab.pw"
+            T_DESC="Скорость канала до серверов российских провайдеров через bench.tlab.pw, в обе стороны." ;;
+        run_yabs) T_NAME="YABS"; T_ICON=speed; T_WHAT="бенчмарк сервера"
+            T_DESC="Бенчмарк сервера: скорость диска и сети до дата-центров в разных странах." ;;
+        run_ip_check_place) T_NAME="IP Check Place"; T_ICON=shield; T_WHAT="блокировки зарубежными сервисами"
+            T_DESC="Открываются ли стриминги и AI-сервисы с IP этого сервера и как его оценивают базы риска." ;;
+        run_bench_sh) T_NAME="bench.sh"; T_ICON=monitoring; T_WHAT="параметры и скорость сети"
+            T_DESC="Параметры сервера, скорость диска и сети до узлов в разных странах." ;;
+        run_ip_quality) T_NAME="IPQuality"; T_ICON=verified_user; T_WHAT="репутация IP"
+            T_DESC="Репутация IP: тип адреса, оценки риска в базах, чёрные списки и доступ к сервисам." ;;
+        run_sysbench_cpu) T_NAME="sysbench CPU"; T_ICON=memory; T_WHAT="тест процессора"
+            T_DESC="Однопоточный тест процессора: сколько событий в секунду выдаёт одно ядро." ;;
+        run_ping_map) T_NAME="Ping-карта"; T_ICON=network_ping; T_WHAT="пинг с узлов РФ и мира"
+            T_DESC="Задержка и потери пакетов до этого сервера с узлов check-host.net в России и мире." ;;
+        *) T_NAME="$1"; T_ICON=dns; T_WHAT=""; T_DESC="" ;;
+    esac
+}
+
+# Строки iPerf3 / bench.sh (вид bar: значение — приём, доп. поле — отдача)
+# -> LR_NAME LR_DN LR_UP LR_CC и максимум IMX (как в логе) / IMX10 / IMX_CITY / IMX_DIR
+mt_speed_rows() {
+    LR_NAME=(); LR_DN=(); LR_UP=(); LR_CC=()
+    IMX=""; IMX10=0; IMX_CITY=""; IMX_DIR=""
+    local i nm cc
+    for i in "${!RK[@]}"; do
+        [[ "${RK[i]}" == bar && -n "${RV[i]}" ]] || continue
+        nm="${RN[i]}"; cc=""
+        [[ "$nm" =~ ,\ (${MT_CC_RE})$ ]] && cc="${BASH_REMATCH[1]}"
+        LR_NAME+=("$nm"); LR_DN+=("${RV[i]}"); LR_UP+=("${RA[i]}"); LR_CC+=("$cc")
+        num10 "${RV[i]}"; (( N10 > IMX10 )) && { IMX10=$N10; IMX="${RV[i]}"; IMX_CITY="$nm"; IMX_DIR="приём"; }
+        if [[ -n "${RA[i]}" ]]; then
+            num10 "${RA[i]}"; (( N10 > IMX10 )) && { IMX10=$N10; IMX="${RA[i]}"; IMX_CITY="$nm"; IMX_DIR="отдача"; }
+        fi
     done
-    (( n%2==1 )) && oy=$((oy+24))
-    MT_Y=$((oy-4))
 }
 
-# Карточка одного теста. Высоту отдаёт в CARD_H, а не через echo: рисование
-# внутри $(...) ушло бы в подоболочку вместе с накопленным SVG_BODY.
-# draw=0 — только померить, draw=1 — померить и нарисовать.
-sv_test_card() {
-    local idx="$1" Y="$2" draw="$3"
-    local fn="${MT_CAT_FUNCS[$idx]}" nm="${MT_CAT_NAMES[$idx]}"
-    local st="${MT_STATUS[$fn]:-}" sstate
-    case "$st" in выполнен) sstate="done";; ошибка) sstate="err";; *) sstate="skip";; esac
-    local mfile="$SUMMARY_DIR/$fn.metrics" sfile="$SUMMARY_DIR/$fn.services"
-    local kv rest l v ck w
-
-    # метрики -> позиции чипов (предварительный проход)
-    local -a ML=(); local nmet=0
-    if [[ "$sstate" == "done" && -s "$mfile" ]]; then
-        while IFS=$'\x1f' read -r l v ck; do [[ -z "$l" ]] && continue; ML+=( "$l|$v|$ck" ); done < "$mfile"
-        nmet=${#ML[@]}
-    fi
-    local chip_rows=0 cx=$IPAD
-    if [[ $nmet -gt 0 ]]; then chip_rows=1
-        for kv in "${ML[@]}"; do
-            l="${kv%%|*}"; rest="${kv#*|}"; v="${rest%%|*}"
-            w=$(sv_chipw "$l" "$v")
-            if (( cx > IPAD && cx + w > CARDW - IPAD )); then chip_rows=$((chip_rows+1)); cx=$IPAD; fi
-            cx=$((cx + w + 8))
-        done
-    fi
-    local nsvc=0
-    [[ "$sstate" == "done" && -s "$sfile" ]] && nsvc=$(grep -c . "$sfile")
-
-    # высота карточки (высоту блока сервисов меряем тем же кодом, что и рисуем)
-    local H=78 chips_h=0 svc_h=0
-    if [[ "$sstate" == "done" ]]; then
-        [[ $chip_rows -gt 0 ]] && chips_h=$(( chip_rows*38 ))
-        [[ $nsvc -gt 0 ]] && svc_h=$(render_services "$sfile" 0 0)
-        # тест прошёл, но парсер ничего не выцепил — тогда карточка это только
-        # заголовок: линейка под ним ничего бы не отделяла
-        if (( chips_h==0 && svc_h==0 )); then H=58
-        else H=$(( 66 + chips_h + (chips_h>0?6:0) + svc_h + 16 )); fi
-    fi
-    CARD_H=$H
-    [[ "$draw" == "1" ]] || return 0
-
-    sv "<rect x=\"$PAD\" y=\"$Y\" width=\"$CARDW\" height=\"$H\" rx=\"6\" fill=\"$C_SC\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
-    sv "<text x=\"$((PAD+IPAD))\" y=\"$((Y+34))\" fill=\"$C_TXT\" font-size=\"19\" font-weight=\"700\">$(sv_esc "$nm")</text>"
-    sv_status_chip $((PAD+CARDW-IPAD)) $((Y+19)) "$sstate"
-
-    if [[ "$sstate" != "done" ]]; then
-        local note="Пропущен пользователем во время прогона."
-        [[ "$sstate" == "err" ]] && note="Тест завершился с ошибкой или без вывода."
-        sv "<text x=\"$((PAD+IPAD))\" y=\"$((Y+58))\" fill=\"$C_TXT3\" font-size=\"13\">$note</text>"
-        return 0
-    fi
-
-    (( chips_h>0 || svc_h>0 )) && sv "<line x1=\"$((PAD+IPAD))\" y1=\"$((Y+52))\" x2=\"$((PAD+CARDW-IPAD))\" y2=\"$((Y+52))\" stroke=\"$C_LINE\" stroke-width=\"1\"/>"
-
-    # чипы метрик
-    if [[ $nmet -gt 0 ]]; then
-        cx=$IPAD; local cyy=$((Y+66)) row=0
-        for kv in "${ML[@]}"; do
-            l="${kv%%|*}"; rest="${kv#*|}"; v="${rest%%|*}"; ck="${rest#*|}"
-            w=$(sv_chipw "$l" "$v")
-            if (( cx > IPAD && cx + w > CARDW - IPAD )); then row=$((row+1)); cx=$IPAD; fi
-            sv_mchip $((PAD+cx)) $((cyy+row*38)) "$l" "$v" "$ck"
-            cx=$((cx + w + 8))
-        done
-    fi
-
-    # строки сервисов (2 колонки + разделители)
-    if [[ $nsvc -gt 0 ]]; then
-        local sy=$(( Y + 66 + chips_h + (chips_h>0?6:0) ))
-        render_services "$sfile" "$sy" 1 >/dev/null
-    fi
-    return 0
+# Ключевая цифра теста для оглавления на обложке -> K (текст), KC (цвет)
+mt_test_key() {
+    local fn="$1" m
+    KC="$C_ON"; K=""
+    case "${MT_STATUS[$fn]:-}" in
+        выполнен) ;;
+        ошибка) K="ошибка"; KC="$C_ERR"; return ;;
+        *) K="пропущен"; KC="$C_OUT"; return ;;
+    esac
+    mt_read_metrics "$fn"; mt_read_rows "$fn"
+    case "$fn" in
+        run_ip_region)
+            K="${M[Консенсус]:-${M["Консенсус IPv4"]:-}}"; m="${M[Совпадений]:-${M["Совпадений v4"]:-}}"
+            [[ -n "$m" ]] && K="${K:+$K · }$m" ;;
+        run_censorcheck_*)
+            mt_rows_section 0; mt_count_states
+            if (( CNT_ALL )); then K="$CNT_OK доступно · $CNT_BAD блок"
+            elif [[ -n "${M[Доступно]:-}${M[Заблокировано]:-}" ]]; then K="${M[Доступно]:-0} доступно · ${M[Заблокировано]:-0} блок"; fi ;;
+        run_iperf3_*|run_bench_sh)
+            mt_speed_rows
+            if [[ "$fn" == run_bench_sh && -n "${M["I/O сред."]:-}" ]]; then K="I/O ${M["I/O сред."]}"
+            elif [[ -n "$IMX" ]]; then K="до $IMX Мбит/с"; fi ;;
+        run_yabs) [[ -n "${M["fio 4k"]:-}" ]] && K="fio 4k ${M["fio 4k"]}" ;;
+        run_ip_check_place)
+            mt_rows_section 0; mt_count_states
+            K="${M[Риск]:+риск ${M[Риск]}}"; (( CNT_ALL )) && K="${K:+$K · }$CNT_BAD блок" ;;
+        run_ip_quality)
+            K="${M[Usage]:-${M[Company]:-}}"; [[ -n "${M[DNSBL]:-}" ]] && K="${K:+$K · }DNSBL ${M[DNSBL]}" ;;
+        run_sysbench_cpu) [[ -n "${M["events/s"]:-}" ]] && K="${M["events/s"]} events/s" ;;
+        run_ping_map)
+            if [[ -n "${M[API]:-}" ]]; then K="API недоступен"; KC="$C_ERR"
+            else [[ -n "${M["РФ avg"]:-}" ]] && K="РФ ${M["РФ avg"]}"
+                 m="${M[Потери]:-}"; [[ -n "$m" ]] && K="${K:+$K · }потери ${m%% *}"; fi ;;
+    esac
+    [[ -n "$K" ]] || K="выполнен"
 }
 
-# Подвал страницы. Короткая страница (пропущенный тест — это заголовок и строчка
-# пояснения) иначе выходила бы полоской: прижимаем подвал к низу и дотягиваем
-# холст до MT_PAGE_MINH, чтобы в ленте альбома все картинки были одного порядка.
-MT_PAGE_MINH="${MT_PAGE_MINH:-520}"
+# --- Обложка ----------------------------------------------------------------------
 
-# Подпись спонсора живёт здесь же, у правого края: выходные данные и «кто это
-# оплатил» — одна и та же строка мелкого шрифта, разносить их по разным углам
-# страницы незачем. Низ подписи садится на базовую линию выходных данных.
-sv_footer_and_close() {
-    local Y="$1" note="$2"
-    # отдельным оператором: bash раскрывает все слова `local` до присваиваний,
-    # и в `local Y="$1" footY=$((Y+34))` подвал считался бы от пустого Y
-    local footY=$((Y+34+AD_H)) SVGH
-    (( footY + 14 < MT_PAGE_MINH )) && footY=$(( MT_PAGE_MINH - 14 ))
-    sv_sponsor $((PAD+CARDW)) $((footY-AD_H))
-    sv "<text x=\"$PAD\" y=\"$footY\" fill=\"$C_FOOT\" font-size=\"12\">$(sv_esc "$note")</text>"
-    SVGH=$((footY+24))
-    MT_PAGE_H=$SVGH
-    # xmlns:xlink объявлен ради флагов в подписи: старые ветки librsvg знают у
-    # <image> только xlink:href, а без объявления пространства имён такой
-    # документ для них просто битый.
-    cat <<HEAD
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 $W $SVGH" text-rendering="geometricPrecision" font-family="'IBM Plex Sans', Roboto, 'Noto Sans', 'DejaVu Sans', sans-serif">
-<rect width="$W" height="$SVGH" fill="$C_BG"/>
-HEAD
-    printf '%s' "$SVG_BODY"
-    echo "</svg>"
-}
-
-# --- Страницы альбома -------------------------------------------------------
-
-# Обложка: шапка со счётом, характеристики сервера, оглавление альбома.
 build_page_cover() {
-    SVG_BODY=""
-    local date_e; date_e=$(date '+%Y-%m-%d %H:%M')
-    sv_head_full "$PAD"
-    sv_card_server "$MT_Y"
-    sv_card_toc "$MT_Y"
-    sv_offnames "$MT_Y"
-    sv_footer_and_close "$MT_Y" "multitest v${SCRIPT_VERSION} · ${date_e} · обложка · страниц: ${MT_PAGE_N} · логотипы Simple Icons (CC0)"
+    pg_begin
+    pg_topbar "v${SCRIPT_VERSION} · сводка диагностики сервера" "обложка"
+    cover_hero
+    cover_server
+    cover_tests
+    cover_offnames
+    pg_footer
+    pg_end
 }
 
-# Страница одного теста: слим-шапка с идентификацией и его карточка целиком.
-build_page_test() {
-    local idx="$1"
-    SVG_BODY=""
-    local date_e; date_e=$(date '+%Y-%m-%d %H:%M')
-    sv_head_slim "$PAD"
-    local top=$MT_Y
-    # Сперва меряем карточку вхолостую. Короткая страница (пропущенный тест —
-    # это заголовок и строчка пояснения) иначе прижимала бы всё к шапке, а нижняя
-    # треть картинки оставалась бы пустой: в ленте альбома это читается как
-    # «страница не догрузилась». Остаток высоты делим поровну — поля сверху и снизу.
-    sv_test_card "$idx" 0 0
-    local natural=$(( top + CARD_H + 58 + AD_H ))
-    (( natural < MT_PAGE_MINH )) && top=$(( top + (MT_PAGE_MINH - natural)/2 ))
-    sv_test_card "$idx" "$top" 1
-    sv_footer_and_close $((top+CARD_H)) "multitest v${SCRIPT_VERSION} · ${date_e} · страница ${MT_PAGE_I} из ${MT_PAGE_N}"
+# Дата, замаскированный адрес крупно, флаг и место, ASN; справа «печенька» со счётом.
+cover_hero() {
+    local top=$(( PG_Y + GAP + 12 )) sz=300 lx=$(( PX + 52 )) lw ip ip4 ip6 second="" fs h c y0 loc
+    lw=$(( CW - 52 - 40 - sz - 40 ))
+    ip4=$(mask_ip "$SYS_IP4"); ip6=$(mask_ip "$SYS_IP6")
+    ip="${ip4:-$ip6}"; [[ -n "$ip" ]] || ip="—"
+    [[ -n "$ip4" && -n "$ip6" ]] && second="IPv6 · $ip6"
+    fitsz "$ip" $lw 112 800 -30 44; fs=$FS
+    h=$(( 26 + 18 + fs * 9 / 10 + 18 + 44 + 18 + 28 )); [[ -n "$second" ]] && h=$(( h + 18 + 28 ))
+    c=$(( h > sz ? h : sz ))
+    rr $PX $top $CW $(( c + 80 )) 56 56 56 56 "$C_SURF"
+    y0=$(( top + 40 + (c - h) / 2 ))
+    t $lx $(( y0 + 20 )) 21 400 "$C_ON2" "$MT_DATE"
+    y0=$(( y0 + 26 + 18 ))
+    blt $y0 $fs 900; t $lx $BL $fs 800 "$C_ON" "$ip" start -30
+    y0=$(( y0 + fs * 9 / 10 + 18 ))
+    mt_flag "$SYS_COUNTRY" $lx $y0 44
+    mt_country "$SYS_COUNTRY"; loc="$CN_NOM"
+    [[ -n "$SYS_CITY" && "$SYS_CITY" != "—" ]] && loc="$SYS_CITY, $loc"
+    ellip "$loc" $(( lw - 58 )) 30 700; t $(( lx + 58 )) $(( y0 + 32 )) 30 700 "$C_ON" "$EL"
+    y0=$(( y0 + 44 + 18 ))
+    ellip "$SYS_ASN" $lw 22; t $lx $(( y0 + 21 )) 22 400 "$C_ON2" "$EL"
+    if [[ -n "$second" ]]; then y0=$(( y0 + 28 + 18 )); ellip "$second" $lw 22; t $lx $(( y0 + 21 )) 22 400 "$C_ON2" "$EL"; fi
+
+    local sx=$(( PX + CW - 40 - sz )) sy=$(( top + 40 + (c - sz) / 2 )) score="${MT_DONE}/${MT_TOT}" cy th
+    mt_shape cookie12 $sx $sy $sz "$C_PRI"
+    fitsz "$score" $(( sz * 78 / 100 )) 112 900 -40 48; fs=$FS
+    th=$(( fs * 9 / 10 + 4 + 28 )); cy=$(( sy + sz / 2 ))
+    blt $(( cy - th / 2 )) $fs 900; t $(( sx + sz / 2 )) $BL $fs 900 "$C_ONPRI" "$score" middle -40
+    rp $MT_TOT тест теста тестов
+    t $(( sx + sz / 2 )) $(( cy + th / 2 - 7 )) 22 700 "$C_ONPRI" "$RP" middle
+    PG_Y=$(( top + c + 80 ))
 }
 
-# Печатает SVG-карточку «Server Scorecard» одним полотном — запасной путь на
-# случай, если альбом собрать или залить не вышло (MT_ALBUM=0 включает его руками).
-build_summary_svg() {
-    mt_style_init
-    mt_album_plan
-    mt_run_counters
-    SVG_BODY=""
-    local date_e; date_e=$(date '+%Y-%m-%d %H:%M')
+# «Сервер»: сетка 3×3 характеристик.
+cover_server() {
+    local dsz="${SYS_DISK%% · *}" dus=""
+    [[ "$SYS_DISK" == *" · "* ]] && dus="занято ${SYS_DISK##* · }"
+    mt_cpu_split; mt_uptime_ru
+    pg_section "Сервер"
+    G_L=( "Процессор" "Память" "Диск" "Система" "Виртуализация" "Ядро" "BBR / qdisc" "Uptime" "Load average" )
+    G_V=( "$CPU_NAME" "$SYS_RAM" "$dsz" "$SYS_OS" "$SYS_VIRT" "$SYS_KERNEL" "$SYS_CC / $SYS_QDISC" "$UPT" "$SYS_LOAD" )
+    G_S=( "$CPU_SUB" "" "$dus" "" "" "" "" "" "" )
+    mt_grid 3 24
+}
 
-    sv_head_full "$PAD"
-    sv_card_server "$MT_Y"
-
-    local Y=$MT_Y i idx
+# «Тесты»: иконка в cookie-9, название, что проверяет, ключевая цифра.
+cover_tests() {
+    local n=${#MT_PAGE_IDX[@]} i idx fn nw=230 y kw
+    (( n > 0 )) || return 0
+    pg_section "Тесты" "${MT_DONE}/${MT_TOT}"
+    for idx in "${MT_PAGE_IDX[@]}"; do mt_test_meta "${MT_CAT_FUNCS[$idx]}"; tw "$T_NAME" 25 700; (( TW > nw )) && nw=$TW; done
+    (( nw > 300 )) && nw=300
+    y=$(( PG_Y + GAP ))
     for i in "${!MT_PAGE_IDX[@]}"; do
-        idx="${MT_PAGE_IDX[$i]}"
-        sv_test_card "$idx" "$Y" 1
-        Y=$((Y+CARD_H+14))
+        idx="${MT_PAGE_IDX[$i]}"; fn="${MT_CAT_FUNCS[$idx]}"
+        mt_test_meta "$fn"; mt_test_key "$fn"
+        segr $i $n 28 8; rr $PX $y $CW 88 "${R[@]}" "$C_SURF"
+        mt_shape cookie9 $(( PX + 16 )) $(( y + 14 )) 60 "$C_PRIC"
+        mt_icon "$T_ICON" $(( PX + 32 )) $(( y + 30 )) 28 "$C_ONPRIC"
+        ellip "$T_NAME" $nw 25 700; t $(( PX + 96 )) $(( y + 52 )) 25 700 "$C_ON" "$EL"
+        ellip "$K" 420 21 600; tw "$EL" 21 600; kw=$TW
+        t $(( PX + CW - 28 )) $(( y + 51 )) 21 600 "$KC" "$EL" end
+        ellip "$T_WHAT" $(( CW - 28 - kw - 20 - 96 - nw - 20 )) 20; t $(( PX + 96 + nw + 20 )) $(( y + 51 )) 20 400 "$C_ON2" "$EL"
+        y=$(( y + 92 ))
     done
+    PG_Y=$(( y - 4 ))
+}
 
-    sv_offnames "$Y"
-    # одностраничнику высота холста задаётся содержимым, а не полом страницы альбома
-    local keep=$MT_PAGE_MINH; MT_PAGE_MINH=0
-    sv_footer_and_close "$MT_Y" "multitest v${SCRIPT_VERSION} · ${date_e} · логотипы Simple Icons (CC0)"
-    MT_PAGE_MINH=$keep
+# «Не запускались»: контурные чипы с переносом по строкам.
+cover_offnames() {
+    (( ${#MT_OFF_NAMES[@]} )) || return 0
+    local top=$(( PG_Y + GAP + 20 )) x=$(( PX + 8 )) cx cy w nm maxx=$(( PX + CW - 8 ))
+    t $x $(( top + 20 )) 21 700 "$C_ON2" "Не запускались"
+    cy=$(( top + 26 + 14 )); cx=$x
+    for nm in "${MT_OFF_NAMES[@]}"; do
+        ellip "$nm" $(( maxx - x - 43 )) 19; tw "$EL" 19; w=$(( TW + 43 ))
+        if (( cx > x && cx + w > maxx )); then cx=$x; cy=$(( cy + 61 )); fi
+        sv "<rect x=\"$cx.75\" y=\"$cy.75\" width=\"$(( w - 2 )).5\" height=\"49.5\" rx=\"24.75\" fill=\"none\" stroke=\"$C_OUTV\" stroke-width=\"1.5\"/>"
+        t $(( cx + 22 )) $(( cy + 32 )) 19 400 "$C_ON2" "$EL"
+        cx=$(( cx + w + 10 ))
+    done
+    PG_Y=$(( cy + 51 ))
+}
+
+# --- Страницы тестов ------------------------------------------------------------
+
+build_page_test() {
+    local idx="$1" fn="${MT_CAT_FUNCS[$1]}" st
+    st="${MT_STATUS[$fn]:-}"
+    mt_test_meta "$fn"
+    pg_begin
+    local pg; printf -v pg '%02d / %02d' "$MT_PAGE_I" "$MT_PAGE_N"
+    pg_topbar "$(mt_ident_line)" "$pg"
+    pg_title "$T_NAME" "$T_DESC"
+    if [[ "$st" != "выполнен" ]]; then
+        page_status "$st"
+    else
+        case "$fn" in
+            run_ip_region)       page_ipregion ;;
+            run_censorcheck_*)   page_censor "$fn" ;;
+            run_iperf3_*)        page_iperf "$fn" ;;
+            run_yabs)            page_yabs ;;
+            run_ip_check_place)  page_ipcheck ;;
+            run_ip_quality)      page_ipquality ;;
+            run_bench_sh)        page_bench ;;
+            run_sysbench_cpu)    page_sysbench ;;
+            run_ping_map)        page_ping ;;
+            *)                   mt_read_metrics "$fn"; mt_read_rows "$fn"; page_fallback ;;
+        esac
+    fi
+    pg_footer
+    pg_end
+}
+
+# Тест не дошёл до результата: приглушённая фигура с иконкой вместо цифры.
+page_status() {
+    if [[ "$1" == "ошибка" ]]; then
+        hero_right cookie9 "статус" "Ошибка" "" "Тест завершился с ошибкой или ничего не вывел." "" "" "$C_ERRC" "$C_ONERRC" error
+    else
+        hero_right cookie9 "статус" "Пропущен" "" "Тест прервали во время прогона — данных нет." "" "" "$C_TRACK" "$C_ON2" skip_next
+    fi
+}
+
+# Показатели сеткой: все метрики, кроме перечисленных. Пусто — ничего.
+mt_metrics_grid() {
+    local l skip=" $* " n
+    G_L=(); G_V=(); G_S=()
+    for l in "${ML[@]}"; do
+        [[ "$skip" == *" $l "* ]] && continue
+        G_L+=("$l"); G_V+=("${M[$l]}")
+    done
+    n=${#G_L[@]}; (( n )) || return 0
+    pg_section "Показатели"
+    if (( n <= 4 )); then mt_grid $n 24; elif (( n <= 6 )); then mt_grid 3 24; else mt_grid 4 24; fi
+}
+
+# Тест выполнен, но парсер не узнал вывод: метрики, если есть, иначе пояснение.
+page_fallback() {
+    if (( ${#ML[@]} )); then mt_metrics_grid; return; fi
+    hero_right cookie9 "результат" "Выполнен" "" "В выводе не нашлось распознаваемых данных." "" "" "$C_PRIC" "$C_ONPRIC" check
+}
+
+# Расхождения IP Region: «Иначе: A и B — GB, C — IT. Без ответа: D, E.» -> SUMM
+ipr_summary() {
+    local cons="$1" i v cc nm s
+    local -A grp=(); local -a order=() na=() parts=() names=()
+    for i in "${!RK[@]}"; do
+        [[ "${RK[i]}" == chip ]] || continue
+        v="${RV[i]}"; nm="${RN[i]}"
+        if [[ "$v" =~ ^(${MT_CC_RE})([[:space:]]|$) ]]; then
+            cc="${BASH_REMATCH[1]}"; [[ "$cc" == "$cons" ]] && continue
+            [[ -n "${grp[$cc]:-}" ]] || order+=("$cc")
+            grp[$cc]+="$nm"$'\x1f'
+        elif [[ "$v" == "N/A" ]]; then na+=("$nm"); fi
+    done
+    for cc in "${order[@]}"; do
+        IFS=$'\x1f' read -r -a names <<< "${grp[$cc]}"
+        mt_join_names "${names[@]}"; parts+=("$JN — $cc")
+    done
+    SUMM=""
+    if (( ${#parts[@]} )); then printf -v s '%s, ' "${parts[@]}"; SUMM="Иначе: ${s%, }."; fi
+    if (( ${#na[@]} )); then
+        if (( ${#na[@]} > 4 )); then printf -v s '%s, ' "${na[@]:0:3}"; s="${s%, } и ещё $(( ${#na[@]} - 3 ))"
+        else printf -v s '%s, ' "${na[@]}"; s="${s%, }"; fi
+        SUMM="${SUMM:+$SUMM }Без ответа: $s."
+    fi
+    [[ -n "$SUMM" ]] || SUMM="Все источники сходятся."
+}
+
+page_ipregion() {
+    local cons cons6 m big small extra=""
+    mt_read_metrics run_ip_region; mt_read_rows run_ip_region
+    cons="${M[Консенсус]:-${M["Консенсус IPv4"]:-}}"; cons6="${M["Консенсус IPv6"]:-}"
+    m="${M[Совпадений]:-${M["Совпадений v4"]:-}}"
+    if [[ -n "$cons" ]]; then
+        if [[ "$m" == */* ]]; then big="${m%%/*}"; small="/ ${m#*/}"; else big="${m:-—}"; small=""; fi
+        mt_country "$cons"; ipr_summary "$cons"
+        [[ -n "$cons6" ]] && extra=" По IPv6: $cons6${M["Совпадений v6"]:+, совпало ${M["Совпадений v6"]}}."
+        [[ -n "${M["v4≠v6"]:-}" ]] && extra+=" Разные страны по v4 и v6: ${M["v4≠v6"]}."
+        hero_left "$cons" "$big" "$small" "источников называют $CN_ACC" "$SUMM$extra"
+    else
+        mt_metrics_grid
+    fi
+    mt_rows_section 0
+    if (( ${#LR_NAME[@]} )); then pg_section "Сервисы" "${#LR_NAME[@]}" "какую страну показывает сервис"; mt_list2 "$cons" logo; fi
+    mt_rows_section 1
+    if (( ${#LR_NAME[@]} )); then pg_section "GeoIP-базы" "${#LR_NAME[@]}" "по ним сайты определяют страну посетителя"; mt_list4 "$cons"; fi
+}
+
+page_censor() {
+    local fn="$1" head s="" ok all bad
+    mt_read_metrics "$fn"; mt_read_rows "$fn"; mt_rows_section 0; mt_count_states
+    if (( CNT_ALL )); then ok=$CNT_OK; all=$CNT_ALL; bad=$CNT_BAD
+    elif [[ -n "${M[Доступно]:-}${M[Заблокировано]:-}" ]]; then
+        ok=${M[Доступно]:-0}; bad=${M[Заблокировано]:-0}; all=$(( ok + bad ))
+    else page_fallback; return; fi
+    case "$fn" in
+        run_censorcheck_geoblock) head="пускают IP этого сервера" ;;
+        run_censorcheck_dpi)      head="проходят без DPI-блокировок" ;;
+        *)                        head="открываются с этого сервера" ;;
+    esac
+    mt_names_with bad;  [[ -n "$JN" ]] && s="Блок: $JN."
+    mt_names_with warn; [[ -n "$JN" ]] && s="${s:+$s }Редирект: $JN."
+    mt_names_with na;   [[ -n "$JN" ]] && s="${s:+$s }Без ответа: $JN."
+    [[ -n "$s" ]] || s="Блокировок нет — все сайты из списка открываются."
+    rp $bad блок блока блоков
+    hero_left "$bad" "$ok" "/ $all" "$head" "$s" "$RP"
+    if (( CNT_ALL )); then pg_section "Сайты" "$CNT_ALL" "доступность с этого сервера"; mt_list2 "" globe; fi
+}
+
+page_iperf() {
+    local fn="$1" n ping pnum sub
+    mt_read_metrics "$fn"; mt_read_rows "$fn"; mt_speed_rows
+    n=${#LR_NAME[@]}
+    if (( n == 0 )); then page_fallback; return; fi
+    rp $n сервер сервера серверов; sub="$n $RP в России"
+    ping="${M["Мин ping"]:-}"; pnum="${ping%% *}"
+    if [[ -n "$pnum" ]]; then
+        hero_right sunny8 "максимум · $IMX_CITY, $IMX_DIR" "$IMX" "Мбит/с" "$sub" "$pnum" "ms · мин. ping"
+    else
+        hero_right sunny8 "максимум · $IMX_CITY, $IMX_DIR" "$IMX" "Мбит/с" "" "$n" "$RP"
+    fi
+    mt_nice $(( (IMX10 + 9) / 10 )) 100 250 500 1000 2500 5000 10000 25000 50000 100000
+    pg_section "Города" "" "Мбит/с · шкала $NICE"
+    mt_updown_rows
+}
+
+# Строки «город · ↓ волна · ↑ волна» из LR_NAME / LR_DN / LR_UP (+ флаг из LR_CC).
+mt_updown_rows() {
+    local n=${#LR_NAME[@]} i y=$(( PG_Y + GAP )) c1 c2 bx=$(( PX + 348 )) bw=690 vx=$(( PX + CW - 28 )) nx nwid nm flags=0
+    for (( i=0; i<n; i++ )); do [[ -n "${LR_CC[i]:-}" ]] && flags=1; done
+    for (( i=0; i<n; i++ )); do
+        segr $i $n 28 8; rr $PX $y $CW 122 "${R[@]}" "$C_SURF"
+        nx=$(( PX + 28 )); nwid=250; nm="${LR_NAME[i]}"
+        # страну уже сказал флаг — «Paris, FR» сокращаем до «Paris»
+        if [[ -n "${LR_CC[i]:-}" ]]; then mt_flag "${LR_CC[i]}" $nx $(( y + 39 )) 44; nm="${nm%, *}"
+        elif (( flags )); then mt_icon language $(( nx + 4 )) $(( y + 43 )) 36 "$C_ON2"; fi
+        (( flags )) && { nx=$(( nx + 60 )); nwid=190; }
+        ellip "$nm" $nwid 26 700; t $nx $(( y + 70 )) 26 700 "$C_ON" "$EL"
+        c1=$(( y + 38 )); c2=$(( y + 84 ))
+        mt_icon arrow_downward $(( PX + 306 )) $(( c1 - 13 )) 26 "$C_PRI"
+        num10 "${LR_DN[i]}"; mt_bar $bx $c1 $bw $(( N10 * 100 / NICE )) "$C_PRI"
+        t $vx $(( c1 + 8 )) 24 700 "$C_ON" "${LR_DN[i]}" end
+        if [[ -n "${LR_UP[i]:-}" ]]; then
+            mt_icon arrow_upward $(( PX + 306 )) $(( c2 - 13 )) 26 "$C_SEC"
+            num10 "${LR_UP[i]}"; mt_bar $bx $c2 $bw $(( N10 * 100 / NICE )) "$C_SEC"
+            t $vx $(( c2 + 8 )) 24 700 "$C_ON2" "${LR_UP[i]}" end
+        fi
+        y=$(( y + 126 ))
+    done
+    PG_Y=$(( y - 4 ))
+}
+
+# Строки «флаг · место / подпись · волна · значение» (сеть YABS, узлы пинга).
+# LR_NAME LR_SUB LR_CC LR_N10 (значение ×10 для шкалы) LR_VN LR_VU (число и единица)
+mt_net_rows() {
+    local n=${#LR_NAME[@]} i y=$(( PG_Y + GAP )) c bx=$(( PX + 334 )) bw=648 vx=$(( PX + CW - 28 )) vc
+    for (( i=0; i<n; i++ )); do
+        segr $i $n 28 8; rr $PX $y $CW 81 "${R[@]}" "$C_SURF"
+        c=$(( y + 40 ))
+        if [[ -n "${LR_CC[i]}" ]]; then mt_flag "${LR_CC[i]}" $(( PX + 20 )) $(( c - 22 )) 44
+        else mt_icon language $(( PX + 24 )) $(( c - 18 )) 36 "$C_ON2"; fi
+        ellip "${LR_NAME[i]}" 226 23 700; t $(( PX + 80 )) $(( c - 3 )) 23 700 "$C_ON" "$EL"
+        ellip "${LR_SUB[i]}" 226 17; t $(( PX + 80 )) $(( c + 19 )) 17 400 "$C_ON2" "$EL"
+        mt_bar $bx $c $bw $(( LR_N10[i] * 100 / NICE )) "$C_PRI"
+        # число и единица — двумя текстами, а не tspan под text-anchor="end":
+        # старые librsvg выравнивают такой текст по кускам, и они наезжают
+        vc="$C_ON"; [[ "${LR_VN[i]}" == "—" ]] && vc="$C_OUT"
+        local ux=$vx
+        if [[ -n "${LR_VU[i]}" ]]; then
+            tw "${LR_VU[i]}" 17; ux=$(( vx - TW ))
+            t $ux $(( c + 10 )) 17 400 "$C_ON2" "${LR_VU[i]}"; ux=$(( ux - 8 ))
+        fi
+        t $ux $(( c + 10 )) 30 800 "$vc" "${LR_VN[i]}" end
+        y=$(( y + 85 ))
+    done
+    PG_Y=$(( y - 4 ))
+}
+
+# Две карточки fio: 4K в «солнце», 1M в «печеньке».
+yabs_fio() {
+    local top=$(( PG_Y + GAP )) cw x i k=0 num unit fs cy tx tw2 j
+    local -a vals=("$1" "$2") lbl=("fio 4K" "fio 1M") shp=(sunny8 cookie12)
+    local -a dsc=("мелкие блоки: базы данных, система" "крупные блоки: большие файлы, бэкапы")
+    [[ -n "$1" && -n "$2" ]] && cw=$(( (CW - 12) / 2 )) || cw=$CW
+    x=$PX
+    for i in 0 1; do
+        [[ -n "${vals[i]}" ]] || continue
+        rr $x $top $cw 286 56 56 56 56 "$C_SURF"
+        mt_shape "${shp[i]}" $(( x + 28 )) $(( top + 28 )) 230 "$C_PRI"
+        num="${vals[i]%% *}"; unit="${vals[i]#* }"; [[ "$unit" == "${vals[i]}" ]] && unit=""
+        fitsz "$num" 160 64 900 -30 32; fs=$FS; cy=$(( top + 143 ))
+        blt $(( cy - (fs * 95 / 100 + 26) / 2 )) $fs 950; t $(( x + 143 )) $BL $fs 900 "$C_ONPRI" "$num" middle -30
+        t $(( x + 143 )) $(( cy + (fs * 95 / 100 + 26) / 2 - 6 )) 20 700 "$C_ONPRI" "$unit" middle
+        tx=$(( x + 28 + 230 + 28 )); tw2=$(( cw - 28 - 230 - 28 - 36 ))
+        wrap "${dsc[i]}" $tw2 21 400 3
+        local th=$(( 38 + 8 + ${#WL[@]} * 294 / 10 )) ty
+        ty=$(( cy - th / 2 ))
+        t $tx $(( ty + 29 )) 30 800 "$C_ON" "${lbl[i]}"
+        for j in "${!WL[@]}"; do blt $(( ty + 46 + j * 294 / 10 )) 21 1400; t $tx $BL 21 400 "$C_ON2" "${WL[$j]}"; done
+        x=$(( x + cw + 12 ))
+    done
+    PG_Y=$(( top + 286 ))
+}
+
+# Подпись шкалы: 2500 -> «2.5 Гбит/с», 500 -> «500 Мбит/с»
+mt_scale_label() {
+    if (( $1 >= 1000 )); then
+        if (( $1 % 1000 == 0 )); then SCL="$(( $1 / 1000 )) Гбит/с"; else SCL="$(( $1 / 1000 )).$(( $1 % 1000 / 100 )) Гбит/с"; fi
+    else SCL="$1 Мбит/с"; fi
+}
+
+page_yabs() {
+    local f4 f1 i loc cc mx=0
+    mt_read_metrics run_yabs; mt_read_rows run_yabs
+    f4="${M["fio 4k"]:-}"; f1="${M["fio 1m"]:-}"
+    [[ -n "$f4$f1" ]] && yabs_fio "$f4" "$f1"
+    G_L=(); G_V=(); G_S=(); G_FR=()
+    [[ -n "${M[CPU]:-}" ]]  && { mt_cpu_clean "${M[CPU]}"; G_L+=("Процессор"); G_V+=("$CPUC"); G_FR+=(16); }
+    [[ -n "${M[Ядер]:-}" ]] && { G_L+=("Ядер"); G_V+=("${M[Ядер]}"); G_FR+=(10); }
+    [[ -n "${M[RAM]:-}" ]]  && { G_L+=("RAM"); G_V+=("${M[RAM]}"); G_FR+=(10); }
+    [[ -n "${M[Диск]:-}" ]] && { G_L+=("Диск"); G_V+=("${M[Диск]}"); G_FR+=(10); }
+    (( ${#G_L[@]} )) && { pg_section "Сервер"; mt_grid ${#G_L[@]} 23; }
+    if [[ -n "${M["GB6 single"]:-}${M["GB6 multi"]:-}" ]]; then
+        G_L=("Одно ядро" "Все ядра"); G_V=("${M["GB6 single"]:-—}" "${M["GB6 multi"]:-—}"); G_S=()
+        pg_section "Geekbench 6"; mt_grid 2 23
+    fi
+    LR_NAME=(); LR_SUB=(); LR_CC=(); LR_N10=(); LR_VN=(); LR_VU=()
+    for i in "${!RK[@]}"; do
+        [[ "${RK[i]}" == net ]] || continue
+        loc="${RN[i]}"; cc=""; [[ "$loc" =~ ,\ (${MT_CC_RE})$ ]] && cc="${BASH_REMATCH[1]}"
+        num10 "${RV[i]}"; mt_speed $N10
+        LR_NAME+=("$loc"); LR_SUB+=("${RA[i]}"); LR_CC+=("$cc"); LR_N10+=("$N10"); LR_VN+=("$SPD_N"); LR_VU+=("$SPD_U")
+        (( N10 > mx )) && mx=$N10
+    done
+    if (( ${#LR_NAME[@]} )); then
+        mt_nice $(( (mx + 9) / 10 )) 100 250 500 1000 2500 5000 10000 25000 50000 100000
+        mt_scale_label $NICE
+        pg_section "Сеть" "${#LR_NAME[@]}" "до дата-центров по миру · шкала $SCL"
+        mt_net_rows
+    fi
+    (( ${#ML[@]} )) || [[ ${#LR_NAME[@]} -gt 0 ]] || page_fallback
+}
+
+page_bench() {
+    local io n bn bu
+    mt_read_metrics run_bench_sh; mt_read_rows run_bench_sh; mt_speed_rows
+    io="${M["I/O сред."]:-}"; n=${#LR_NAME[@]}
+    if [[ -n "$io" ]]; then
+        if (( n )); then mt_speed $IMX10; bn="$SPD_N"; bu="$SPD_U · лучший"
+        else bn="${M[Ядер]:-—}"; rp "${M[Ядер]:-0}" ядро ядра ядер; bu="$RP CPU"; fi
+        local ion="${io%% *}" iou="${io#* }"
+        [[ "$iou" == "$io" ]] && { ion="${io%%[!0-9.]*}"; iou="${io#"$ion"}"; }
+        hero_right sunny8 "диск · I/O, среднее из трёх прогонов" "$ion" "$iou" "${M[Сеть]:-}" "$bn" "$bu"
+    fi
+    G_L=(); G_V=(); G_S=(); G_FR=()
+    [[ -n "${M[CPU]:-}" ]]  && { mt_cpu_clean "${M[CPU]}"; G_L+=("Процессор"); G_V+=("$CPUC"); G_FR+=(16); }
+    [[ -n "${M[Ядер]:-}" ]] && { G_L+=("Ядер"); G_V+=("${M[Ядер]}"); G_FR+=(10); }
+    [[ -n "${M[RAM]:-}" ]]  && { G_L+=("RAM"); G_V+=("${M[RAM]}"); G_FR+=(10); }
+    [[ -n "${M[Диск]:-}" ]] && { G_L+=("Диск"); G_V+=("${M[Диск]}"); G_FR+=(10); }
+    (( ${#G_L[@]} )) && { pg_section "Сервер"; mt_grid ${#G_L[@]} 23; }
+    if (( n )); then
+        mt_nice $(( (IMX10 + 9) / 10 )) 100 250 500 1000 2500 5000 10000 25000 50000 100000
+        pg_section "Сеть" "$n" "Мбит/с · шкала $NICE"
+        mt_updown_rows
+    fi
+    [[ -n "$io" ]] || (( n )) || page_fallback
+}
+
+page_sysbench() {
+    local eps la tt tev line="" l
+    mt_read_metrics run_sysbench_cpu
+    eps="${M["events/s"]:-}"; la="${M["lat avg"]:-}"; tt="${M[время]:-}"; tev="${M[событий]:-}"
+    if [[ -z "$eps" ]]; then page_fallback; return; fi
+    if [[ -n "$tev" ]]; then rp "$tev" событие события событий; line="$tev $RP"; fi
+    [[ -n "$tt" ]] && line="${line:+$line за }$tt"
+    if [[ -n "$la" ]]; then hero_right sunny8 "events/s · 1 поток" "$eps" "" "$line" "${la%% *}" "ms · задержка"
+    else hero_right sunny8 "events/s · 1 поток" "$eps" "" "$line" "1" "поток"; fi
+    G_L=(); G_V=(); G_S=()
+    for l in событий время "lat avg" "lat 95th"; do
+        [[ -n "${M[$l]:-}" ]] || continue
+        case "$l" in событий) G_L+=("Событий") ;; время) G_L+=("Время") ;; "lat avg") G_L+=("Задержка, среднее") ;; *) G_L+=("Задержка, 95%") ;; esac
+        G_V+=("${M[$l]}")
+    done
+    (( ${#G_L[@]} )) && { pg_section "Детали"; mt_grid ${#G_L[@]} 24; }
+}
+
+page_ipcheck() {
+    local risk dnsbl
+    mt_read_metrics run_ip_check_place; mt_read_rows run_ip_check_place; mt_rows_section 0; mt_count_states
+    risk="${M[Риск]:-}"; dnsbl="${M[DNSBL]:-}"
+    if (( CNT_ALL )); then
+        if [[ -n "$risk" ]]; then hero_right sunny8 "стриминги и AI-сервисы" "$CNT_OK" "/ $CNT_ALL" "открываются с этого IP" "$risk" "уровень риска"
+        else hero_right sunny8 "стриминги и AI-сервисы" "$CNT_OK" "/ $CNT_ALL" "открываются с этого IP" "${dnsbl:-—}" "в DNSBL"; fi
+        pg_section "Сервисы" "$CNT_ALL" "регион, который видит сервис"
+        mt_list2 "$SYS_COUNTRY" logo
+        mt_metrics_grid "Риск"
+    else
+        page_fallback
+    fi
+}
+
+page_ipquality() {
+    local usage company geo dnsbl line=""
+    mt_read_metrics run_ip_quality; mt_read_rows run_ip_quality
+    usage="${M[Usage]:-}"; company="${M[Company]:-}"; geo="${M[Гео]:-}"; dnsbl="${M[DNSBL]:-}"
+    if [[ -n "$usage$company" ]]; then
+        [[ -n "$company" ]] && line="Company: $company"
+        [[ -n "$geo" ]] && line="${line:+$line · }Гео: $geo"
+        hero_right sunny8 "тип IP по базам" "${usage:-$company}" "" "$line" "${dnsbl:-—}" "в чёрных списках"
+    fi
+    mt_rows_section 0
+    if (( ${#LR_NAME[@]} )); then pg_section "Оценка риска" "${#LR_NAME[@]}" "по базам репутации IP"; mt_list2 "" db; fi
+    mt_rows_section 1
+    if (( ${#LR_NAME[@]} )); then pg_section "Сервисы и AI" "${#LR_NAME[@]}" "регион, который видит сервис"; mt_list2 "$SYS_COUNTRY" logo; fi
+    # то, что уже стоит в hero, сеткой не повторяем; hero нет — показываем всё
+    if [[ -n "$usage$company" ]]; then mt_metrics_grid Usage Company Гео DNSBL; else mt_metrics_grid; fi
+    [[ -n "$usage$company" ]] || (( ${#RK[@]} )) || (( ${#ML[@]} )) || page_fallback
+}
+
+page_ping() {
+    local ru worst loss wn wc line g i cc n ms node mx=0 grp
+    mt_read_metrics run_ping_map; mt_read_rows run_ping_map
+    if [[ -n "${M[API]:-}" ]]; then
+        hero_right cookie9 "check-host.net" "API недоступен" "" "Сервис проверки не ответил — узлы не опрошены." "" "" "$C_ERRC" "$C_ONERRC" error
+        return
+    fi
+    ru="${M["РФ avg"]:-}"; worst="${M[Худший]:-}"; loss="${M[Потери]:-}"
+    if [[ "$loss" == 0/* ]]; then rp "${loss#0/}" узел узла узлов; line="потерь нет · ${loss#0/} $RP"
+    elif [[ -n "$loss" ]]; then line="потери: $loss"; fi
+    # «Токио · 184.2 ms» -> число и город; «Токио · 100% потерь» -> «100%» и город
+    if [[ "$worst" =~ ^(.*)\ ·\ ([0-9]+(\.[0-9]+)?)\ ms$ ]]; then wn="${BASH_REMATCH[2]}"; wc="ms · ${BASH_REMATCH[1]}"
+    elif [[ "$worst" =~ ^(.*)\ ·\ ([0-9]+%) ]]; then wn="${BASH_REMATCH[2]}"; wc="потерь · ${BASH_REMATCH[1]}"
+    else wn="—"; wc="${worst:-худший узел}"; fi
+    if [[ -n "$ru" ]]; then hero_right sunny8 "средний пинг из России" "${ru%% *}" "ms" "$line" "$wn" "$wc"; fi
+    for i in "${!RK[@]}"; do
+        [[ "${RK[i]}" == ping ]] || continue
+        num10 "${RV[i]}"; (( N10 > mx )) && mx=$N10
+    done
+    mt_nice $(( (mx + 9) / 10 )) 50 100 150 200 300 500 1000 2000
+    local first=1
+    for g in "Россия" "Соседи" "Европа" "Мир"; do
+        LR_NAME=(); LR_SUB=(); LR_CC=(); LR_N10=(); LR_VN=(); LR_VU=()
+        for i in "${!RK[@]}"; do
+            [[ "${RK[i]}" == ping ]] || continue
+            IFS='|' read -r ms grp _ <<< "${RA[i]}"
+            [[ "$grp" == "$g" ]] || continue
+            node="${RS[i]}"; cc="${node%%[0-9]*}"
+            LR_NAME+=("${RN[i]}"); LR_CC+=("$cc")
+            if [[ "${RV[i]}" == "—" || -z "${RV[i]}" ]]; then
+                LR_SUB+=("$node · ${ms:-нет ответа}"); LR_N10+=(0); LR_VN+=("—"); LR_VU+=("")
+            else
+                num10 "${RV[i]}"; LR_N10+=("$N10"); LR_VN+=("${RV[i]}"); LR_VU+=("ms")
+                if [[ "$ms" == "0%" || -z "$ms" ]]; then LR_SUB+=("$node · без потерь"); else LR_SUB+=("$node · потери $ms"); fi
+            fi
+        done
+        n=${#LR_NAME[@]}; (( n )) || continue
+        if (( first )); then pg_section "$g" "$n" "задержка, шкала $NICE ms"; first=0; else pg_section "$g" "$n"; fi
+        mt_net_rows
+    done
+    [[ -n "$ru" ]] || (( first == 0 )) || page_fallback
+}
+
+# --- Одна длинная картинка (MT_ALBUM=0 или если альбом не собрался) ----------------
+# Те же страницы стопкой: каждая — вложенный <svg> со своим смещением.
+build_summary_svg() {
+    mt_style_init; mt_album_plan; mt_run_counters
+    local tmp="${SUMMARY_DIR:-/tmp}/.page.svg" body="" y=0 i idx page
+    MT_PAGE_N=$(( ${#MT_PAGE_IDX[@]} + 1 )); MT_PAGE_I=1
+    build_page_cover > "$tmp"; page=$(<"$tmp")
+    body+="<svg y=\"$y\"${page#<svg}"$'\n'; y=$(( y + MT_PAGE_H ))
+    for i in "${!MT_PAGE_IDX[@]}"; do
+        idx="${MT_PAGE_IDX[$i]}"; MT_PAGE_I=$(( i + 2 ))
+        build_page_test "$idx" > "$tmp"; page=$(<"$tmp")
+        body+="<svg y=\"$y\"${page#<svg}"$'\n'; y=$(( y + MT_PAGE_H ))
+    done
+    rm -f "$tmp"
+    MT_PAGE_H=$y
+    printf '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="%d" height="%d" viewBox="0 0 %d %d">\n%s</svg>\n' "$W" "$y" "$W" "$y" "$body"
 }
 
 # Крутилка: команда уходит в фоновый процесс, её вывод — в лог, а в терминале
@@ -2624,12 +3843,15 @@ step_build_svg() {
     [[ -s "$SUMMARY_DIR/summary.svg" ]]
 }
 
+# Одна длинная картинка — это все страницы стопкой, 15–20 тысяч px в высоту.
+# Рендерим её в масштабе 1:1: кегли в 5b крупные и читаются и так, а ×2 на
+# такой высоте — сотни мегабайт памяти под буфер, которых у VPS на 512 МБ нет.
 step_render_png() {
     local svg="$SUMMARY_DIR/summary.svg" png="$SUMMARY_DIR/summary.png"
     printf '%s' "$svg" > "$SUMMARY_DIR/out.path"
-    if   command -v rsvg-convert &>/dev/null; then rsvg-convert -w 2200 -o "$png" "$svg" 2>/dev/null
-    elif command -v convert      &>/dev/null; then convert -density 220 -background none "$svg" "$png" 2>/dev/null
-    elif command -v magick       &>/dev/null; then magick  -density 220 -background none "$svg" "$png" 2>/dev/null
+    if   command -v rsvg-convert &>/dev/null; then rsvg-convert -w 1280 -o "$png" "$svg" 2>/dev/null
+    elif command -v convert      &>/dev/null; then convert -density 96 -background none "$svg" "$png" 2>/dev/null
+    elif command -v magick       &>/dev/null; then magick  -density 96 -background none "$svg" "$png" 2>/dev/null
     fi
     [[ -s "$png" ]] || return 1
     printf '%s' "$png" > "$SUMMARY_DIR/out.path"
