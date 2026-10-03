@@ -1241,6 +1241,221 @@ mt_conf_wipe() {
     MT_SRV_ID=""; MT_SRV_TOKEN=""; MT_API=""; MT_BOT=""
 }
 
+# Регулярка в C-локали: в UTF-8 диапазоны вида [A-Za-z] ловят лишнее. BASH_REMATCH — глобальный.
+mt_match() { local LC_ALL=C; [[ "$2" =~ $1 ]]; }
+
+# Вопрос «да/нет» с клавиатуры: fd 8 открывает вызывающий (exec 8<"$MT_TTY"). Не stdin:
+# при `curl … | bash` stdin — это сам скрипт. Да — y/д и полные слова, иначе — нет.
+mt_tg_ask() {
+    local a=""
+    echo -ne "$1"
+    IFS= read -r a <&8 || { echo; return 1; }
+    case "$a" in y|Y|yes|Yes|д|Д|да|Да) return 0 ;; *) return 1 ;; esac
+}
+
+mt_tg_label() {
+    if mt_conf_load 2>/dev/null; then printf 'привязан к @%s' "$MT_BOT"; else printf 'не привязан'; fi
+}
+
+# Понятная строка вместо ответа бэкенда: тело ответа в терминал не печатаем.
+mt_tg_say_fail() {   # <HTTP-код> <файл ответа>
+    local code="$1"
+    mt_resp "$2" 2>/dev/null
+    if [[ "$code" == 000 || -z "$code" ]]; then
+        echo -e "  ${YELLOW}Бот недоступен — проверьте сеть и попробуйте позже.${NC}"
+    elif [[ "$MT_RESP_V" == retry ]]; then
+        echo -e "  ${YELLOW}Слишком много попыток — повторите через несколько минут.${NC}"
+    else
+        echo -e "  ${YELLOW}Бот ответил неожиданно (HTTP $(mt_clean "${code:0:3}")). Попробуйте позже.${NC}"
+    fi
+}
+
+# Привязка сервера к боту (device flow, docs/telegram-protocol.md): ключ создаём здесь,
+# бот показывает три кода, а здесь человек видит, КТО подтвердил, и отвечает «это я».
+# Конфиг пишется только после ok на pair/confirm. 0 — привязан, 1 — нет.
+mt_tg_pair() {
+    local tmp code ttl match who="" approved=0 min re kv deadline rc=1
+    local -a form=()
+    print_separator "Telegram-бот — привязка сервера"
+    if ! mt_tg_configured; then
+        echo -e "  ${YELLOW}Telegram-бот ещё не настроен в этой версии скрипта.${NC}"; return 1
+    fi
+    if ! ( exec 8<"$MT_TTY" ) 2>/dev/null; then
+        echo -e "  ${YELLOW}Привязка — только из терминала: ответы нужны с клавиатуры.${NC}"; return 1
+    fi
+    if ! ( umask 077; mkdir -p "$MT_STATE_DIR" ) 2>/dev/null || [[ ! -w "$MT_STATE_DIR" ]]; then
+        echo -e "  ${YELLOW}Нужны права root: ключ сервера хранится в ${MT_STATE_DIR}.${NC}"; return 1
+    fi
+    exec 8<"$MT_TTY"
+    tmp=$(mktemp -d) || { exec 8<&-; return 1; }
+
+    if mt_conf_load; then
+        if ! mt_tg_ask "  Сервер уже привязан к @${MT_BOT}. Привязать заново? [y/д — да · Enter — нет]: "; then
+            rm -rf "$tmp"; exec 8<&-; return 0
+        fi
+        MT_API_MAXTIME=15 mt_api POST /v1/agent/bye "$tmp/r" >/dev/null 2>&1
+        mt_conf_wipe
+    fi
+
+    if ! MT_SRV_TOKEN=$(mt_tok_new); then
+        echo -e "  ${RED}Не удалось создать ключ: нет /dev/urandom.${NC}"; rm -rf "$tmp"; exec 8<&-; return 1
+    fi
+    MT_PAIR_ABORT=0
+    trap 'MT_PAIR_ABORT=1' INT
+
+    echo -e "  Определяю адрес и железо сервера..."
+    gather_system_facts
+    mt_cpu_split
+    for kv in "ip4=$(mask_ip "$SYS_IP4")" "ip6=$(mask_ip "$SYS_IP6")" "country=$SYS_COUNTRY" \
+              "city=$SYS_CITY" "asn=$SYS_ASN" "cpu=$CPU_NAME" "cores=$SYS_CORES" "ram=$SYS_RAM" \
+              "disk=$SYS_DISK" "os=$SYS_OS" "virt=$SYS_VIRT" "v=$SCRIPT_VERSION" "p=1"; do
+        form+=( --data-urlencode "${kv//[$'\r\n\t']/ }" )
+    done
+    code=$(MT_API_MAXTIME=30 mt_api POST /v1/pair/start "$tmp/r" "${form[@]}")
+    re='^ok ([A-Za-z0-9]{22}) ([0-9]{1,4}) ([0-9]{2})( .*)?$'
+    if (( MT_PAIR_ABORT == 0 )) && { [[ "$code" != 200 ]] || ! mt_resp "$tmp/r" || ! mt_match "$re" "$MT_RESP"; }; then
+        mt_tg_say_fail "$code" "$tmp/r"
+        MT_SRV_TOKEN=""; rm -rf "$tmp"; exec 8<&-; trap - INT; return 1
+    fi
+    if (( MT_PAIR_ABORT == 0 )); then
+        code="${BASH_REMATCH[1]}"; ttl="${BASH_REMATCH[2]}"; match="${BASH_REMATCH[3]}"
+        (( ttl < 60 )) && ttl=60
+        (( ttl > 1800 )) && ttl=1800
+        min=$(( (ttl + 59) / 60 ))
+        echo ""
+        echo -e "  ${BOLD}Откройте в Telegram:${NC} https://t.me/${MT_BOT_USERNAME}?start=p_${code}"
+        if [[ "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" == *[Uu][Tt][Ff]* ]]; then
+            echo ""
+            mt_resp_body "$tmp/r" | sed 's/^/  /'
+        fi
+        echo ""
+        echo -e "  ${BOLD}Код для бота: ${match}${NC}"
+        echo -e "  ${CYAN}Ждём подтверждения в Telegram (до ${min} мин). Ctrl+C — отмена.${NC}"
+
+        deadline=$(( SECONDS + ttl ))
+        while (( SECONDS < deadline && MT_PAIR_ABORT == 0 )); do
+            code=$(MT_API_MAXTIME=15 mt_api POST /v1/pair/poll "$tmp/r")
+            (( MT_PAIR_ABORT )) && break
+            if [[ "$code" == 200 ]] && mt_resp "$tmp/r"; then
+                case "$MT_RESP_V" in
+                    approved) approved=1; who="${MT_RESP_A[0]:-}"; break ;;
+                    denied)   echo -e "  ${YELLOW}Привязка отменена в Telegram.${NC}"; break ;;
+                    expired)  echo -e "  ${YELLOW}Время вышло — запустите привязку заново.${NC}"; break ;;
+                esac
+            fi
+            sleep 2
+        done
+    fi
+
+    if (( MT_PAIR_ABORT )); then
+        echo ""
+        echo -e "  ${YELLOW}Привязка прервана — ничего не сохранено.${NC}"
+    elif (( approved )); then
+        who=$(printf '%b' "${who//%/\\x}")
+        who=$(mt_clean "$who")
+        who=$(vcut "$who" 64)
+        if mt_tg_ask "  Подтвердил Telegram: ${BOLD}${who}${NC}. Это вы? [y/д — да · Enter — нет]: "; then
+            code=$(MT_API_MAXTIME=30 mt_api POST /v1/pair/confirm "$tmp/r" --data-urlencode "answer=yes")
+            if [[ "$code" == 200 ]] && mt_resp "$tmp/r" && mt_match '^ok ([A-Za-z0-9]{8,32})$' "$MT_RESP"; then
+                MT_SRV_ID="${BASH_REMATCH[1]}"; MT_API="$MT_BOT_API"; MT_BOT="$MT_BOT_USERNAME"
+                if mt_conf_save; then
+                    echo -e "  ${GREEN}Сервер привязан. Сводки мультитеста будут приходить в Telegram.${NC}"
+                    rc=0
+                else
+                    echo -e "  ${RED}Не удалось сохранить ключ в ${MT_CONF}.${NC}"
+                fi
+            else
+                mt_tg_say_fail "$code" "$tmp/r"
+            fi
+        else
+            MT_API_MAXTIME=30 mt_api POST /v1/pair/confirm "$tmp/r" --data-urlencode "answer=no" >/dev/null 2>&1
+            echo -e "  ${YELLOW}Отменено — на сервере ничего не сохранено.${NC}"
+        fi
+    elif (( SECONDS >= deadline )); then
+        echo -e "  ${YELLOW}Время вышло — запустите привязку заново.${NC}"
+    fi
+
+    (( rc == 0 )) || { MT_SRV_TOKEN=""; MT_SRV_ID=""; MT_API=""; MT_BOT=""; }
+    rm -rf "$tmp"; exec 8<&-; trap - INT
+    return $rc
+}
+
+# Отвязка: bye (ошибки не мешают) и ключ долой. Без терминала — без вопроса.
+mt_tg_unpair() {
+    local tmp
+    print_separator "Telegram-бот — отвязка сервера"
+    if ! mt_conf_load; then echo -e "  Сервер не привязан."; return 0; fi
+    if ( exec 8<"$MT_TTY" ) 2>/dev/null; then
+        exec 8<"$MT_TTY"
+        if ! mt_tg_ask "  Отвязать сервер от @${MT_BOT}? Сводки перестанут приходить. [y/д — да · Enter — нет]: "; then
+            exec 8<&-; return 0
+        fi
+        exec 8<&-
+    fi
+    if tmp=$(mktemp -d); then
+        MT_API_MAXTIME=15 mt_api POST /v1/agent/bye "$tmp/r" >/dev/null 2>&1
+        rm -rf "$tmp"
+    fi
+    mt_conf_wipe
+    echo -e "  ${GREEN}Сервер отвязан, ключ удалён.${NC}"
+}
+
+# Статус и проверка связи — через hello. 0 — привязан и бот ответил, 1 — не привязан
+# (или отвязан в боте — тогда ключ стираем), 2 — привязан, но бот недоступен.
+mt_tg_status() {
+    local tmp code t
+    if ! mt_conf_load; then
+        echo -e "  Сервер не привязан. Привязать: ${BOLD}multitest --pair${NC} или меню → 15."; return 1
+    fi
+    tmp=$(mktemp -d) || return 2
+    t=$(IFS=,; printf '%s' "${MT_CAT_FUNCS[*]//run_/}")
+    code=$(MT_API_MAXTIME=15 mt_api POST /v1/agent/hello "$tmp/r" --data-urlencode "v=$SCRIPT_VERSION" \
+           --data-urlencode "p=1" --data-urlencode "t=$t")
+    mt_resp "$tmp/r"
+    rm -rf "$tmp"
+    if [[ "$MT_RESP_V" == revoked ]]; then
+        mt_conf_wipe
+        echo -e "  ${YELLOW}Сервер отвязан в боте — ключ на сервере удалён.${NC}"; return 1
+    fi
+    if [[ "$code" == 200 && "$MT_RESP_V" == ok ]]; then
+        echo -e "  ${GREEN}Привязан к @${MT_BOT} · связь с ботом есть.${NC}"; return 0
+    fi
+    echo -e "  ${YELLOW}Привязан к @${MT_BOT} · бот сейчас недоступен (HTTP $(mt_clean "${code:0:3}")).${NC}"
+    return 2
+}
+
+# Пункт 15 главного меню.
+mt_tg_menu() {
+    local c paired
+    while true; do
+        print_header
+        echo -e "  ${CYAN}${BOLD}── Telegram-бот ──${NC}"
+        echo ""
+        echo -e "  Бот ${BOLD}@${MT_BOT_USERNAME}${NC} · сервер $(mt_tg_label)"
+        echo -e "  Сводки мультитеста приходят в бота — с постом, который можно поправить и переслать."
+        echo ""
+        paired=0; mt_conf_load && paired=1
+        if (( paired )); then
+            echo -e "  ${GREEN}1)${NC}  Проверить связь"
+            echo -e "  ${GREEN}2)${NC}  Привязать заново"
+            echo -e "  ${RED}3)${NC}  Отвязать сервер"
+        else
+            echo -e "  ${GREEN}1)${NC}  Привязать сервер"
+        fi
+        echo ""
+        echo -e "  ${RED}0)${NC}  Назад"
+        echo ""
+        echo -ne "  ${BOLD}Выберите пункт: ${NC}"
+        read -r c || return 0
+        case "$paired:$c" in
+            1:1) mt_tg_status; pause_prompt ;;
+            1:2|0:1) mt_tg_pair; pause_prompt ;;
+            1:3) mt_tg_unpair; pause_prompt ;;
+            *:0) return ;;
+        esac
+    done
+}
+
 # ============================================================
 #  Сводка мультитеста (изображение)
 # ============================================================
@@ -4352,6 +4567,12 @@ show_menu() {
     echo -e "  ${CYAN}${BOLD}── Утилиты ──${NC}"
     echo ""
     echo -e "  ${GREEN}14)${NC}  Утилиты (BBR, IPv6...)"
+    if mt_tg_configured; then
+        echo ""
+        echo -e "  ${CYAN}${BOLD}── Telegram ──${NC}"
+        echo ""
+        echo -e "  ${GREEN}15)${NC}  Telegram-бот · $(mt_tg_label)"
+    fi
     echo ""
     echo -e "  ${RED} 0)${NC}  Выход"
 
@@ -4369,7 +4590,7 @@ show_menu() {
         MT_PROMO_BELOW=0
         print_stencloud_promo
     fi
-    echo -ne "  ${BOLD}Выберите пункт [0-14]: ${NC}"
+    echo -ne "  ${BOLD}Выберите пункт [0-$(mt_tg_configured && echo 15 || echo 14)]: ${NC}"
 }
 
 # ============================================================
@@ -4383,6 +4604,9 @@ mt_cli_help() {
     echo "Использование: multitest [параметр]"
     echo "  (без параметров)  интерактивное меню"
     echo "  --install         установить как команду multitest"
+    echo "  --pair            привязать сервер к Telegram-боту @${MT_BOT_USERNAME}"
+    echo "  --tg-status       привязан ли сервер и есть ли связь с ботом"
+    echo "  --unpair          отвязать сервер и удалить ключ"
     echo "  --help            эта справка"
 }
 
@@ -4392,6 +4616,9 @@ mt_cli_dispatch() {
     case "${1:-}" in
         "") return 0 ;;
         -h|--help) mt_cli_help; exit 0 ;;
+        --pair) mt_tg_pair; exit $? ;;
+        --unpair) mt_tg_unpair; exit $? ;;
+        --tg-status) mt_tg_status; exit $? ;;
         *) echo "Неизвестный параметр: $1" >&2; mt_cli_help >&2; exit 2 ;;
     esac
 }
@@ -4434,6 +4661,7 @@ while true; do
         12) run_ping_map; pause_prompt ;;
         13) run_all; pause_prompt ;;
         14) show_utilities_menu ;;
+        15) if mt_tg_configured; then mt_tg_menu; else echo -e "${RED}Неверный выбор. Попробуйте снова.${NC}"; pause_prompt; fi ;;
         0)  echo -e "${GREEN}До свидания!${NC}"; exit 0 ;;
         *)  echo -e "${RED}Неверный выбор. Попробуйте снова.${NC}"; pause_prompt ;;
     esac
