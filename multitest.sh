@@ -1224,13 +1224,13 @@ show_utilities_menu() {
         else
             echo -e "  ${GREEN}2)${NC}  IPv6 — ${BOLD}включить${NC}         ${CYAN}сейчас: ${v6_txt}${NC}"
         fi
-        # Telegram-бот — то же подменю, что пункт 15 главного меню: привязать,
-        # проверить связь, запуск из Telegram, отвязать.
+        # Telegram-бот: привязать сервер, проверить связь, запуск тестов из
+        # Telegram, отвязать — своё подменю (mt_tg_menu).
         local tg_max=2
         if mt_tg_configured; then
             tg_max=3
             if mt_conf_load 2>/dev/null; then
-                echo -e "  ${GREEN}3)${NC}  Telegram-бот — ${BOLD}настроить${NC}       ${CYAN}сейчас: привязан к @${MT_BOT}${NC}"
+                echo -e "  ${GREEN}3)${NC}  Telegram-бот — ${BOLD}настроить${NC}       ${CYAN}сейчас: $(mt_tg_label)$(mt_agent_installed && echo ' · запуск из TG вкл')${NC}"
             else
                 echo -e "  ${GREEN}3)${NC}  Telegram-бот — ${BOLD}привязать сервер${NC}  ${CYAN}сводки и тесты прямо в Telegram${NC}"
             fi
@@ -1544,7 +1544,7 @@ mt_tg_unpair() {
 mt_tg_status() {
     local tmp code t
     if ! mt_conf_load; then
-        echo -e "  Сервер не привязан. Привязать: ${BOLD}multitest --pair${NC} или меню → 15."; return 1
+        echo -e "  Сервер не привязан. Привязать: ${BOLD}multitest --pair${NC} или Утилиты → Telegram-бот."; return 1
     fi
     tmp=$(mktemp -d) || return 2
     t=$(IFS=,; printf '%s' "${MT_CAT_FUNCS[*]//run_/}")
@@ -1565,7 +1565,7 @@ mt_tg_status() {
                 echo -e "  ${YELLOW}Запуск из Telegram включён, но служба не работает: journalctl -u multitest-agent.${NC}"
             fi
         else
-            echo -e "  Запуск из Telegram выключен — включить: multitest → 15."
+            echo -e "  Запуск из Telegram выключен — включить: multitest → Утилиты → Telegram-бот."
         fi
         return 0
     fi
@@ -1573,7 +1573,7 @@ mt_tg_status() {
     return 2
 }
 
-# Пункт 15 главного меню.
+# Подменю «Утилиты → Telegram-бот».
 mt_tg_menu() {
     local c paired
     while true; do
@@ -1793,7 +1793,7 @@ mt_agent_main() {
             200:idle)    backoff=5 ;;
             200:revoked) echo "агент: сервер отвязан в боте — удаляю ключ и службу"
                          rm -f "$tmp"; mt_agent_selfremove; return 78 ;;
-            200:upgrade) echo "агент: бот просит обновить multitest (multitest → 15 → обновить агент)"; sleep 3600 ;;
+            200:upgrade) echo "агент: бот просит обновить multitest (multitest → Утилиты → Telegram-бот → обновить агент)"; sleep 3600 ;;
             *)           echo "агент: бот недоступен (HTTP $(mt_clean "${code:0:3}")) — повтор через ${backoff} c"
                          sleep $(( backoff + RANDOM % 5 ))
                          backoff=$(( backoff * 2 )); (( backoff > 21600 )) && backoff=21600 ;;
@@ -1874,11 +1874,11 @@ mt_agent_offer() {   # <кто подтвердил>
     echo -e "  Служба multitest-agent будет спрашивать у бота задания и запускать ${BOLD}только${NC} тесты"
     echo -e "  Multitest. Настройки системы она не меняет (ставит лишь пакеты для тестов — как ручной"
     echo -e "  запуск). Лимиты: не чаще раза в $(( MT_LIM_GAP / 60 )) мин, до ${MT_LIM_DAY} прогонов в сутки, тяжёлых"
-    echo -e "  (YABS, iPerf3, bench.sh) — до ${MT_LIM_HEAVY}. Выключить: multitest → 15."
+    echo -e "  (YABS, iPerf3, bench.sh) — до ${MT_LIM_HEAVY}. Выключить: multitest → Утилиты → Telegram-бот."
     if mt_tg_ask "  Разрешить запуск тестов из Telegram для ${BOLD}$1${NC}? [y/д — да · Enter — нет]: "; then
         mt_agent_install
     else
-        echo -e "  ${CYAN}Хорошо — только сводки. Включить позже: multitest → 15.${NC}"
+        echo -e "  ${CYAN}Хорошо — только сводки. Включить позже: multitest → Утилиты → Telegram-бот.${NC}"
     fi
 }
 
@@ -5021,7 +5021,7 @@ mt_tg_report() {
 mt_tg_hint() {
     [[ -t 1 && "${MT_TG:-1}" != 0 ]] && mt_tg_configured || return 0
     mt_conf_load 2>/dev/null && return 0
-    echo -e "  ${CYAN}Сводку можно получать в Telegram — пункт 15 (или multitest --pair).${NC}"
+    echo -e "  ${CYAN}Сводку можно получать в Telegram — Утилиты → Telegram-бот (или multitest --pair).${NC}"
 }
 
 # Русское склонение числительных: 1 день / 2 дня / 5 дней.
@@ -5189,12 +5189,10 @@ show_menu() {
     echo ""
     echo -e "  ${CYAN}${BOLD}── Утилиты ──${NC}"
     echo ""
-    echo -e "  ${GREEN}14)${NC}  Утилиты (BBR, IPv6...)"
     if mt_tg_configured; then
-        echo ""
-        echo -e "  ${CYAN}${BOLD}── Telegram ──${NC}"
-        echo ""
-        echo -e "  ${GREEN}15)${NC}  Telegram-бот · $(mt_tg_label)"
+        echo -e "  ${GREEN}14)${NC}  Утилиты — BBR, IPv6, Telegram-бот"
+    else
+        echo -e "  ${GREEN}14)${NC}  Утилиты — BBR, IPv6"
     fi
     echo ""
     echo -e "  ${RED} 0)${NC}  Выход"
@@ -5213,7 +5211,7 @@ show_menu() {
         MT_PROMO_BELOW=0
         print_stencloud_promo
     fi
-    echo -ne "  ${BOLD}Выберите пункт [0-$(mt_tg_configured && echo 15 || echo 14)]: ${NC}"
+    echo -ne "  ${BOLD}Выберите пункт [0-14]: ${NC}"
 }
 
 # ============================================================
@@ -5287,7 +5285,6 @@ while true; do
         12) run_ping_map; pause_prompt ;;
         13) run_all; pause_prompt ;;
         14) show_utilities_menu ;;
-        15) if mt_tg_configured; then mt_tg_menu; else echo -e "${RED}Неверный выбор. Попробуйте снова.${NC}"; pause_prompt; fi ;;
         0)  echo -e "${GREEN}До свидания!${NC}"; exit 0 ;;
         *)  echo -e "${RED}Неверный выбор. Попробуйте снова.${NC}"; pause_prompt ;;
     esac

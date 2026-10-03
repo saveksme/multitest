@@ -81,5 +81,6 @@ mt_tg_status > "$T_W/out" 2>&1; rc=$?
 check "статус: revoked стирает конфиг"   '[ $rc = 1 ] && [ ! -e "$MT_CONF" ]'
 
 paired d
-check "пункт 15 в меню со статусом"      'show_menu </dev/null 2>/dev/null | grep -q "15).*Telegram-бот · привязан к @test_bot"'
+check "бот — в утилитах, со статусом"   'show_utilities_menu </dev/null 2>/dev/null | grep -q "3).*Telegram-бот.*привязан к @test_bot"'
+check "в главном меню пункта 15 нет"     '! show_menu </dev/null 2>/dev/null | grep -q "15)" && show_menu </dev/null 2>/dev/null | grep -q "14).*Telegram-бот"'
 t_finish
