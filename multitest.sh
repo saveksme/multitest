@@ -223,7 +223,7 @@ test_deps() {
             echo "wget" ;;
         run_iperf3_ru|run_iperf3_tlab)
             echo "wget iperf3 jq" ;;
-        run_yabs|run_ip_check_place|run_ip_quality)
+        run_yabs|run_ip_check_place|run_ip_quality|run_ping_map)
             echo "curl" ;;
         run_sysbench_cpu)
             echo "sysbench" ;;
@@ -339,6 +339,182 @@ run_sysbench_cpu() {
     sysbench cpu run --threads=1
 }
 
+# Ping-карта: как сервер виден снаружи — пинг с узлов check-host.net (РФ + мир).
+# Публичный API без аккаунтов/токенов: GET check-ping?host=<ip>&node=… → поллинг check-result/<id>.
+run_ping_map() {
+    print_separator "Ping-карта — check-host.net"
+    check_and_install curl
+
+    echo -e "  Задержка и потери пакетов до сервера с точек РФ и мира."
+    echo -e "  Публичный API check-host.net — без аккаунтов и токенов."
+    echo ""
+
+    # Внешний IPv4 берём сами: в capture-подоболочке переменные скрипта не экспортируются
+    local ip
+    ip=$(curl -s --max-time 6 https://ifconfig.me 2>/dev/null)
+    [[ -z "$ip" ]] && ip=$(curl -s --max-time 6 https://api.ipify.org 2>/dev/null)
+    if [[ -z "$ip" ]]; then
+        echo -e "  ${RED}[CH] ОШИБКА: не удалось определить внешний IPv4-адрес сервера.${NC}"
+        return 1
+    fi
+    echo -e "  Цель: ${BOLD}${ip}${NC}"
+    echo ""
+
+    # Узлы: 3 РФ + соседи + ЕС + мир. Мёртвые/переименованные узлы просто не придут
+    # в ответе API — список самовосстанавливающийся.
+    local -a ch_nodes=( ru1 ru2 ru3 kz1 tr1 de4 fi1 pl2 nl1 uk1 us5 us1 sg1 jp1 )
+    local -A ch_city=( [ru1]="Москва" [ru2]="Москва" [ru3]="Санкт-Петербург"
+                       [kz1]="Караганда" [tr1]="Стамбул" [de4]="Франкфурт"
+                       [fi1]="Хельсинки" [pl2]="Варшава" [nl1]="Амстердам"
+                       [uk1]="Лондон" [us5]="Нью-Йорк" [us1]="Лос-Анджелес"
+                       [sg1]="Сингапур" [jp1]="Токио" )
+    ch_region() {
+        case "$1" in
+            ru*)                       echo "Россия" ;;
+            kz1|tr1)                   echo "Соседи" ;;
+            de4|fi1|pl2|nl1|uk1)       echo "Европа" ;;
+            *)                         echo "Мир" ;;
+        esac
+    }
+    ch_agggroup() {
+        # группа агрегатных чипов (kz/tr попадают только в таблицу)
+        case "$1" in
+            ru*)                       echo "Россия" ;;
+            de4|fi1|pl2|nl1|uk1)       echo "Европа" ;;
+            us*)                       echo "США" ;;
+            sg1|jp1)                   echo "Азия" ;;
+        esac
+    }
+
+    # --- Запуск ping-проверки со всех узлов ---
+    local url="https://check-host.net/check-ping?host=${ip}" n
+    for n in "${ch_nodes[@]}"; do url+="&node=${n}.node.check-host.net"; done
+    local resp rid
+    resp=$(curl -s --max-time 20 -H "Accept: application/json" "$url" 2>/dev/null)
+    rid=$(printf '%s' "$resp" | sed -nE 's/.*"request_id"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' | head -1)
+    if [[ -z "$rid" ]]; then
+        echo -e "  ${RED}[CH] ОШИБКА: API check-host.net недоступен или вернул неожиданный ответ.${NC}"
+        return 1
+    fi
+    local report="https://check-host.net/check-report/${rid}"
+
+    # --- Поллинг результатов: узел со значением null ещё не завершил проверку ---
+    local res="" a nulls
+    echo -ne "  Опрашиваем узлы check-host.net..."
+    for a in $(seq 1 18); do
+        sleep 5
+        res=$(curl -s --max-time 15 -H "Accept: application/json" \
+              "https://check-host.net/check-result/${rid}" 2>/dev/null)
+        [[ -z "$res" ]] && continue
+        nulls=$(printf '%s' "$res" | grep -oE '"[a-z]+[0-9]+\.node\.check-host\.net"[[:space:]]*:[[:space:]]*null' | wc -l)
+        nulls=$((nulls))
+        # все ответили; после 30 с не ждём 1-2 застрявших узлов — они станут «нет ответа»
+        (( nulls == 0 )) && break
+        (( a >= 6 && nulls <= 2 )) && break
+        echo -ne "\r  Опрашиваем узлы check-host.net... попытка ${a}/18 "
+    done
+    echo ""
+    if [[ -z "$res" ]]; then
+        echo -e "  ${RED}[CH] ОШИБКА: результаты check-host.net не получены.${NC}"
+        return 1
+    fi
+
+    # --- Разбор результатов по узлам (jq в проекте нет — sed/awk) ---
+    # Формат: "<узел>": [[["OK",0.044,"ip"],…]] | [[null]] (ошибка узла) | null (не успел)
+    local -A p_ok p_loss p_avg p_min p_max p_bad
+    local slice times to cnt st
+    for n in "${ch_nodes[@]}"; do
+        # режем JSON по кавычкам-ключам, затем берём строки от ключа узла до следующего ключа узла
+        slice=$(printf '%s' "$res" | sed 's/[[{,][[:space:]]*"/\n"/g' | awk -v k="\"${n}.node.check-host.net\":" '
+            index($0, k)==1 { on=1; next }
+            /^"[a-z]+[0-9]+\.node\.check-host\.net":/ { on=0 }
+            on { print }')
+        times=$(printf '%s' "$slice" | grep -oE '"OK"[[:space:]]*,[[:space:]]*[0-9]+(\.[0-9]+)?' | grep -oE '[0-9]+(\.[0-9]+)?$')
+        to=$(printf '%s' "$slice" | grep -oE '"TIMEOUT"' | wc -l); to=$((to))
+        if [[ -z "$times" && "$to" -eq 0 ]]; then
+            p_bad[$n]=1
+            continue
+        fi
+        cnt=$(printf '%s\n' "$times" | grep -c .); cnt=$((cnt))
+        # API отдаёт времена в секундах — переводим в миллисекунды
+        st=$(printf '%s\n' "$times" | awk '{ s+=$1; if(m==""||$1<m)m=$1; if($1>M)M=$1 } END { if(NR>0) printf "%.1f %.1f %.1f", m*1000, s/NR*1000, M*1000 }')
+        read -r "p_min[$n]" "p_avg[$n]" "p_max[$n]" <<< "$st"
+        p_ok[$n]=$cnt
+        p_loss[$n]=$to
+    done
+
+    # --- Таблица по узлам (формат строк канонический — его читает parse_pingmap) ---
+    echo ""
+    echo -e "  ${BOLD}Как сервер виден с разных точек:${NC}"
+    echo ""
+    local region prev="" city loss_pct
+    for n in "${ch_nodes[@]}"; do
+        region=$(ch_region "$n")
+        if [[ "$region" != "$prev" ]]; then
+            [[ -n "$prev" ]] && echo ""
+            echo -e "  ${CYAN}── ${region} ──${NC}"
+            prev="$region"
+        fi
+        city="${ch_city[$n]:-$n}"
+        if [[ -n "${p_bad[$n]:-}" ]]; then
+            printf "  %-4s · %s · — · нет ответа\n" "$n" "$city"
+        elif (( ${p_ok[$n]:-0} == 0 )); then
+            printf "  %-4s · %s · 100%% · все пакеты потеряны\n" "$n" "$city"
+        else
+            loss_pct=$(( ${p_loss[$n]:-0} * 100 / (${p_ok[$n]:-0} + ${p_loss[$n]:-0}) ))
+            printf "  %-4s · %s · %d%% · %s/%s/%s ms\n" "$n" "$city" "$loss_pct" \
+                   "${p_min[$n]}" "${p_avg[$n]}" "${p_max[$n]}"
+        fi
+    done
+
+    # --- Агрегаты ---
+    local -A g_val
+    local g
+    for n in "${ch_nodes[@]}"; do
+        [[ -n "${p_bad[$n]:-}" ]] && continue
+        (( ${p_ok[$n]:-0} == 0 )) && continue
+        g=$(ch_agggroup "$n")
+        [[ -z "$g" ]] && continue
+        g_val[$g]="${g_val[$g]:-} ${p_avg[$n]}"
+    done
+    echo ""
+    echo -e "  ${BOLD}Сводка:${NC}"
+    local gavg
+    for g in "Россия" "Европа" "США" "Азия"; do
+        [[ -z "${g_val[$g]:-}" ]] && continue
+        gavg=$(awk -v s="${g_val[$g]}" 'BEGIN{ n=split(s,a," "); t=0; for(i=1;i<=n;i++) t+=a[i]; printf "%.1f", t/n }')
+        printf "  Средняя (%s): %s ms\n" "$g" "$gavg"
+    done
+
+    # Худший узел и потери (узлы без ответа API не считаем потерями сервера)
+    local wn="" wv=0 wdetail="" wd answered=0 n_loss_cnt=0 n_loss_names="" w
+    for n in "${ch_nodes[@]}"; do
+        [[ -n "${p_bad[$n]:-}" ]] && continue
+        ((answered++))
+        if (( ${p_ok[$n]:-0} == 0 )); then
+            ((n_loss_cnt++)); n_loss_names="${n_loss_names:+$n_loss_names }${ch_city[$n]}"
+            w=999999; wd="100% потерь"
+        else
+            if (( ${p_loss[$n]:-0} > 0 )); then
+                ((n_loss_cnt++)); n_loss_names="${n_loss_names:+$n_loss_names }${ch_city[$n]}"
+            fi
+            w=${p_avg[$n]}; wd="${p_avg[$n]} ms"
+        fi
+        if awk -v a="$w" -v b="$wv" 'BEGIN{ exit !(a>b) }'; then wn="$n"; wv="$w"; wdetail="$wd"; fi
+    done
+    if (( answered == 0 )); then
+        echo -e "  ${RED}[CH] ОШИБКА: ни один узел не вернул результат (проверьте доступность check-host.net).${NC}"
+        return 1
+    fi
+    [[ -n "$wn" ]] && printf "  Худший узел: %s (%s) · %s\n" "${ch_city[$wn]:-$wn}" "$wn" "$wdetail"
+    if (( n_loss_cnt == 0 )); then
+        printf "  Узлы с потерями: 0/%d\n" "$answered"
+    else
+        printf "  Узлы с потерями: %d/%d (%s)\n" "$n_loss_cnt" "$answered" "$n_loss_names"
+    fi
+    printf "  Отчёт: %s\n" "$report"
+}
+
 MULTITEST_SKIPPED=0
 
 multitest_skip_handler() {
@@ -441,7 +617,8 @@ run_all() {
     # Оценки времени грубые, порядок величины: нужны, чтобы прикинуть цену выбора.
     local all_funcs=( "run_ip_region" "run_censorcheck_geoblock" "run_censorcheck_dpi" \
                       "run_censorcheck_tlab" "run_iperf3_ru" "run_iperf3_tlab" "run_yabs" \
-                      "run_ip_check_place" "run_bench_sh" "run_ip_quality" "run_sysbench_cpu" )
+                      "run_ip_check_place" "run_bench_sh" "run_ip_quality" "run_sysbench_cpu" \
+                      "run_ping_map" )
     local all_names=( "IP Region" \
                       "Censorcheck — проверка геоблока" \
                       "Censorcheck — DPI (серверы РФ)" \
@@ -449,11 +626,12 @@ run_all() {
                       "iPerf3 — тест до российских серверов" \
                       "iPerf3 — bench.tlab.pw (РФ)" \
                       "YABS — бенчмарк сервера" \
-                      "IP Check Place — блокировки зарубежными сервисами" \
+                      "IP Check Place — блокировки зарубежных сервисов" \
                       "bench.sh — параметры сервера и скорость" \
                       "IPQuality" \
-                      "sysbench CPU — тест процессора" )
-    local all_secs=(  40 120 180 120 180 120 720 180 300 180 15 )
+                      "sysbench CPU — тест процессора" \
+                      "Ping-карта — check-host.net" )
+    local all_secs=(  40 120 180 120 180 120 720 180 300 180 15 60 )
     local catalog_total=${#all_funcs[@]}
 
     # --- Выбор тестов ---
@@ -912,7 +1090,8 @@ capture_test() {
     export -f print_separator check_and_install install_package detect_pkg_manager
     export -f run_ip_region run_censorcheck_geoblock run_censorcheck_dpi \
               run_censorcheck_tlab run_iperf3_ru run_iperf3_tlab run_yabs \
-              run_ip_check_place run_bench_sh run_ip_quality run_sysbench_cpu
+              run_ip_check_place run_bench_sh run_ip_quality run_sysbench_cpu \
+              run_ping_map
 
     if [[ "$SCRIPT_CAPTURE" == "util" ]]; then
         COLUMNS=200 script -q -c "stty cols 200 2>/dev/null; bash -c '$fn'" "$logfile"
@@ -1725,6 +1904,41 @@ parse_sysbench() {
     [[ -n "$l95" ]] && mt_metric "lat 95th" "${l95} ms" "pri"
 }
 
+# Ping-карта: карточка «только агрегаты» — средние по регионам, худший узел, потери.
+parse_pingmap() {
+    local txt="$1" v st
+    if printf '%s\n' "$txt" | grep -q '\[CH\] ОШИБКА'; then
+        mt_metric "API" "недоступен" "bad"
+        return 0
+    fi
+    v=$(printf '%s\n' "$txt" | grep -m1 -oE 'Средняя \(Россия\): [0-9]+(\.[0-9]+)? ms' | grep -oE '[0-9]+(\.[0-9]+)?')
+    [[ -n "$v" ]] && mt_metric "РФ avg" "${v} ms" "pri"
+    local gl gg
+    for gl in "Европа:ЕС avg" "США:США avg" "Азия:Азия avg"; do
+        gg="${gl%%:*}"
+        v=$(printf '%s\n' "$txt" | grep -m1 -oE "Средняя \\(${gg}\\): [0-9]+(\\.[0-9]+)? ms" | grep -oE '[0-9]+(\.[0-9]+)?')
+        [[ -n "$v" ]] && mt_metric "${gl##*:}" "${v} ms" \
+            "$(awk -v x="$v" 'BEGIN{ print (x+0<80)?"ok":(x+0<=200)?"warn":"bad" }')"
+    done
+    local worst
+    worst=$(printf '%s\n' "$txt" | grep -m1 -oE 'Худший узел: .+$' | sed -E 's/^Худший узел: //; s/ \([a-z]+[0-9]+\)//')
+    if [[ -n "$worst" ]]; then
+        v=$(printf '%s' "$worst" | grep -oE '[0-9]+(\.[0-9]+)?' | tail -1)
+        if printf '%s' "$worst" | grep -qE 'потер|ответа'; then st="bad"
+        elif [[ -n "$v" ]] && awk -v a="$v" 'BEGIN{ exit !(a>150) }'; then st="warn"
+        else st="ok"; fi
+        mt_metric "Худший" "$worst" "$st"
+    fi
+    local ln names
+    ln=$(printf '%s\n' "$txt" | grep -m1 -oE 'Узлы с потерями: [0-9]+/[0-9]+.*')
+    if [[ -n "$ln" ]]; then
+        v=$(printf '%s' "$ln" | sed -nE 's/^Узлы с потерями: ([0-9]+\/[0-9]+).*$/\1/p')
+        names=$(printf '%s' "$ln" | sed -nE 's/^.* \(([^)]+)\)[[:space:]]*$/\1/p')
+        [[ "${v%%/*}" == "0" ]] && st="ok" || st="bad"
+        mt_metric "Потери" "${v}${names:+ ($names)}" "$st"
+    fi
+}
+
 # Диспетчер: читает лог, пишет .metrics/.services
 parse_test_output() {
     local fn="$1" log="$2"
@@ -1742,6 +1956,7 @@ parse_test_output() {
         run_ip_check_place)                 parse_ipcheck "$txt" ;;
         run_ip_quality)                     parse_ipquality "$txt" ;;
         run_sysbench_cpu)                   parse_sysbench "$txt" ;;
+        run_ping_map)                       parse_pingmap "$txt" ;;
     esac
 }
 
@@ -2629,12 +2844,13 @@ show_menu() {
     echo -e "  ${GREEN} 9)${NC}  bench.sh — параметры сервера и скорость"
     echo -e "  ${GREEN}10)${NC}  IPQuality"
     echo -e "  ${GREEN}11)${NC}  sysbench CPU — тест процессора"
+    echo -e "  ${GREEN}12)${NC}  Ping-карта — check-host.net"
     echo ""
-    echo -e "  ${YELLOW}12)${NC}  ${BOLD}Мультитест — выбор и запуск тестов${NC}"
+    echo -e "  ${YELLOW}13)${NC}  ${BOLD}Мультитест — выбор и запуск тестов${NC}"
     echo ""
     echo -e "  ${CYAN}${BOLD}── Утилиты ──${NC}"
     echo ""
-    echo -e "  ${GREEN}13)${NC}  Утилиты (BBR, IPv6...)"
+    echo -e "  ${GREEN}14)${NC}  Утилиты (BBR, IPv6...)"
     echo ""
     echo -e "  ${RED} 0)${NC}  Выход"
 
@@ -2652,7 +2868,7 @@ show_menu() {
         MT_PROMO_BELOW=0
         print_stencloud_promo
     fi
-    echo -ne "  ${BOLD}Выберите пункт [0-13]: ${NC}"
+    echo -ne "  ${BOLD}Выберите пункт [0-14]: ${NC}"
 }
 
 # ============================================================
@@ -2695,8 +2911,9 @@ while true; do
         9)  run_bench_sh; pause_prompt ;;
         10) run_ip_quality; pause_prompt ;;
         11) run_sysbench_cpu; pause_prompt ;;
-        12) run_all; pause_prompt ;;
-        13) show_utilities_menu ;;
+        12) run_ping_map; pause_prompt ;;
+        13) run_all; pause_prompt ;;
+        14) show_utilities_menu ;;
         0)  echo -e "${GREEN}До свидания!${NC}"; exit 0 ;;
         *)  echo -e "${RED}Неверный выбор. Попробуйте снова.${NC}"; pause_prompt ;;
     esac
