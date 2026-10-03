@@ -1284,7 +1284,10 @@ mt_api() {
     [[ "$method" == GET ]] && args+=(-G)
     [[ "$method" == POST && $# -eq 0 ]] && args+=(--data '')
     if [[ -n "$MT_SRV_TOKEN" ]]; then
-        printf 'header = "Authorization: Bearer %s"\n' "$MT_SRV_TOKEN" \
+        # MT_API_HEADER — ещё один секретный заголовок (код привязки из бота): тоже через
+        # stdin, не в argv. Значение проверено вызывающим — только [A-Za-z0-9_:- ].
+        { printf 'header = "Authorization: Bearer %s"\n' "$MT_SRV_TOKEN"
+          [[ -n "${MT_API_HEADER:-}" ]] && printf 'header = "%s"\n' "$MT_API_HEADER"; } \
             | "$MT_CURL" -K - "${args[@]}" "$@" "${base%/}$path"
     else
         "$MT_CURL" "${args[@]}" "$@" "${base%/}$path" </dev/null
@@ -1404,15 +1407,20 @@ mt_tg_say_fail() {   # <HTTP-код> <файл ответа>
     fi
 }
 
-# Привязка сервера к боту (device flow, docs/telegram-protocol.md): ключ создаём здесь,
-# бот показывает три кода, а здесь человек видит, КТО подтвердил, и отвечает «это я».
-# Конфиг пишется только после ok на pair/confirm. 0 — привязан, 1 — нет.
+# Привязка сервера к боту (docs/telegram-protocol.md): ключ создаём здесь. Без кода —
+# device flow: бот показывает три кода, а здесь человек видит, КТО подтвердил. С кодом
+# mtp_… из команды «Добавить сервер» аккаунт известен сразу — ни ссылки, ни QR. В обоих
+# случаях здесь спрашиваем «это ваш Telegram?» и пишем конфиг только после ok на
+# pair/confirm. $1 — код из бота или пусто. 0 — привязан, 1 — нет.
 mt_tg_pair() {
-    local tmp code ttl match who="" approved=0 min re kv deadline rc=1
+    local join="${1:-}" tmp code ttl match who="" approved=0 min re kv deadline q rc=1
     local -a form=()
     print_separator "Telegram-бот — привязка сервера"
     if ! mt_tg_configured; then
         echo -e "  ${YELLOW}Telegram-бот ещё не настроен в этой версии скрипта.${NC}"; return 1
+    fi
+    if [[ -n "$join" ]] && ! mt_match '^mtp_[A-Za-z0-9]{24}$' "$join"; then
+        echo -e "  ${YELLOW}Это не код из бота. Скопируйте команду заново: в боте «Добавить сервер».${NC}"; return 1
     fi
     if ! ( exec 8<"$MT_TTY" ) 2>/dev/null; then
         echo -e "  ${YELLOW}Привязка — только из терминала: ответы нужны с клавиатуры.${NC}"; return 1
@@ -1448,40 +1456,58 @@ mt_tg_pair() {
               "disk=$SYS_DISK" "os=$SYS_OS" "virt=$SYS_VIRT" "v=$SCRIPT_VERSION" "p=1"; do
         form+=( --data-urlencode "${kv//[$'\r\n\t']/ }" )
     done
-    code=$(MT_API_MAXTIME=30 mt_api POST /v1/pair/start "$tmp/r" "${form[@]}")
-    re='^ok ([A-Za-z0-9]{22}) ([0-9]{1,4}) ([0-9]{2})( .*)?$'
-    if (( MT_PAIR_ABORT == 0 )) && { [[ "$code" != 200 ]] || ! mt_resp "$tmp/r" || ! mt_match "$re" "$MT_RESP"; }; then
-        mt_tg_say_fail "$code" "$tmp/r"
-        MT_SRV_TOKEN=""; rm -rf "$tmp"; exec 8<&-; trap - INT; return 1
-    fi
-    if (( MT_PAIR_ABORT == 0 )); then
-        code="${BASH_REMATCH[1]}"; ttl="${BASH_REMATCH[2]}"; match="${BASH_REMATCH[3]}"
-        (( ttl < 60 )) && ttl=60
-        (( ttl > 1800 )) && ttl=1800
-        min=$(( (ttl + 59) / 60 ))
-        echo ""
-        echo -e "  ${BOLD}Откройте в Telegram:${NC} https://t.me/${MT_BOT_USERNAME}?start=p_${code}"
-        if [[ "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" == *[Uu][Tt][Ff]* ]]; then
-            echo ""
-            mt_resp_body "$tmp/r" | sed 's/^/  /'
-        fi
-        echo ""
-        echo -e "  ${BOLD}Код для бота: ${match}${NC}"
-        echo -e "  ${CYAN}Ждём подтверждения в Telegram (до ${min} мин). Ctrl+C — отмена.${NC}"
-
-        deadline=$(( SECONDS + ttl ))
-        while (( SECONDS < deadline && MT_PAIR_ABORT == 0 )); do
-            code=$(MT_API_MAXTIME=15 mt_api POST /v1/pair/poll "$tmp/r")
-            (( MT_PAIR_ABORT )) && break
-            if [[ "$code" == 200 ]] && mt_resp "$tmp/r"; then
-                case "$MT_RESP_V" in
-                    approved) approved=1; who="${MT_RESP_A[0]:-}"; break ;;
-                    denied)   echo -e "  ${YELLOW}Привязка отменена в Telegram.${NC}"; break ;;
-                    expired)  echo -e "  ${YELLOW}Время вышло — запустите привязку заново.${NC}"; break ;;
-                esac
+    deadline=$(( SECONDS + 3600 ))
+    if [[ -n "$join" ]]; then
+        # Код — заголовком через stdin curl (MT_API_HEADER), как и ключ: в argv его нет.
+        code=$(MT_API_HEADER="X-Pair-Token: $join" MT_API_MAXTIME=30 mt_api POST /v1/pair/claim "$tmp/r" "${form[@]}")
+        if (( MT_PAIR_ABORT == 0 )); then
+            if [[ "$code" == 200 ]] && mt_resp "$tmp/r" && [[ "$MT_RESP_V" == approved ]]; then
+                approved=1; who="${MT_RESP_A[0]:-}"
+            elif mt_resp "$tmp/r" && [[ "$MT_RESP" == "err token" ]]; then
+                echo -e "  ${YELLOW}Команда из бота устарела или уже использована.${NC}"
+                echo -e "  ${YELLOW}Нажмите в боте «Добавить сервер» — там будет новая.${NC}"
+            elif [[ "$MT_RESP" == "err limit" ]]; then
+                echo -e "  ${YELLOW}В боте слишком много серверов или незавершённых привязок — отвяжите лишние.${NC}"
+            else
+                mt_tg_say_fail "$code" "$tmp/r"
             fi
-            sleep 2
-        done
+        fi
+    else
+        code=$(MT_API_MAXTIME=30 mt_api POST /v1/pair/start "$tmp/r" "${form[@]}")
+        re='^ok ([A-Za-z0-9]{22}) ([0-9]{1,4}) ([0-9]{2})( .*)?$'
+        if (( MT_PAIR_ABORT == 0 )) && { [[ "$code" != 200 ]] || ! mt_resp "$tmp/r" || ! mt_match "$re" "$MT_RESP"; }; then
+            mt_tg_say_fail "$code" "$tmp/r"
+            MT_SRV_TOKEN=""; rm -rf "$tmp"; exec 8<&-; trap - INT; return 1
+        fi
+        if (( MT_PAIR_ABORT == 0 )); then
+            code="${BASH_REMATCH[1]}"; ttl="${BASH_REMATCH[2]}"; match="${BASH_REMATCH[3]}"
+            (( ttl < 60 )) && ttl=60
+            (( ttl > 1800 )) && ttl=1800
+            min=$(( (ttl + 59) / 60 ))
+            echo ""
+            echo -e "  ${BOLD}Откройте в Telegram:${NC} https://t.me/${MT_BOT_USERNAME}?start=p_${code}"
+            if [[ "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" == *[Uu][Tt][Ff]* ]]; then
+                echo ""
+                mt_resp_body "$tmp/r" | sed 's/^/  /'
+            fi
+            echo ""
+            echo -e "  ${BOLD}Код для бота: ${match}${NC}"
+            echo -e "  ${CYAN}Ждём подтверждения в Telegram (до ${min} мин). Ctrl+C — отмена.${NC}"
+
+            deadline=$(( SECONDS + ttl ))
+            while (( SECONDS < deadline && MT_PAIR_ABORT == 0 )); do
+                code=$(MT_API_MAXTIME=15 mt_api POST /v1/pair/poll "$tmp/r")
+                (( MT_PAIR_ABORT )) && break
+                if [[ "$code" == 200 ]] && mt_resp "$tmp/r"; then
+                    case "$MT_RESP_V" in
+                        approved) approved=1; who="${MT_RESP_A[0]:-}"; break ;;
+                        denied)   echo -e "  ${YELLOW}Привязка отменена в Telegram.${NC}"; break ;;
+                        expired)  echo -e "  ${YELLOW}Время вышло — запустите привязку заново.${NC}"; break ;;
+                    esac
+                fi
+                sleep 2
+            done
+        fi
     fi
 
     if (( MT_PAIR_ABORT )); then
@@ -1491,7 +1517,13 @@ mt_tg_pair() {
         who=$(printf '%b' "${who//%/\\x}")
         who=$(mt_clean "$who")
         who=$(vcut "$who" 64)
-        if mt_tg_ask "  Подтвердил Telegram: ${BOLD}${who}${NC}. Это вы? [y/д — да · Enter — нет]: "; then
+        # с кодом: чужая команда привязала бы этот сервер к чужому аккаунту — имя показываем
+        if [[ -n "$join" ]]; then
+            q="  Команда из Telegram-аккаунта ${BOLD}${who}${NC}. Привязать сервер к нему? [y/д — да · Enter — нет]: "
+        else
+            q="  Подтвердил Telegram: ${BOLD}${who}${NC}. Это вы? [y/д — да · Enter — нет]: "
+        fi
+        if mt_tg_ask "$q"; then
             code=$(MT_API_MAXTIME=30 mt_api POST /v1/pair/confirm "$tmp/r" --data-urlencode "answer=yes")
             if [[ "$code" == 200 ]] && mt_resp "$tmp/r" && mt_match '^ok ([A-Za-z0-9]{8,32})$' "$MT_RESP"; then
                 MT_SRV_ID="${BASH_REMATCH[1]}"; MT_API="$MT_BOT_API"; MT_BOT="$MT_BOT_USERNAME"
@@ -5225,7 +5257,8 @@ mt_cli_help() {
     echo "Использование: multitest [параметр]"
     echo "  (без параметров)  интерактивное меню"
     echo "  --install         установить как команду multitest"
-    echo "  --pair            привязать сервер к Telegram-боту @${MT_BOT_USERNAME}"
+    echo "  --pair [код]      привязать сервер к Telegram-боту @${MT_BOT_USERNAME}"
+    echo "                    (код mtp_… — из кнопки «Добавить сервер» в боте: без ссылки и QR)"
     echo "  --tg-status       привязан ли сервер и есть ли связь с ботом"
     echo "  --unpair          отвязать сервер и удалить ключ"
     echo "  --agent           служба запуска тестов из Telegram (её запускает systemd)"
@@ -5238,7 +5271,7 @@ mt_cli_dispatch() {
     case "${1:-}" in
         "") return 0 ;;
         -h|--help) mt_cli_help; exit 0 ;;
-        --pair) mt_tg_pair; exit $? ;;
+        --pair) mt_tg_pair "${2:-}"; exit $? ;;
         --unpair) mt_tg_unpair; exit $? ;;
         --tg-status) mt_tg_status; exit $? ;;
         --agent) mt_agent_main; exit $? ;;

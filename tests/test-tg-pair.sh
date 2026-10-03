@@ -63,6 +63,30 @@ fresh; answers n; t_respond 200 "ok $CODE 600 47"; t_respond 200 "approved %40iv
 printf 'y\ny\n' | mt_tg_pair > "$T_W/out" 2>&1; rc=$?
 check "ответ из терминала, не из stdin"  '[ $rc = 1 ] && [ ! -e "$MT_CONF" ]'
 
+# --- быстрая привязка по коду из бота ------------------------------------------------------
+JOIN="mtp_$(printf 'A%.0s' {1..24})"
+rm -f "$MT_CONF"; fresh; answers y
+t_respond 200 "approved %D0%98%D0%B2%D0%B0%D0%BD%20(%40ivan)"
+t_respond 200 "ok AbCdEf123456"
+mt_tg_pair "$JOIN" > "$T_W/out" 2>&1; rc=$?
+check "код из бота: rc 0 и конфиг"         '[ $rc = 0 ] && grep -qx "MT_SRV_ID=AbCdEf123456" "$MT_CONF"'
+check "код — только в stdin curl"          'grep -qF "X-Pair-Token: $JOIN" "$T_W/curl/stdin.1" && ! grep -qF "$JOIN" "$T_W/curl/argv.1"'
+check "claim вместо ссылки и QR"           'grep -qx "https://bot.test/v1/pair/claim" "$T_W/curl/argv.1" && ! grep -qF "start=p_" "$T_W/out"'
+check "спросил про аккаунт, answer=yes"    'grep -qF "Telegram-аккаунта" "$T_W/out" && grep -qF "Иван (@ivan)" "$T_W/out" && grep -qx "answer=yes" "$T_W/curl/argv.2"'
+check "в confirm кода уже нет"             '! grep -qF "X-Pair-Token" "$T_W/curl/stdin.2"'
+
+rm -f "$MT_CONF"; fresh; answers n; t_respond 200 "approved %40mallory"; t_respond 200 "cancelled"
+mt_tg_pair "$JOIN" > "$T_W/out" 2>&1; rc=$?
+check "чужой аккаунт → «нет», конфига нет" '[ $rc = 1 ] && [ ! -e "$MT_CONF" ] && grep -qx "answer=no" "$T_W/curl/argv.2"'
+
+rm -f "$MT_CONF"; fresh; answers y; t_respond 404 "err token"
+mt_tg_pair "$JOIN" > "$T_W/out" 2>&1; rc=$?
+check "устаревший код → понятно"           '[ $rc = 1 ] && [ ! -e "$MT_CONF" ] && grep -qF "устарела или уже использована" "$T_W/out" && ! grep -qF "Время вышло" "$T_W/out"'
+
+fresh; answers y
+mt_tg_pair 'mtp_bad;rm -rf /' > "$T_W/out" 2>&1; rc=$?
+check "кривой код → 1, без запросов"        '[ $rc = 1 ] && [ "$(t_calls)" = 0 ] && grep -qF "не код из бота" "$T_W/out"'
+
 paired a; before=$(cat "$MT_CONF"); fresh; answers n
 mt_tg_pair > "$T_W/out" 2>&1
 check "перепривязка «нет»: конфиг цел, запросов нет" '[ "$(cat "$MT_CONF")" = "$before" ] && [ "$(t_calls)" = 0 ]'
