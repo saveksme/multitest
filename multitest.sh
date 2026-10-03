@@ -4055,6 +4055,11 @@ render_album_summary() {
         echo -e "  ${YELLOW}Страницы не собрались — соберу одной картинкой.${NC}"
         return 1
     fi
+    # Telegram-заданию файлообменник не нужен: страницы уходят боту напрямую
+    if [[ "${MT_HEADLESS:-0}" == "1" ]]; then
+        echo -e "  ${CYAN}Страницы собраны: ${BOLD}${SUMMARY_DIR}/pages${NC}"
+        return 0
+    fi
     if ! spin_run "Загружаю альбом на imgdb" step_upload_album; then
         echo -e "  ${YELLOW}Альбом не загрузился — соберу одной картинкой.${NC}"
         return 1
@@ -4504,10 +4509,22 @@ mt_tg_send_result() {
     local meta
     meta="{\"masked_ip\":\"$(mt_tg_je "$mip")\",\"country\":\"$(mt_tg_je "$SYS_COUNTRY")\",\"city\":\"$(mt_tg_je "$SYS_CITY")\",\"asn\":\"$(mt_tg_je "$SYS_ASN")\",\"done\":$done,\"err\":$err,\"skip\":$skip,\"tests\":\"$tsel\"}"
 
+    # Диагностика к результату: хвосты логов тестов без ANSI и с замаскированными
+    # адресами. Бэкенд пишет их в свой журнал — если тесты отработали в пустоту,
+    # по этому хвосту видно, что именно сказал тест на ВМ.
+    local diag="" lf
+    for lf in ${test_log[@]+"${test_log[@]}"}; do
+        [[ -s "$lf" ]] || continue
+        diag+="=== $(basename "$lf") ==="$'\n'
+        diag+="$(strip_ansi < "$lf" | sed -E 's/([0-9]{1,3}\.)[0-9]{1,3}\.[0-9]{1,3}/\1.x.x/g; s/([0-9a-fA-F]{0,4}:){2,}[0-9a-fA-F:]+/x:x::x/g' | tail -40)"$'\n'
+    done
+    [[ ${#diag} -gt 12000 ]] && diag="${diag:0:12000}"
+
     mt_tg_curl POST /agent/result --max-time 300 \
         -F "job_id=$jid" \
         -F "album_url=$(mt_tg_je "$url")" \
         -F "meta=$meta" \
+        ${diag:+-F "diags=$diag"} \
         "${args[@]}"
 }
 
