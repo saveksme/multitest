@@ -4526,8 +4526,19 @@ mt_tg_send_result() {
     done
     tsel="${tsel%,}"
 
+    # сырые метрики для авто-блоков шаблона публикации (парсит бэкенд)
+    local mraw="" mf
+    for mf in "$SUMMARY_DIR"/*.metrics "$SUMMARY_DIR"/*.services; do
+        [[ -s "$mf" ]] || continue
+        mraw+="### $(basename "$mf")"$'\n'"$(cat "$mf")"$'\n'
+    done
+    [[ ${#mraw} -gt 16000 ]] && mraw="${mraw:0:16000}"
+
+    # факты для блока «Параметры» (KVM/AES-NI/IPv6/BBR) и CPU
+    local aes="0"; grep -qm1 '\baes\b' /proc/cpuinfo 2>/dev/null && aes="1"
+
     local meta
-    meta="{\"masked_ip\":\"$(mt_tg_je "$mip")\",\"country\":\"$(mt_tg_je "$SYS_COUNTRY")\",\"city\":\"$(mt_tg_je "$SYS_CITY")\",\"asn\":\"$(mt_tg_je "$SYS_ASN")\",\"done\":$done,\"err\":$err,\"skip\":$skip,\"tests\":\"$tsel\"}"
+    meta="{\"masked_ip\":\"$(mt_tg_je "$mip")\",\"country\":\"$(mt_tg_je "$SYS_COUNTRY")\",\"city\":\"$(mt_tg_je "$SYS_CITY")\",\"asn\":\"$(mt_tg_je "$SYS_ASN")\",\"cpu\":\"$(mt_tg_je "$SYS_CPU")\",\"virt\":\"$(mt_tg_je "$SYS_VIRT")\",\"cc\":\"$(mt_tg_je "$SYS_CC")\",\"ip6\":\"$([[ -n "$SYS_IP6" ]] && echo 1 || echo 0)\",\"aes\":$aes,\"done\":$done,\"err\":$err,\"skip\":$skip,\"tests\":\"$tsel\"}"
 
     # Диагностика к результату: хвосты логов тестов без ANSI и с замаскированными
     # адресами. Бэкенд пишет их в свой журнал — если тесты отработали в пустоту,
@@ -4544,6 +4555,7 @@ mt_tg_send_result() {
         -F "job_id=$jid" \
         -F "album_url=$(mt_tg_je "$url")" \
         -F "meta=$meta" \
+        ${mraw:+-F "mraw=$mraw"} \
         ${diag:+-F "diags=$diag"} \
         "${args[@]}"
 }
