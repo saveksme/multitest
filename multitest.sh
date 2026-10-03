@@ -4367,6 +4367,8 @@ MT_PAGE_SCALE="${MT_PAGE_SCALE:-2}"
 # Альбом у imgdb — 64 картинки; выше потолка собирать нечего, уходим в простыню.
 MT_ALBUM="${MT_ALBUM:-1}"
 MT_ALBUM_MAX=64
+# imgdb — веб-ссылка на альбом; MT_IMGDB=0 — не заливать (сводка всё равно уйдёт в Telegram, если сервер привязан)
+MT_IMGDB="${MT_IMGDB:-1}"
 
 # Рендер одной страницы: <base>.svg -> <base>.png, путь дописывается в pages.list.
 # Высоту берём из MT_PAGE_H, который выставил построитель страницы: разбирать
@@ -4426,6 +4428,72 @@ step_upload_album() {
     printf '%s' "$url" > "$SUMMARY_DIR/url.txt"
 }
 
+# --- Telegram: доставка сводки ------------------------------------------------
+
+# Слать ли сводку в бота: сервер привязан и не выключено через MT_TG=0.
+mt_tg_enabled() { [[ "${MT_TG:-1}" != 0 ]] && mt_conf_load 2>/dev/null; }
+
+# summary.txt и страницы альбома (обложка первой) — одним multipart-запросом.
+# Шаг идёт под spin_run (на терминале — в фоне), поэтому итог — маркером в
+# SUMMARY_DIR: tg.ok (с run_id), tg.blocked, tg.revoked, tg.err (с причиной).
+# Ключ идемпотентности в tg.key: повтор после таймаута не создаст второй пост.
+# Ключ сервера стирает только явный «revoked»; голый 401 — нет.
+step_tg_deliver() {
+    local key f code try wait=5 reason=""
+    local -a parts=()
+    mt_conf_load || return 1
+    rm -f "$SUMMARY_DIR/tg.ok" "$SUMMARY_DIR/tg.blocked" "$SUMMARY_DIR/tg.revoked" "$SUMMARY_DIR/tg.err"
+    [[ -s "$SUMMARY_DIR/summary.txt" ]] || { printf 'нет summary.txt' > "$SUMMARY_DIR/tg.err"; return 1; }
+    key=$(cat "$SUMMARY_DIR/tg.key" 2>/dev/null)
+    if ! mt_match '^run-[0-9a-f]{16}$' "$key"; then
+        key="run-$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
+        printf '%s' "$key" > "$SUMMARY_DIR/tg.key"
+    fi
+    parts=( -F "summary=@$SUMMARY_DIR/summary.txt;type=text/plain" -F "key=$key" )
+    if [[ -s "$SUMMARY_DIR/pages.list" ]]; then
+        while IFS= read -r f; do
+            [[ -s "$f" ]] && parts+=( -F "page=@$f;type=image/png" )
+        done < "$SUMMARY_DIR/pages.list"
+    fi
+    for try in 1 2 3; do
+        code=$(MT_API_MAXTIME=180 mt_api POST /v1/agent/runs "$SUMMARY_DIR/tg.resp" "${parts[@]}")
+        mt_resp "$SUMMARY_DIR/tg.resp"
+        case "$code:$MT_RESP_V" in
+            200:ok)      printf '%s' "${MT_RESP_A[0]:-}" > "$SUMMARY_DIR/tg.ok"; return 0 ;;
+            200:revoked) mt_conf_wipe; : > "$SUMMARY_DIR/tg.revoked"; return 1 ;;
+            200:blocked) : > "$SUMMARY_DIR/tg.blocked"; return 1 ;;
+            *:retry)     wait="${MT_RESP_A[0]:-30}"; [[ "$wait" =~ ^[0-9]+$ ]] || wait=30
+                         (( wait > 30 )) && wait=30; reason="бот попросил подождать" ;;
+            200:pending) wait=5; reason="бот ещё обрабатывает" ;;
+            000:*)       wait=5; reason="нет связи с ботом" ;;
+            5??:*)       wait=5; reason="HTTP $code" ;;
+            *)           reason="HTTP ${code:0:3}"; break ;;
+        esac
+        (( try < 3 )) && sleep "$wait"
+    done
+    printf '%s' "$(mt_clean "$reason")" > "$SUMMARY_DIR/tg.err"
+    return 1
+}
+
+mt_tg_report() {
+    if [[ -e "$SUMMARY_DIR/tg.ok" ]]; then
+        echo -e "  ${GREEN}Сводка отправлена в Telegram${NC} (@${MT_BOT:-$MT_BOT_USERNAME})."
+    elif [[ -e "$SUMMARY_DIR/tg.blocked" ]]; then
+        echo -e "  ${YELLOW}Telegram: бот заблокирован — разблокируйте его, и сводки снова будут приходить.${NC}"
+    elif [[ -e "$SUMMARY_DIR/tg.revoked" ]]; then
+        echo -e "  ${YELLOW}Telegram: сервер отвязан в боте — ключ на сервере удалён.${NC}"
+    elif [[ -e "$SUMMARY_DIR/tg.err" ]]; then
+        echo -e "  ${YELLOW}Telegram: сводка не отправилась ($(cat "$SUMMARY_DIR/tg.err")).${NC}"
+    fi
+}
+
+# Подсказка непривязанному серверу — одна строка, только на терминале.
+mt_tg_hint() {
+    [[ -t 1 && "${MT_TG:-1}" != 0 ]] && mt_tg_configured || return 0
+    mt_conf_load 2>/dev/null && return 0
+    echo -e "  ${CYAN}Сводку можно получать в Telegram — пункт 15 (или multitest --pair).${NC}"
+}
+
 # Русское склонение числительных: 1 день / 2 дня / 5 дней.
 ru_plural() {
     local n=$1 one=$2 few=$3 many=$4
@@ -4464,16 +4532,38 @@ render_album_summary() {
     (( ${#MT_PAGE_IDX[@]} > 0 && n <= MT_ALBUM_MAX )) || return 1
 
     rm -f "$SUMMARY_DIR/pages.list"
+    local tg=0 dir="$SUMMARY_DIR/pages"
     if ! spin_run "Собираю страницы альбома (${n})" step_build_pages; then
+        # недостроенный альбом в бот не шлём — только сводку, бот напишет пост текстом
+        if mt_tg_enabled && [[ -s "$SUMMARY_DIR/summary.txt" ]]; then
+            rm -f "$SUMMARY_DIR/pages.list"
+            spin_run "Отправляю сводку в Telegram" step_tg_deliver
+            mt_tg_report
+        fi
         echo -e "  ${YELLOW}Страницы не собрались — соберу одной картинкой.${NC}"
         return 1
     fi
-    if ! spin_run "Загружаю альбом на imgdb" step_upload_album; then
+    if mt_tg_enabled; then
+        spin_run "Отправляю сводку в Telegram" step_tg_deliver
+        [[ -e "$SUMMARY_DIR/tg.ok" ]] && tg=1
+    fi
+    # imgdb выключен (MT_IMGDB=0) или не ответил, а в Telegram сводка ушла — этого
+    # достаточно: длинную простыню ради хостинга не собираем.
+    if [[ "$MT_IMGDB" != "1" ]] || ! spin_run "Загружаю альбом на imgdb" step_upload_album; then
+        if (( tg )) || [[ "$MT_IMGDB" != "1" ]]; then
+            echo ""
+            echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            mt_tg_report
+            echo -e "  ${YELLOW}Оригиналы лежат тут:${NC} ${BOLD}${dir}${NC}"
+            echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            return 0
+        fi
+        mt_tg_report
         echo -e "  ${YELLOW}Альбом не загрузился — соберу одной картинкой.${NC}"
         return 1
     fi
 
-    local url dir="$SUMMARY_DIR/pages" life
+    local url life
     url=$(cat "$SUMMARY_DIR/url.txt"); life=$(imgdb_life)
     echo ""
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -4481,6 +4571,7 @@ render_album_summary() {
     echo -e "  ${CYAN}Страниц: ${BOLD}${n}${NC}${CYAN} — обложка и по одной на тест.${NC}"
     # про постоянную ссылку молчим: строка была нужна, только пока срок конечный
     [[ "$life" != "постоянная" ]] && echo -e "  ${YELLOW}Ссылка ${life} — потом альбом удалится с хостинга.${NC}"
+    mt_tg_report
     echo -e "  ${YELLOW}Оригиналы лежат тут:${NC} ${BOLD}${dir}${NC}"
     echo -e "    ${YELLOW}например: ${BOLD}scp -r root@<host>:${dir} .${NC}"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -4496,11 +4587,13 @@ render_and_upload_summary() {
             return 0
         }
     fi
-    rm -f "$SUMMARY_DIR/url.txt" "$SUMMARY_DIR/out.path" "$SUMMARY_DIR/expires.txt"
+    rm -f "$SUMMARY_DIR/url.txt" "$SUMMARY_DIR/out.path" "$SUMMARY_DIR/expires.txt" \
+          "$SUMMARY_DIR/tg.ok" "$SUMMARY_DIR/tg.blocked" "$SUMMARY_DIR/tg.revoked" \
+          "$SUMMARY_DIR/tg.err" "$SUMMARY_DIR/tg.key"
 
     spin_run "Устанавливаю зависимости для картинки" step_render_deps
 
-    [[ "$MT_ALBUM" == "1" ]] && render_album_summary && return 0
+    [[ "$MT_ALBUM" == "1" ]] && render_album_summary && { mt_tg_hint; return 0; }
     # дальше — прежний путь: одна длинная картинка и перебор файлообменников
 
     if ! spin_run "Собираю карточку" step_build_svg; then
