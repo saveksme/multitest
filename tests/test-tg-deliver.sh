@@ -49,6 +49,10 @@ check "502 → tg.err, без HTML внутри"   '[ $rc != 0 ] && [ -e "$SUMMA
 
 MT_TG=0; check "MT_TG=0 → выключено"     '! mt_tg_enabled'; MT_TG=1
 
+pair; newrun; fresh; t_respond 200 "closed"
+step_tg_deliver; rc=$?
+check "бот закрыт → без повторов, понятно" '[ $rc != 0 ] && [ "$(t_calls)" = 1 ] && grep -qF "закрыт владельцем" "$SUMMARY_DIR/tg.err" && [ -e "$MT_CONF" ]'
+
 # --- один альбом в Telegram: склейка лишних страниц --------------------------------------
 plan=$(mt_tg_plan 1280 2107 1817 1579 1674 1427 1733 1053)
 check "≤ 9 страниц — без склеек"            '[ "$(printf "%s\n" "$plan" | tr "\n" " ")" = "1 2 3 4 5 6 7 " ]'

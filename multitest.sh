@@ -43,7 +43,7 @@ MT_RESP=""; MT_RESP_V=""; MT_RESP_A=()
 MT_AGENT_DIR="${MT_AGENT_DIR:-/var/lib/multitest}"
 MT_AGENT_UNIT="${MT_AGENT_UNIT:-/etc/systemd/system/multitest-agent.service}"
 MT_SYSTEMD="${MT_SYSTEMD:-/run/systemd/system}"
-MT_LIM_GAP=900; MT_LIM_DAY=6; MT_LIM_HEAVY=2      # раз в 15 мин, 6 в сутки, тяжёлых 2
+MT_LIM_GAP=300; MT_LIM_DAY=12; MT_LIM_HEAVY=4     # раз в 5 мин, 12 в сутки, тяжёлых 4
 MT_HEADLESS=0; MT_JOB_ID=""; MT_JOB_DIR=""; MT_TEST_NUM=""
 
 # Марка спонсора для подписи: контур обведён с растрового логотипа
@@ -1402,6 +1402,8 @@ mt_tg_say_fail() {   # <HTTP-код> <файл ответа>
         echo -e "  ${YELLOW}Бот недоступен — проверьте сеть и попробуйте позже.${NC}"
     elif [[ "$MT_RESP_V" == retry ]]; then
         echo -e "  ${YELLOW}Слишком много попыток — повторите через несколько минут.${NC}"
+    elif [[ "$MT_RESP_V" == closed ]]; then
+        echo -e "  ${YELLOW}Бот сейчас закрыт владельцем — попробуйте позже.${NC}"
     else
         echo -e "  ${YELLOW}Бот ответил неожиданно (HTTP $(mt_clean "${code:0:3}")). Попробуйте позже.${NC}"
     fi
@@ -5024,6 +5026,7 @@ step_tg_deliver() {
             200:ok)      printf '%s' "${MT_RESP_A[0]:-}" > "$SUMMARY_DIR/tg.ok"; return 0 ;;
             200:revoked) mt_conf_wipe; : > "$SUMMARY_DIR/tg.revoked"; return 1 ;;
             200:blocked) : > "$SUMMARY_DIR/tg.blocked"; return 1 ;;
+            200:closed)  reason="бот закрыт владельцем — сводка осталась на сервере"; break ;;
             *:retry)     wait="${MT_RESP_A[0]:-30}"; [[ "$wait" =~ ^[0-9]+$ ]] || wait=30
                          (( wait > 30 )) && wait=30; reason="бот попросил подождать" ;;
             200:pending) wait=5; reason="бот ещё обрабатывает" ;;

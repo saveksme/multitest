@@ -47,19 +47,20 @@ fresh; t_respond 200 "ok"
 mt_agent_job "job Jaaaaaaaaaaaaaaaaaaa nope_test" > "$T_W/out" 2>&1
 check "незнакомый тест → bad_tests"      '[ ! -e "$T_W/calls" ] && grep -qx "reason=bad_tests" "$T_W/curl/argv.1"'
 
-# 5. Лимиты: раньше 15 минут — отказ с ожиданием
+# 5. Лимиты: раньше 5 минут — отказ с ожиданием
 fresh; t_respond 200 "ok"
 mt_agent_job "job Jbbbbbbbbbbbbbbbbbbb ip_region" > "$T_W/out" 2>&1
 check "лимит частоты → local_limit"      '[ ! -e "$T_W/calls" ] && grep -qx "reason=local_limit" "$T_W/curl/argv.1" && grep -qE "^wait=[0-9]+$" "$T_W/curl/argv.1"'
 printf -v now '%(%s)T' -1
-printf '%s 1\n%s 1\n' $(( now - 7200 )) $(( now - 5000 )) > "$MT_AGENT_DIR/agent.runs"
+: > "$MT_AGENT_DIR/agent.runs"
+for (( k = 0; k < MT_LIM_HEAVY; k++ )); do printf '%s 1\n' $(( now - 7200 + k * 600 )) >> "$MT_AGENT_DIR/agent.runs"; done
 w=$(mt_agent_limits "yabs"); rc=$?
-check "тяжёлых больше двух в сутки — нельзя" '[ $rc = 1 ] && [ "$w" = 3600 ]'
+check "тяжёлых сверх лимита в сутки — нельзя" '[ $rc = 1 ] && [ "$w" = 3600 ]'
 w=$(mt_agent_limits "ip_region"); rc=$?
 check "лёгкий тест при этом можно"       '[ $rc = 0 ]'
 printf '%s 0\n' $(( now + 99999 )) > "$MT_AGENT_DIR/agent.runs"
 w=$(mt_agent_limits "ip_region"); rc=$?
-check "время из будущего не ломает лимит" '[ $rc = 1 ] && [ "$w" -le 900 ]'
+check "время из будущего не ломает лимит" '[ $rc = 1 ] && [ "$w" -le 300 ]'
 rm -f "$MT_AGENT_DIR/agent.runs"
 
 # 6. «Остановить» между тестами: ответ cancel на progress — дальше не идём
@@ -74,7 +75,7 @@ rm -f "$MT_AGENT_DIR/agent.runs"
 fresh; t_respond 200 "ok"; t_respond 401 "err auth"; t_respond 401 "err auth"
 MT_AGENT_POLLS=2 mt_agent_main > "$T_W/out" 2>&1; rc=$?
 check "401 → ключ цел, служба на месте"  '[ -e "$MT_CONF" ] && [ ! -e "$T_W/systemctl" ]'
-check "hello с agent=1 и лимитами"       'grep -qx "agent=1" "$T_W/curl/argv.1" && grep -qx "lim=900,6,2" "$T_W/curl/argv.1"'
+check "hello с agent=1 и лимитами"       'grep -qx "agent=1" "$T_W/curl/argv.1" && grep -qx "lim=300,12,4" "$T_W/curl/argv.1"'
 check "опрос — GET с wait"               'grep -qx -- "-G" "$T_W/curl/argv.2" && grep -qx "wait=25" "$T_W/curl/argv.2"'
 
 # 8. revoked → ключ и служба прочь, выход 78
