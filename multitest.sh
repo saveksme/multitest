@@ -4200,6 +4200,13 @@ mt_tg_rand() {
 # Минимальное экранирование значения для JSON (кавычки и обратные слэши).
 mt_tg_je() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 
+# Статус из JSON ответа бэкенда: "ok" | "pending" | "denied" | "expired" | "".
+# Пробелы вырезаем: json.dumps на стороне бэкенда отдаёт "status": "ok",
+# а сравнение в [[ ]] пробел за символ не считает.
+mt_tg_json_status() {
+    printf '%s' "$1" | tr -d '[:space:]' | grep -oE '"status":"[a-z]+"' | head -1 | sed 's/.*"\([a-z]*\)"$/\1/'
+}
+
 # --- Мастер подключения ------------------------------------------------------
 
 mt_tg_wizard() {
@@ -4254,19 +4261,21 @@ mt_tg_wizard() {
     echo -e "  ${BOLD}2.${NC} Нажмите ${BOLD}Start${NC} и подтвердите сохранение ВМ кнопкой в чате."
     echo -e "  ${CYAN}Код одноразовый и действует 10 минут.${NC}"
     echo -ne "  Ожидаю подтверждение"
-    local i resp vm_id key
+    local i resp vm_id key flat
     for i in $(seq 1 100); do
         printf '.'
         resp=$(mt_tg_curl POST /agent/pair/status -d "{\"code\":\"$code\"}" 2>/dev/null) || resp=""
-        if [[ "$resp" == *'"status":"ok"'* ]]; then
-            vm_id=$(printf '%s' "$resp" | grep -oE '"vm_id"[ ]*:[ ]*"[A-Za-z0-9_-]+"' | head -1 | sed 's/.*"\([A-Za-z0-9_-]*\)"$/\1/')
-            key=$(printf '%s' "$resp" | grep -oE '"agent_key"[ ]*:[ ]*"[A-Za-z0-9._-]+"' | head -1 | sed 's/.*"\([A-Za-z0-9._-]*\)"$/\1/')
-            break
-        elif [[ "$resp" == *'"status":"denied"'* ]]; then
-            echo ""; echo -e "  ${YELLOW}В подключении отказано в чате.${NC}"; return 1
-        elif [[ "$resp" == *'"status":"expired"'* ]]; then
-            echo ""; echo -e "  ${YELLOW}Код истёк — запустите подключение заново.${NC}"; return 1
-        fi
+        flat=$(mt_tg_json_status "$resp")
+        case "$flat" in
+            ok)
+                vm_id=$(printf '%s' "$resp" | grep -oE '"vm_id"[ ]*:[ ]*"[A-Za-z0-9_-]+"' | head -1 | sed 's/.*"\([A-Za-z0-9_-]*\)"$/\1/')
+                key=$(printf '%s' "$resp" | grep -oE '"agent_key"[ ]*:[ ]*"[A-Za-z0-9._-]+"' | head -1 | sed 's/.*"\([A-Za-z0-9._-]*\)"$/\1/')
+                break ;;
+            denied)
+                echo ""; echo -e "  ${YELLOW}В подключении отказано в чате.${NC}"; return 1 ;;
+            expired)
+                echo ""; echo -e "  ${YELLOW}Код истёк — запустите подключение заново.${NC}"; return 1 ;;
+        esac
         sleep 5
     done
 
