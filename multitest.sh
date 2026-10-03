@@ -38,6 +38,13 @@ MT_CURL="${MT_CURL:-curl}"         # тесты подменяют curl
 MT_TTY="${MT_TTY:-/dev/tty}"       # вопросы привязки — только с клавиатуры
 MT_SRV_ID=""; MT_SRV_TOKEN=""; MT_API=""; MT_BOT=""
 MT_RESP=""; MT_RESP_V=""; MT_RESP_A=()
+# Агент (запуск тестов из Telegram): служба systemd и её рабочий каталог. Лимиты —
+# локальные, бот их не переопределит; править можно в agent.conf (MT_LIM_*).
+MT_AGENT_DIR="${MT_AGENT_DIR:-/var/lib/multitest}"
+MT_AGENT_UNIT="${MT_AGENT_UNIT:-/etc/systemd/system/multitest-agent.service}"
+MT_SYSTEMD="${MT_SYSTEMD:-/run/systemd/system}"
+MT_LIM_GAP=900; MT_LIM_DAY=6; MT_LIM_HEAVY=2      # раз в 15 мин, 6 в сутки, тяжёлых 2
+MT_HEADLESS=0; MT_JOB_ID=""; MT_JOB_DIR=""; MT_TEST_NUM=""
 
 # Марка спонсора для подписи: контур обведён с растрового логотипа
 # (assets/brand/stencloud.png, там же лежит читаемая копия stencloud.svg) —
@@ -707,49 +714,135 @@ run_all() {
         [[ "$MT_BBR_SPEED_TESTS" == *" $_f "* ]] && { recommend_bbr_cake; break; }
     done
 
-    print_separator "МУЛЬТИТЕСТ — запуск (${#test_funcs[@]} тест(ов))"
+    mt_run_selected
+    (( $? == 3 )) && echo -e "  ${YELLOW}Сейчас идёт другой прогон (в том числе из Telegram) — дождитесь окончания.${NC}"
+    return 0
+}
+
+# Тесты по списку id через запятую (id — имя функции без run_) → test_funcs/test_names в
+# порядке каталога, без повторов. Пустой, кривой или незнакомый ввод → 1 и пустые массивы:
+# заданию из Telegram «по умолчанию все тесты» не годится.
+mt_sel_from_spec() {
+    local spec="$1" rest id k fn LC_ALL=C
+    local -A want=()
+    test_funcs=(); test_names=()
+    [[ -n "$spec" && ",$spec," != *",,"* ]] || return 1
+    # режем подстановками: без read и без раскрытия glob (строка приходит снаружи)
+    rest="$spec,"
+    while [[ -n "$rest" ]]; do
+        id="${rest%%,*}"; rest="${rest#*,}"
+        [[ "$id" =~ ^[a-z0-9_]+$ ]] && mt_is_test_fn "run_$id" || return 1
+        want["run_$id"]=1
+    done
+    for k in "${!MT_CAT_FUNCS[@]}"; do
+        fn="${MT_CAT_FUNCS[$k]}"
+        [[ -n "${want[$fn]:-}" ]] || continue
+        test_funcs+=( "$fn" ); test_names+=( "${MT_CAT_NAMES[$k]}" )
+    done
+    (( ${#test_funcs[@]} > 0 ))
+}
+
+# Безголовый режим (служба агента): ни одного вопроса, без цветов в журнале, BBR не
+# трогаем. SHELL — для script -c: под systemd иначе /bin/sh (dash), а он теряет
+# экспортированные функции bash, и тесты молча проходят без метрик.
+mt_headless_init() {
+    MT_HEADLESS=1; MT_BBR_PROMPTED=1
+    RED=""; GREEN=""; YELLOW=""; CYAN=""; BOLD=""; NC=""
+    export SHELL=/bin/bash
+}
+
+# Одна блокировка на ручной мультитест и задания из Telegram: два бенчмарка разом
+# исказят друг друга и столкнутся на блокировке пакетного менеджера. fd 9 держим до
+# конца прогона; flock нет — работаем без блокировки. 1 — занято.
+mt_run_lock() {
+    local f="${MT_LOCK_FILE:-}"
+    if [[ -z "$f" ]]; then
+        f=/run/multitest.lock
+        [[ -d /run && -w /run ]] || f="${TMPDIR:-/tmp}/multitest.lock"
+    fi
+    command -v flock >/dev/null 2>&1 || return 0
+    { exec 9>"$f"; } 2>/dev/null || return 0
+    flock -n 9 || { exec 9>&-; return 1; }
+}
+
+mt_cat_index() {
+    local k
+    for k in "${!MT_CAT_FUNCS[@]}"; do [[ "${MT_CAT_FUNCS[$k]}" == "$1" ]] && { echo "$k"; return 0; }; done
+    echo 0
+}
+
+# Событие задания из Telegram: start | progress | beat | failed (+ k=v). Ответ «cancel» —
+# в боте нажали «Остановить»: кладём флаг, прогон увидит его перед следующим тестом.
+mt_job_event() {
+    [[ -n "${MT_JOB_ID:-}" ]] || return 0
+    local tmp kv
+    local -a f=( --data-urlencode "type=$1" )
+    shift
+    for kv in "$@"; do f+=( --data-urlencode "$kv" ); done
+    tmp=$(mktemp) || return 0
+    MT_API_MAXTIME=15 mt_api POST "/v1/agent/jobs/$MT_JOB_ID/event" "$tmp" "${f[@]}" >/dev/null 2>&1
+    mt_resp "$tmp"
+    rm -f "$tmp"
+    [[ "$MT_RESP_V" == cancel && -n "${MT_JOB_DIR:-}" ]] && : > "$MT_JOB_DIR/cancel"
+    return 0
+}
+
+mt_job_cancelled() { [[ -n "${MT_JOB_DIR:-}" && -e "$MT_JOB_DIR/cancel" ]]; }
+
+# Прогон test_funcs (≥ 1): зависимости, статусы, каталог сводки, тесты по очереди,
+# сводка. Общий для ручного мультитеста и заданий из Telegram. 0 — прогон был,
+# 1 — нечего гонять или нет каталога, 3 — занято другим прогоном.
+mt_run_selected() {
+    local total=${#test_funcs[@]} i num k _f secs now killed stopped=0
+    (( total > 0 )) || return 1
+    mt_run_lock || return 3
+
+    print_separator "МУЛЬТИТЕСТ — запуск (${total} тест(ов))"
     for k in "${!test_names[@]}"; do
         printf "    ${GREEN}%2d.${NC} %s\n" "$((k + 1))" "${test_names[$k]}"
     done
     echo ""
-    echo -e "  ${YELLOW}Ctrl+C${NC} во время теста — пропустить текущий"
-    echo -e "  Тесты идут автоматически; нажмите любую клавишу, чтобы выбрать вручную."
-    echo ""
+    if [[ "$MT_HEADLESS" != 1 ]]; then
+        echo -e "  ${YELLOW}Ctrl+C${NC} во время теста — пропустить текущий"
+        echo -e "  Тесты идут автоматически; нажмите любую клавишу, чтобы выбрать вручную."
+        echo ""
+    fi
     install_deps_for "${test_funcs[@]}"
 
     # Статусы для сводки (каталог MT_CAT_* — глобальный: в картинке показываем
     # и невыбранные тесты)
     declare -gA MT_STATUS=()
-    local _f
     for _f in "${test_funcs[@]}"; do MT_STATUS["$_f"]="пропущен"; done
+    test_status=(); test_metric=(); test_log=()
 
-    test_status=()
-    test_metric=()
-    test_log=()
-
-    # Каталог для логов тестов и файлов сводки
+    # Каталог для логов и сводки: mktemp, а не имя по секундам — два запуска в одну
+    # секунду делили бы каталог, а предсказуемое имя в /tmp от root — плохая идея.
     SUMMARY_TS=$(date +%Y%m%d-%H%M%S)
-    SUMMARY_DIR="/tmp/multitest-summary-${SUMMARY_TS}"
-    mkdir -p "$SUMMARY_DIR" 2>/dev/null
+    if ! SUMMARY_DIR=$(mktemp -d "${MT_SUMMARY_ROOT:-/tmp}/multitest-summary-${SUMMARY_TS}-XXXX" 2>/dev/null); then
+        echo -e "  ${RED}Не удалось создать каталог для сводки.${NC}"
+        exec 9>&-
+        return 1
+    fi
     detect_script_flavor
 
-    local total=${#test_funcs[@]}
-    local i
-
-    for i in $(seq 0 $((total - 1))); do
-        local num=$((i + 1))
-        test_status[$i]="пропущен"
-        test_metric[$i]=""
-        test_log[$i]="$SUMMARY_DIR/test-${num}.log"
+    for (( i = 0; i < total; i++ )); do
+        num=$((i + 1))
+        test_status[$i]="пропущен"; test_metric[$i]=""; test_log[$i]="$SUMMARY_DIR/test-${num}.log"
+        if mt_job_cancelled; then
+            echo -e "  ${YELLOW}Остановлено из Telegram — сводка из готовых тестов.${NC}"
+            stopped=1
+            break
+        fi
+        mt_job_event progress "i=$num" "n=$total" "t=${test_funcs[$i]#run_}"
 
         echo ""
         echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         echo -e "  ${CYAN}[${num}/${total}]${NC} Следующий: ${BOLD}${test_names[$i]}${NC}"
         echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
-        # --- Автостарт через 5 c, любая клавиша → ручной выбор ---
+        # --- Автостарт через 5 c, любая клавиша → ручной выбор (не в безголовом) ---
         local action="" _key=""
-        if [[ -t 0 ]]; then
+        if [[ -t 0 && "$MT_HEADLESS" != 1 ]]; then
             echo -ne "  ${CYAN}Автозапуск через ${BOLD}5${NC}${CYAN}c — нажмите любую клавишу для ручного выбора...${NC} "
             if read -r -t 5 -n 1 _key; then
                 echo ""
@@ -768,19 +861,44 @@ run_all() {
             q|Q)
                 echo -e "\n${GREEN}Мультитест прерван. Выполнено тестов: $((num - 1))/${total}${NC}"
                 render_and_upload_summary
-                return
+                exec 9>&-
+                return 0
                 ;;
         esac
 
-        # Запуск теста в подоболочке с захватом вывода, Ctrl+C убивает только тест
+        # Задание из Telegram: дедлайн теста для сторожа — ETA × 3, от 2 до 30 минут.
+        if [[ -n "${MT_JOB_DIR:-}" ]]; then
+            secs=$(( MT_CAT_SECS[$(mt_cat_index "${test_funcs[$i]}")] * 3 ))
+            (( secs < 120 )) && secs=120
+            (( secs > 1800 )) && secs=1800
+            printf -v now '%(%s)T' -1
+            printf '%s %s\n' "$num" "$(( now + secs ))" > "$MT_JOB_DIR/cur"
+        fi
+
+        # Запуск теста в подоболочке с захватом вывода, Ctrl+C убивает только тест.
+        # В безголовом режиме вывод теста — только в лог: в журнале службы ему не место
+        # (там полные IP).
+        MT_TEST_NUM=$num
         MULTITEST_SKIPPED=0
         trap multitest_skip_handler INT
-        ( capture_test "${test_funcs[$i]}" "${test_log[$i]}" )
+        if [[ "$MT_HEADLESS" == 1 ]]; then
+            ( capture_test "${test_funcs[$i]}" "${test_log[$i]}" ) >/dev/null 2>&1
+        else
+            ( capture_test "${test_funcs[$i]}" "${test_log[$i]}" )
+        fi
         trap - INT
+        killed=""
+        if [[ -n "${MT_JOB_DIR:-}" ]]; then
+            rm -f "$MT_JOB_DIR/cur"
+            [[ -f "$MT_JOB_DIR/killed.$num" ]] && killed=$(cat "$MT_JOB_DIR/killed.$num")
+        fi
 
-        if [[ $MULTITEST_SKIPPED -eq 1 ]]; then
+        if [[ "$killed" == timeout ]]; then
+            echo -e "  ${YELLOW}Тест не уложился во время и остановлен.${NC}"
+            test_status[$i]="ошибка"
+        elif [[ -n "$killed" || $MULTITEST_SKIPPED -eq 1 ]]; then
             echo ""
-            echo -e "  ${YELLOW}Тест пропущен (Ctrl+C).${NC}"
+            echo -e "  ${YELLOW}Тест пропущен.${NC}"
             test_status[$i]="пропущен"
         else
             test_status[$i]="выполнен"
@@ -792,8 +910,10 @@ run_all() {
     done
 
     echo ""
-    echo -e "${GREEN}${BOLD}Все тесты завершены! (${total}/${total})${NC}"
+    (( stopped )) || echo -e "${GREEN}${BOLD}Все тесты завершены! (${total}/${total})${NC}"
     render_and_upload_summary
+    exec 9>&-
+    return 0
 }
 
 # ============================================================
@@ -1221,6 +1341,8 @@ mt_conf_load() {
             MT_SRV_TOKEN) [[ "$v" =~ ^mtk_[0-9a-f]{64}$ ]] || return 78; tok="$v" ;;
             MT_API)       [[ "$v" =~ ^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?$ ]] || return 78; api="$v" ;;
             MT_BOT)       [[ "$v" =~ ^[A-Za-z0-9_]{5,32}$ ]] || return 78; bot="$v" ;;
+            MT_LIM_GAP|MT_LIM_DAY|MT_LIM_HEAVY)
+                          [[ "$v" =~ ^[0-9]{1,6}$ ]] || return 78; printf -v "$k" '%s' "$v" ;;
             *)            return 78 ;;
         esac
     done < "$MT_CONF"
@@ -1305,6 +1427,9 @@ mt_tg_pair() {
         if ! mt_tg_ask "  Сервер уже привязан к @${MT_BOT}. Привязать заново? [y/д — да · Enter — нет]: "; then
             rm -rf "$tmp"; exec 8<&-; return 0
         fi
+        # Служба агента — до bye: иначе она получила бы «revoked» и стёрла бы уже
+        # новый ключ. Включить её снова предложим после привязки.
+        mt_agent_installed && mt_agent_uninstall >/dev/null
         MT_API_MAXTIME=15 mt_api POST /v1/agent/bye "$tmp/r" >/dev/null 2>&1
         mt_conf_wipe
     fi
@@ -1373,6 +1498,7 @@ mt_tg_pair() {
                 if mt_conf_save; then
                     echo -e "  ${GREEN}Сервер привязан. Сводки мультитеста будут приходить в Telegram.${NC}"
                     rc=0
+                    mt_agent_offer "$who"
                 else
                     echo -e "  ${RED}Не удалось сохранить ключ в ${MT_CONF}.${NC}"
                 fi
@@ -1404,6 +1530,7 @@ mt_tg_unpair() {
         fi
         exec 8<&-
     fi
+    mt_agent_installed && mt_agent_uninstall >/dev/null
     if tmp=$(mktemp -d); then
         MT_API_MAXTIME=15 mt_api POST /v1/agent/bye "$tmp/r" >/dev/null 2>&1
         rm -rf "$tmp"
@@ -1430,7 +1557,17 @@ mt_tg_status() {
         echo -e "  ${YELLOW}Сервер отвязан в боте — ключ на сервере удалён.${NC}"; return 1
     fi
     if [[ "$code" == 200 && "$MT_RESP_V" == ok ]]; then
-        echo -e "  ${GREEN}Привязан к @${MT_BOT} · связь с ботом есть.${NC}"; return 0
+        echo -e "  ${GREEN}Привязан к @${MT_BOT} · связь с ботом есть.${NC}"
+        if mt_agent_installed; then
+            if systemctl is-active --quiet multitest-agent 2>/dev/null; then
+                echo -e "  ${GREEN}Запуск из Telegram включён — служба multitest-agent работает.${NC}"
+            else
+                echo -e "  ${YELLOW}Запуск из Telegram включён, но служба не работает: journalctl -u multitest-agent.${NC}"
+            fi
+        else
+            echo -e "  Запуск из Telegram выключен — включить: multitest → 15."
+        fi
+        return 0
     fi
     echo -e "  ${YELLOW}Привязан к @${MT_BOT} · бот сейчас недоступен (HTTP $(mt_clean "${code:0:3}")).${NC}"
     return 2
@@ -1449,8 +1586,14 @@ mt_tg_menu() {
         paired=0; mt_conf_load && paired=1
         if (( paired )); then
             echo -e "  ${GREEN}1)${NC}  Проверить связь"
-            echo -e "  ${GREEN}2)${NC}  Привязать заново"
-            echo -e "  ${RED}3)${NC}  Отвязать сервер"
+            if mt_agent_installed; then
+                echo -e "  ${GREEN}2)${NC}  Запуск тестов из Telegram — ${BOLD}выключить${NC}"
+                echo -e "  ${GREEN}3)${NC}  Обновить агент (скрипт службы)"
+            else
+                echo -e "  ${GREEN}2)${NC}  Запуск тестов из Telegram — ${BOLD}включить${NC}"
+            fi
+            echo -e "  ${GREEN}4)${NC}  Привязать заново"
+            echo -e "  ${RED}5)${NC}  Отвязать сервер"
         else
             echo -e "  ${GREEN}1)${NC}  Привязать сервер"
         fi
@@ -1461,11 +1604,282 @@ mt_tg_menu() {
         read -r c || return 0
         case "$paired:$c" in
             1:1) mt_tg_status; pause_prompt ;;
-            1:2|0:1) mt_tg_pair; pause_prompt ;;
-            1:3) mt_tg_unpair; pause_prompt ;;
+            1:2) if mt_agent_installed; then mt_agent_uninstall; else mt_agent_install; fi; pause_prompt ;;
+            1:3) mt_agent_installed && mt_agent_install; pause_prompt ;;
+            1:4|0:1) mt_tg_pair; pause_prompt ;;
+            1:5) mt_tg_unpair; pause_prompt ;;
             *:0) return ;;
         esac
     done
+}
+
+# ============================================================
+#  Telegram-бот: агент — тесты по заданиям из бота
+# ============================================================
+# Служба multitest-agent ждёт задание у бота (long-poll ~25 с) и гоняет только тесты из
+# каталога (MT_CAT_FUNCS). Бот не может обойти локальные лимиты и ничего не меняет в
+# системе: BBR, IPv6 и прочее — только руками. Ключ стирается только по явному «revoked».
+
+mt_systemd() { [[ -d "$MT_SYSTEMD" ]]; }
+mt_agent_installed() { [[ -f "$MT_AGENT_UNIT" ]]; }
+MT_HEAVY_RE=',(yabs|iperf3_ru|iperf3_tlab|bench_sh),'
+
+# hello с флагом агента (1 — служба работает, 0 — выключена) и лимитами. stdout — код HTTP.
+mt_agent_hello() {
+    local tmp code t
+    tmp=$(mktemp) || return 1
+    t=$(IFS=,; printf '%s' "${MT_CAT_FUNCS[*]//run_/}")
+    code=$(MT_API_MAXTIME=15 mt_api POST /v1/agent/hello "$tmp" --data-urlencode "v=$SCRIPT_VERSION" \
+        --data-urlencode "p=1" --data-urlencode "t=$t" --data-urlencode "agent=$1" \
+        --data-urlencode "lim=$MT_LIM_GAP,$MT_LIM_DAY,$MT_LIM_HEAVY")
+    mt_resp "$tmp"
+    rm -f "$tmp"
+    printf '%s' "$code"
+}
+
+# Локальные лимиты: история запусков — в $MT_AGENT_DIR/agent.runs («время тяжёлый»).
+# 0 и «0» — можно; 1 и сколько секунд ждать — нельзя.
+mt_agent_limits() {
+    local f="$MT_AGENT_DIR/agent.runs" now t h last=0 day=0 heavy=0 want=0
+    printf -v now '%(%s)T' -1
+    [[ ",$1," =~ $MT_HEAVY_RE ]] && want=1
+    if [[ -f "$f" ]]; then
+        while read -r t h; do
+            [[ "$t" =~ ^[0-9]+$ ]] || continue
+            (( t > now )) && t=$now                # часы ушли назад — не верим будущему
+            (( t > last )) && last=$t
+            if (( now - t < 86400 )); then
+                day=$(( day + 1 ))
+                [[ "$h" == 1 ]] && heavy=$(( heavy + 1 ))
+            fi
+        done < "$f"
+    fi
+    if (( last > 0 && now - last < MT_LIM_GAP )); then echo $(( MT_LIM_GAP - (now - last) )); return 1; fi
+    if (( day >= MT_LIM_DAY )); then echo 3600; return 1; fi
+    if (( want && heavy >= MT_LIM_HEAVY )); then echo 3600; return 1; fi
+    echo 0
+}
+
+mt_agent_record() {
+    local f="$MT_AGENT_DIR/agent.runs" now h=0
+    printf -v now '%(%s)T' -1
+    [[ ",$1," =~ $MT_HEAVY_RE ]] && h=1
+    { tail -n 49 "$f" 2>/dev/null; printf '%s %s\n' "$now" "$h"; } > "$f.tmp" && mv -f "$f.tmp" "$f"
+}
+
+# Погасить текущий тест задания: всю группу процессов лидера сессии из script,
+# TERM, через 10 с — KILL. Маркер killed.<номер> скажет прогону, что случилось.
+mt_agent_kill_current() {   # <cancel|timeout>
+    local num tdl pid
+    [[ -f "$MT_JOB_DIR/cur" ]] || return 0
+    read -r num tdl < "$MT_JOB_DIR/cur"
+    [[ "$num" =~ ^[0-9]+$ ]] || return 0
+    printf '%s' "$1" > "$MT_JOB_DIR/killed.$num"
+    pid=$(cat "$MT_JOB_DIR/pid.$num" 2>/dev/null)
+    [[ "$pid" =~ ^[0-9]+$ ]] || return 0
+    kill -TERM -- "-$pid" 2>/dev/null
+    sleep 10
+    kill -KILL -- "-$pid" 2>/dev/null
+    return 0
+}
+
+# Сторож задания (в фоне): beat раз в 15 с — ответ «cancel» гасит тест; дедлайн теста
+# (ETA × 3) и всего прогона (60 мин) — тоже. Останавливается, когда прогон положит done.
+mt_agent_watchdog() {   # <дедлайн прогона, epoch>
+    local tmp now num tdl
+    tmp=$(mktemp) || return 0
+    while [[ ! -e "$MT_JOB_DIR/done" ]]; do
+        sleep 15
+        [[ -e "$MT_JOB_DIR/done" ]] && break
+        MT_API_MAXTIME=15 mt_api POST "/v1/agent/jobs/$MT_JOB_ID/event" "$tmp" --data-urlencode "type=beat" >/dev/null 2>&1
+        if mt_resp "$tmp" && [[ "$MT_RESP_V" == cancel ]]; then
+            : > "$MT_JOB_DIR/cancel"
+            mt_agent_kill_current cancel
+            continue
+        fi
+        printf -v now '%(%s)T' -1
+        if (( now > $1 )); then
+            : > "$MT_JOB_DIR/cancel"
+            mt_agent_kill_current timeout
+        elif [[ -f "$MT_JOB_DIR/cur" ]]; then
+            read -r num tdl < "$MT_JOB_DIR/cur"
+            [[ "$tdl" =~ ^[0-9]+$ ]] && (( now > tdl )) && mt_agent_kill_current timeout
+        fi
+    done
+    rm -f "$tmp"
+}
+
+# Одно задание: «job <id> <тесты через запятую> [k=v…]». Всё незнакомое — отказ.
+MT_AGENT_SEEN=""
+mt_agent_job() {
+    local line="$1" jid spec lw rc deadline wpid d now
+    local re='^job ([A-Za-z0-9_-]{16,32}) ([a-z0-9_,]{1,200})( [a-z]{1,16}=[A-Za-z0-9_.,:-]{0,64}){0,8}$'
+    if ! mt_match "$re" "$line"; then
+        echo "агент: непонятное задание — пропускаю"
+        return 1
+    fi
+    jid="${BASH_REMATCH[1]}"; spec="${BASH_REMATCH[2]}"
+    [[ " $MT_AGENT_SEEN " == *" $jid "* ]] && return 0          # это задание уже было
+    MT_AGENT_SEEN="$(printf '%s\n' $MT_AGENT_SEEN | tail -n 19 | tr '\n' ' ')$jid"
+    MT_JOB_ID="$jid"
+    if ! mt_sel_from_spec "$spec"; then
+        mt_job_event failed "reason=bad_tests"; MT_JOB_ID=""; return 1
+    fi
+    if ! lw=$(mt_agent_limits "$spec"); then
+        echo "агент: лимит запусков — следующий через ${lw} c"
+        mt_job_event failed "reason=local_limit" "wait=$lw"; MT_JOB_ID=""; return 1
+    fi
+    mkdir -p "$MT_AGENT_DIR/runs" 2>/dev/null
+    if ! MT_JOB_DIR=$(mktemp -d "$MT_AGENT_DIR/runs/job-XXXXXX" 2>/dev/null); then
+        mt_job_event failed "reason=no_dir"; MT_JOB_ID=""; MT_JOB_DIR=""; return 1
+    fi
+    echo "агент: задание $jid — тесты $spec"
+    mt_job_event start "n=${#test_funcs[@]}"
+    printf -v now '%(%s)T' -1
+    deadline=$(( now + 3600 ))
+    mt_agent_watchdog "$deadline" &
+    wpid=$!
+    MT_SUMMARY_ROOT="$MT_JOB_DIR" MT_IMGDB=0 mt_run_selected
+    rc=$?
+    : > "$MT_JOB_DIR/done"
+    kill "$wpid" 2>/dev/null; wait "$wpid" 2>/dev/null
+    if (( rc == 3 )); then
+        mt_job_event failed "reason=busy"
+    elif (( rc == 0 )); then
+        mt_agent_record "$spec"
+        [[ -e "$SUMMARY_DIR/tg.ok" ]] || mt_job_event failed "reason=no_deliver"
+    else
+        mt_job_event failed "reason=no_dir"
+    fi
+    # в каталоге заданий держим последние три прогона
+    for d in $(ls -1dt "$MT_AGENT_DIR"/runs/job-* 2>/dev/null | tail -n +4); do rm -rf "$d"; done
+    MT_JOB_ID=""; MT_JOB_DIR=""
+    return 0
+}
+
+# Сервер отвязали в боте: ключ, служба и unit — прочь. Порядок важен: сначала конфиг,
+# потом disable без --now (иначе systemd убьёт нас посреди уборки); выход 78 служба
+# не перезапускает (RestartPreventExitStatus=78).
+mt_agent_selfremove() {
+    mt_conf_wipe
+    if mt_systemd; then
+        systemctl disable multitest-agent >/dev/null 2>&1
+        rm -f "$MT_AGENT_UNIT"
+        systemctl daemon-reload >/dev/null 2>&1
+    fi
+}
+
+# --agent: главный цикл службы. 78 — работать нечем (нет ключа, конфиг испорчен, отвязан).
+mt_agent_main() {
+    local rc code tmp backoff=5 polls=0
+    mt_conf_load; rc=$?
+    if (( rc == 1 )); then echo "агент: сервер не привязан — выхожу"; return 78; fi
+    if (( rc == 78 )); then echo "агент: $MT_CONF испорчен — ничего не трогаю"; return 78; fi
+    mt_headless_init
+    mkdir -p "$MT_AGENT_DIR/runs" "$MT_AGENT_DIR/work" 2>/dev/null
+    cd "$MT_AGENT_DIR/work" 2>/dev/null || cd /tmp || return 1
+    tmp=$(mktemp) || return 1
+    echo "агент: запущен, бот @${MT_BOT}"
+    mt_agent_hello 1 >/dev/null
+    [[ "$MT_RESP_V" == revoked ]] && { echo "агент: сервер отвязан в боте — удаляю ключ и службу"; mt_agent_selfremove; return 78; }
+    while :; do
+        if [[ -n "${MT_AGENT_POLLS:-}" ]]; then        # для тестов: ограничить число опросов
+            (( polls++ >= MT_AGENT_POLLS )) && break
+        fi
+        code=$(MT_API_MAXTIME=60 mt_api GET /v1/agent/poll "$tmp" --data-urlencode "wait=25")
+        mt_resp "$tmp"
+        case "$code:$MT_RESP_V" in
+            200:job)     backoff=5; mt_agent_job "$MT_RESP" ;;
+            200:idle)    backoff=5 ;;
+            200:revoked) echo "агент: сервер отвязан в боте — удаляю ключ и службу"
+                         rm -f "$tmp"; mt_agent_selfremove; return 78 ;;
+            200:upgrade) echo "агент: бот просит обновить multitest (multitest → 15 → обновить агент)"; sleep 3600 ;;
+            *)           echo "агент: бот недоступен (HTTP $(mt_clean "${code:0:3}")) — повтор через ${backoff} c"
+                         sleep $(( backoff + RANDOM % 5 ))
+                         backoff=$(( backoff * 2 )); (( backoff > 21600 )) && backoff=21600 ;;
+        esac
+    done
+    rm -f "$tmp"
+    return 0
+}
+
+# Включить запуск из Telegram: скрипт в /usr/local/bin (проверяем, что он умеет агента),
+# unit systemd, enable --now. Без systemd пока не умеем — доставка сводок работает и так.
+mt_agent_install() {
+    local bin=/usr/local/bin/multitest tmp
+    if ! mt_systemd; then
+        echo -e "  ${YELLOW}Запуск из Telegram пока работает только с systemd — здесь его нет.${NC}"; return 1
+    fi
+    tmp=$(mktemp) || return 1
+    if [[ -f "$0" && -r "$0" ]] && head -1 "$0" | grep -q '^#!/bin/bash'; then
+        cp "$0" "$tmp"
+    elif ! curl -fsSL --proto =https --max-time 60 "$REPO_URL" -o "$tmp" 2>/dev/null; then
+        rm -f "$tmp"; echo -e "  ${RED}Не удалось скачать multitest для службы.${NC}"; return 1
+    fi
+    if ! head -1 "$tmp" | grep -q '^#!/bin/bash' || ! bash -n "$tmp" 2>/dev/null \
+        || [[ "$(bash "$tmp" --agent-selftest 2>/dev/null)" != agent-ok ]]; then
+        rm -f "$tmp"
+        echo -e "  ${YELLOW}Эта версия multitest не умеет запуск из Telegram. Установите свежую:${NC}"
+        echo -e "    curl -sL $REPO_URL -o $bin && chmod +x $bin && multitest"
+        return 1
+    fi
+    if [[ ! "$tmp" -ef "$bin" ]] && ! { [[ -f "$0" ]] && [[ "$0" -ef "$bin" ]]; }; then
+        install -m 755 "$tmp" "$bin" || { rm -f "$tmp"; return 1; }
+    fi
+    rm -f "$tmp"
+    mkdir -p "$MT_AGENT_DIR/work" "$MT_AGENT_DIR/runs"
+    cat > "$MT_AGENT_UNIT" <<EOF
+[Unit]
+Description=Multitest agent — тесты по заданиям из Telegram-бота
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=$bin --agent
+Restart=on-failure
+RestartSec=15
+RestartPreventExitStatus=78
+# bench.sh и YABS пишут тестовые файлы в текущий каталог, а под systemd это /
+WorkingDirectory=$MT_AGENT_DIR/work
+# SHELL обязателен: иначе script -c идёт через /bin/sh (dash), и тесты теряют функции
+Environment=SHELL=/bin/bash HOME=/root TERM=xterm-256color
+StandardInput=null
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    if systemctl daemon-reload >/dev/null 2>&1 && systemctl enable --now multitest-agent >/dev/null 2>&1; then
+        echo -e "  ${GREEN}Запуск из Telegram включён: в боте у сервера появилась кнопка «Запустить тест».${NC}"
+        return 0
+    fi
+    echo -e "  ${RED}systemd не запустил службу multitest-agent — см. journalctl -u multitest-agent.${NC}"
+    return 1
+}
+
+mt_agent_uninstall() {
+    if mt_systemd; then
+        systemctl disable --now multitest-agent >/dev/null 2>&1
+        rm -f "$MT_AGENT_UNIT"
+        systemctl daemon-reload >/dev/null 2>&1
+    fi
+    mt_conf_load 2>/dev/null && mt_agent_hello 0 >/dev/null
+    echo -e "  ${GREEN}Запуск из Telegram выключен.${NC}"
+}
+
+# Вопрос согласия: что агент может и чего не может. Только с клавиатуры (fd 8).
+mt_agent_offer() {   # <кто подтвердил>
+    mt_systemd || return 0
+    echo ""
+    echo -e "  ${BOLD}Запуск тестов прямо из Telegram${NC}"
+    echo -e "  Служба multitest-agent будет спрашивать у бота задания и запускать ${BOLD}только${NC} тесты"
+    echo -e "  Multitest. Настройки системы она не меняет (ставит лишь пакеты для тестов — как ручной"
+    echo -e "  запуск). Лимиты: не чаще раза в $(( MT_LIM_GAP / 60 )) мин, до ${MT_LIM_DAY} прогонов в сутки, тяжёлых"
+    echo -e "  (YABS, iPerf3, bench.sh) — до ${MT_LIM_HEAVY}. Выключить: multitest → 15."
+    if mt_tg_ask "  Разрешить запуск тестов из Telegram для ${BOLD}$1${NC}? [y/д — да · Enter — нет]: "; then
+        mt_agent_install
+    else
+        echo -e "  ${CYAN}Хорошо — только сводки. Включить позже: multitest → 15.${NC}"
+    fi
 }
 
 # ============================================================
@@ -1500,7 +1914,12 @@ capture_test() {
     export -f print_separator check_and_install install_package detect_pkg_manager
     export -f "${MT_CAT_FUNCS[@]}"
 
-    if [[ "$SCRIPT_CAPTURE" == "util" ]]; then
+    if [[ "$SCRIPT_CAPTURE" == "util" && -n "${MT_JOB_DIR:-}" && -n "${MT_TEST_NUM:-}" ]]; then
+        # Задание из Telegram: script запускает тест лидером новой сессии — его pid и
+        # есть группа процессов. По нему сторож гасит тест вместе с fio/iperf3/geekbench,
+        # а не один script (дети иначе остались бы сиротами и исказили бы следующий прогон).
+        COLUMNS=200 script -q -c "echo \$\$ > '$MT_JOB_DIR/pid.$MT_TEST_NUM'; stty cols 200 2>/dev/null; bash -c '$fn'" "$logfile"
+    elif [[ "$SCRIPT_CAPTURE" == "util" ]]; then
         COLUMNS=200 script -q -c "stty cols 200 2>/dev/null; bash -c '$fn'" "$logfile"
     else
         COLUMNS=200 bash -c "$fn" 2>&1 | tee "$logfile"
@@ -4462,6 +4881,8 @@ step_tg_deliver() {
         printf '%s' "$key" > "$SUMMARY_DIR/tg.key"
     fi
     parts=( -F "summary=@$SUMMARY_DIR/summary.txt;type=text/plain" -F "key=$key" )
+    # сводка по заданию из Telegram закрывает это задание в боте
+    [[ -n "${MT_JOB_ID:-}" ]] && parts+=( -F "job_id=$MT_JOB_ID" )
     if [[ -s "$SUMMARY_DIR/pages.list" ]]; then
         while IFS= read -r f; do
             [[ -s "$f" ]] && parts+=( -F "page=@$f;type=image/png" )
@@ -4712,6 +5133,7 @@ mt_cli_help() {
     echo "  --pair            привязать сервер к Telegram-боту @${MT_BOT_USERNAME}"
     echo "  --tg-status       привязан ли сервер и есть ли связь с ботом"
     echo "  --unpair          отвязать сервер и удалить ключ"
+    echo "  --agent           служба запуска тестов из Telegram (её запускает systemd)"
     echo "  --help            эта справка"
 }
 
@@ -4724,6 +5146,8 @@ mt_cli_dispatch() {
         --pair) mt_tg_pair; exit $? ;;
         --unpair) mt_tg_unpair; exit $? ;;
         --tg-status) mt_tg_status; exit $? ;;
+        --agent) mt_agent_main; exit $? ;;
+        --agent-selftest) echo agent-ok; exit 0 ;;
         *) echo "Неизвестный параметр: $1" >&2; mt_cli_help >&2; exit 2 ;;
     esac
 }
