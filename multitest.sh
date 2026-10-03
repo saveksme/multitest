@@ -1147,6 +1147,11 @@ strip_ansi() {
 }
 
 # Запуск теста с захватом вывода в лог (для парсинга метрик).
+# Функции передаём ВРЕМЕННЫМ ФАЙЛОМ, а не только экспортом в окружение:
+# export -f кладёт их в BASH_FUNC_*<имя>%%, а systemd запускает агента без
+# SHELL — тогда util-linux script исполняет команду через /bin/sh (dash),
+# и dash вырезает из окружения имена с '%'. Тест падал с «command not found».
+# Файл сурсится уже внутри bash, так что способ работает в любом окружении.
 capture_test() {
     local fn="$1"
     local logfile="$2"
@@ -1158,11 +1163,25 @@ capture_test() {
               run_ip_check_place run_bench_sh run_ip_quality run_sysbench_cpu \
               run_ping_map
 
+    local fns qf qn
+    fns=$(mktemp) || return 1
+    {
+        declare -f print_separator check_and_install install_package detect_pkg_manager
+        declare -f run_ip_region run_censorcheck_geoblock run_censorcheck_dpi \
+                  run_censorcheck_tlab run_iperf3_ru run_iperf3_tlab run_yabs \
+                  run_ip_check_place run_bench_sh run_ip_quality run_sysbench_cpu \
+                  run_ping_map
+    } > "$fns"
+    qf=$(printf '%q' "$fns"); qn=$(printf '%q' "$fn")
+
     if [[ "$SCRIPT_CAPTURE" == "util" ]]; then
-        COLUMNS=200 script -q -c "stty cols 200 2>/dev/null; bash -c '$fn'" "$logfile"
+        COLUMNS=200 script -q -c "stty cols 200 2>/dev/null; bash -c 'source $qf; $qn'" "$logfile"
     else
-        COLUMNS=200 bash -c "$fn" 2>&1 | tee "$logfile"
+        COLUMNS=200 bash -c "source $qf; $qn" 2>&1 | tee "$logfile"
     fi
+    local rc=$?
+    rm -f "$fns"
+    return $rc
 }
 
 # --- Загрузчики на бесплатные хостинги (каждый: файл=$1 -> URL в stdout) ---
@@ -4363,6 +4382,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+Environment=SHELL=/bin/bash
 ExecStart=$self --tg-agent
 Restart=always
 RestartSec=15
