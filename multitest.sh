@@ -1104,16 +1104,28 @@ show_utilities_menu() {
         else
             echo -e "  ${GREEN}2)${NC}  IPv6 — ${BOLD}включить${NC}         ${CYAN}сейчас: ${v6_txt}${NC}"
         fi
+        # Telegram-бот — то же подменю, что пункт 15 главного меню: привязать,
+        # проверить связь, запуск из Telegram, отвязать.
+        local tg_max=2
+        if mt_tg_configured; then
+            tg_max=3
+            if mt_conf_load 2>/dev/null; then
+                echo -e "  ${GREEN}3)${NC}  Telegram-бот — ${BOLD}настроить${NC}       ${CYAN}сейчас: привязан к @${MT_BOT}${NC}"
+            else
+                echo -e "  ${GREEN}3)${NC}  Telegram-бот — ${BOLD}привязать сервер${NC}  ${CYAN}сводки и тесты прямо в Telegram${NC}"
+            fi
+        fi
 
         echo ""
         echo -e "  ${RED}0)${NC}  Назад"
         echo ""
-        echo -ne "  ${BOLD}Выберите пункт [0-2]: ${NC}"
+        echo -ne "  ${BOLD}Выберите пункт [0-${tg_max}]: ${NC}"
         read -r util_choice || return 0
 
         case "$util_choice" in
             1) if [[ $bbr_on -eq 1 ]]; then disable_bbr_cake; else enable_bbr_cake; fi; pause_prompt ;;
             2) if [[ $v6_on -eq 1 ]]; then disable_ipv6; else enable_ipv6; fi; pause_prompt ;;
+            3) if (( tg_max == 3 )); then mt_tg_menu; else echo -e "${RED}Неверный выбор.${NC}"; pause_prompt; fi ;;
             0) return ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; pause_prompt ;;
         esac
