@@ -27,6 +27,14 @@ AD_PROMO="BEDOLAGA"        # промокод
 AD_DISCOUNT="−20%"         # скидка по нему
 AD_BOT="@stencloudbot"     # куда идти за сервером
 
+# Telegram-бот проекта — общий (авторский), работает через центральный бэкенд
+# (отдельный приватный репозиторий, Docker). Оба значения переопределяются env'ом:
+# MT_TG_BOT / MT_TG_API — тогда ВМ подключается к чужому селф-хосту. Токен
+# бота живёт ТОЛЬКО на бэкенде: скрипт открытый, на ВМ пользователей секрета
+# нет и не будет, агент аутентифицируется личным ключом из tg.conf (0600).
+MT_TG_BOT="${MT_TG_BOT:-@multitestus_bot}"
+MT_TG_API="${MT_TG_API:-https://mtbot.sixseven.cam}"
+
 # Марка спонсора для подписи: контур обведён с растрового логотипа
 # (assets/brand/stencloud.png, там же лежит читаемая копия stencloud.svg) —
 # держать её вектором обязательно, скрипт качают одним файлом, а PNG в base64
@@ -41,7 +49,7 @@ AD_LOGO_CLOUD="M 32 98.6 C 17.8 100.6, 6.3 110.1, 1.9 123.4 C 0.6 127.3, 0 131.4
 #  Установка (--install)
 # ============================================================
 
-if [[ "$1" == "--install" ]]; then
+if [[ "${1:-}" == "--install" ]]; then
     echo -e "${CYAN}Установка multitest...${NC}"
     INSTALL_PATH="/usr/local/bin/multitest"
     TMP_FILE=$(mktemp)
@@ -594,43 +602,87 @@ mt_select_tests() {
     done
 }
 
+# --- Каталог тестов (порядок = нумерация в главном меню) ---
+# Глобальный: им пользуются run_all, пикер, headless-режим --run и агент
+# Telegram (задания из бота приходят номерами из этого же каталога).
+# Оценки времени грубые, порядок величины: нужны, чтобы прикинуть цену выбора.
+MT_CAT_FUNCS=( "run_ip_region" "run_censorcheck_geoblock" "run_censorcheck_dpi" \
+               "run_censorcheck_tlab" "run_iperf3_ru" "run_iperf3_tlab" "run_yabs" \
+               "run_ip_check_place" "run_bench_sh" "run_ip_quality" "run_sysbench_cpu" \
+               "run_ping_map" )
+MT_CAT_NAMES=( "IP Region" \
+               "Censorcheck — проверка геоблока" \
+               "Censorcheck — DPI (серверы РФ)" \
+               "Censorcheck — censorcheck.tlab.pw" \
+               "iPerf3 — тест до российских серверов" \
+               "iPerf3 — bench.tlab.pw (РФ)" \
+               "YABS — бенчмарк сервера" \
+               "IP Check Place — блокировки зарубежных сервисов" \
+               "bench.sh — параметры сервера и скорость" \
+               "IPQuality" \
+               "sysbench CPU — тест процессора" \
+               "Ping-карта — check-host.net" )
+MT_CAT_SECS=(  40 120 180 120 180 120 720 180 300 180 15 60 )
+
+# Разбор строки выбора «1 3 5» / «4-7» / «all» -> MT_SEL (1 = выбран; массив
+# вызывающего — bash видит локальные переменные вызывающего скрипта динамически).
+# Пустая строка и all/все = все тесты. Общий путь для headless (--run, задания
+# Telegram-агента) и не-TTY запуска (`curl | bash`), где пикер не нарисовать.
+mt_selection_from_str() {
+    local sel="$1" k idx tok start end any=0
+    local total=${#MT_CAT_FUNCS[@]}
+    for ((k=0; k<total; k++)); do MT_SEL[$k]=0; done
+    if [[ -z "$sel" || "$sel" =~ ^([Aa][Ll][Ll]|[Вв]се)$ ]]; then
+        for ((k=0; k<total; k++)); do MT_SEL[$k]=1; done
+        return 0
+    fi
+    for tok in $(printf '%s' "$sel" | tr ',' ' '); do
+        if [[ "$tok" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+            start="${BASH_REMATCH[1]}"; end="${BASH_REMATCH[2]}"
+        elif [[ "$tok" =~ ^[0-9]+$ ]]; then
+            start="$tok"; end="$tok"
+        else
+            continue
+        fi
+        for idx in $(seq "$start" "$end"); do
+            (( idx >= 1 && idx <= total )) && MT_SEL[$((idx-1))]=1
+        done
+    done
+    for ((k=0; k<total; k++)); do [[ "${MT_SEL[$k]}" == "1" ]] && any=1; done
+    if (( any == 0 )); then
+        echo -e "  ${YELLOW}Ничего корректного не выбрано — запускаю все тесты.${NC}"
+        for ((k=0; k<total; k++)); do MT_SEL[$k]=1; done
+    fi
+}
+
+# Прогресс наружу после каждого теста: $1 номер, $2 всего, $3 имя, $4 статус.
+# По умолчанию — тишина; Telegram-агент (--tg-job) подменяет функцию на
+# отправку прогресса в бэкенд, который редактирует статус-сообщение в чате.
+mt_progress() { :; }
+
 run_all() {
     print_separator "МУЛЬТИТЕСТ — выбор тестов"
 
-    # --- Полный каталог тестов (порядок = нумерация в главном меню) ---
-    # Оценки времени грубые, порядок величины: нужны, чтобы прикинуть цену выбора.
-    local all_funcs=( "run_ip_region" "run_censorcheck_geoblock" "run_censorcheck_dpi" \
-                      "run_censorcheck_tlab" "run_iperf3_ru" "run_iperf3_tlab" "run_yabs" \
-                      "run_ip_check_place" "run_bench_sh" "run_ip_quality" "run_sysbench_cpu" \
-                      "run_ping_map" )
-    local all_names=( "IP Region" \
-                      "Censorcheck — проверка геоблока" \
-                      "Censorcheck — DPI (серверы РФ)" \
-                      "Censorcheck — censorcheck.tlab.pw" \
-                      "iPerf3 — тест до российских серверов" \
-                      "iPerf3 — bench.tlab.pw (РФ)" \
-                      "YABS — бенчмарк сервера" \
-                      "IP Check Place — блокировки зарубежных сервисов" \
-                      "bench.sh — параметры сервера и скорость" \
-                      "IPQuality" \
-                      "sysbench CPU — тест процессора" \
-                      "Ping-карта — check-host.net" )
-    local all_secs=(  40 120 180 120 180 120 720 180 300 180 15 60 )
+    local all_funcs=( "${MT_CAT_FUNCS[@]}" )
+    local all_names=( "${MT_CAT_NAMES[@]}" )
+    local all_secs=( "${MT_CAT_SECS[@]}" )
     local catalog_total=${#all_funcs[@]}
 
     # --- Выбор тестов ---
     local -a MT_SEL=()
     local k idx
-    if [[ -t 0 && -t 1 && "${TERM:-dumb}" != "dumb" ]]; then
+    if [[ "${MT_HEADLESS:-0}" != "1" && -t 0 && -t 1 && "${TERM:-dumb}" != "dumb" ]]; then
         if ! mt_select_tests; then
             echo -e "\n  ${YELLOW}Мультитест отменён.${NC}"
             return 0
         fi
     else
-        # Запасной путь для не-TTY и dumb-терминалов (`wget -qO- ... | bash`):
-        # интерактивный список там нарисовать нечем, остаётся ввод номеров.
+        # Не-TTY (`wget -qO- ... | bash`) и headless (--run, задания Telegram):
+        # список номеров приходит снаружи (MT_RUNSEL) или вводится вручную.
         local selection=""
-        if [[ -t 0 ]]; then
+        if [[ "${MT_HEADLESS:-0}" == "1" ]]; then
+            selection="${MT_RUNSEL:-}"
+        elif [[ -t 0 ]]; then
             echo -e "  ${CYAN}${BOLD}Какие тесты включить в мультитест?${NC}"
             echo ""
             for k in $(seq 0 $((catalog_total - 1))); do
@@ -641,30 +693,7 @@ run_all() {
             echo -ne "  ${BOLD}Выбор (Enter = все тесты): ${NC}"
             read -r selection
         fi
-        for k in $(seq 0 $((catalog_total - 1))); do MT_SEL[$k]=0; done
-        if [[ -z "$selection" || "$selection" =~ ^([Aa][Ll][Ll]|[Вв]се)$ ]]; then
-            for k in $(seq 0 $((catalog_total - 1))); do MT_SEL[$k]=1; done
-        else
-            local tok start end
-            for tok in $(printf '%s' "$selection" | tr ',' ' '); do
-                if [[ "$tok" =~ ^([0-9]+)-([0-9]+)$ ]]; then
-                    start="${BASH_REMATCH[1]}"; end="${BASH_REMATCH[2]}"
-                elif [[ "$tok" =~ ^[0-9]+$ ]]; then
-                    start="$tok"; end="$tok"
-                else
-                    continue
-                fi
-                for idx in $(seq "$start" "$end"); do
-                    (( idx >= 1 && idx <= catalog_total )) && MT_SEL[$((idx-1))]=1
-                done
-            done
-            local any=0
-            for k in $(seq 0 $((catalog_total - 1))); do [[ "${MT_SEL[$k]}" == "1" ]] && any=1; done
-            if [[ $any -eq 0 ]]; then
-                echo -e "  ${YELLOW}Ничего корректного не выбрано — запускаю все тесты.${NC}"
-                for k in $(seq 0 $((catalog_total - 1))); do MT_SEL[$k]=1; done
-            fi
-        fi
+        mt_selection_from_str "$selection"
     fi
 
     # --- Список выбранных тестов (глобальные массивы для сводки) ---
@@ -674,6 +703,13 @@ run_all() {
         [[ "${MT_SEL[$k]}" == "1" ]] || continue
         test_funcs+=( "${all_funcs[$k]}" )
         test_names+=( "${all_names[$k]}" )
+    done
+
+    # Среди выбранного есть сетевые тесты — предлагаем BBR + Cake одним
+    # вопросом до старта прогона, а не перед каждым из них.
+    local _f
+    for _f in "${test_funcs[@]}"; do
+        [[ "$MT_BBR_SPEED_TESTS" == *" $_f "* ]] && { recommend_bbr_cake; break; }
     done
 
     print_separator "МУЛЬТИТЕСТ — запуск (${#test_funcs[@]} тест(ов))"
@@ -717,9 +753,9 @@ run_all() {
         echo -e "  ${CYAN}[${num}/${total}]${NC} Следующий: ${BOLD}${test_names[$i]}${NC}"
         echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
-        # --- Автостарт через 5 c, любая клавиша → ручной выбор ---
+                # --- Автостарт через 5 c, любая клавиша → ручной выбор ---
         local action="" _key=""
-        if [[ -t 0 ]]; then
+        if [[ -t 0 && "${MT_HEADLESS:-0}" != "1" ]]; then
             echo -ne "  ${CYAN}Автозапуск через ${BOLD}5${NC}${CYAN}c — нажмите любую клавишу для ручного выбора...${NC} "
             if read -r -t 5 -n 1 _key; then
                 echo ""
@@ -759,6 +795,7 @@ run_all() {
                 "$SUMMARY_DIR/${test_funcs[$i]}.metrics" "$SUMMARY_DIR/${test_funcs[$i]}.services"
         fi
         MT_STATUS["${test_funcs[$i]}"]="${test_status[$i]}"
+        mt_progress "$num" "$total" "${test_names[$i]}" "${test_status[$i]}"
     done
 
     echo ""
@@ -830,6 +867,50 @@ EOF
         echo -e "${YELLOW}Congestion control: ${new_cc}, qdisc: ${new_qdisc}${NC}"
         echo -e "${YELLOW}Проверьте, что ядро поддерживает BBR и Cake.${NC}"
     fi
+}
+
+# Тесты, ради которых есть смысл предложить BBR + Cake: их результат — скорость
+# TCP, на которой congestion control сказывается напрямую; остальным тестам он
+# безразличен.
+MT_BBR_SPEED_TESTS=" run_iperf3_ru run_iperf3_tlab run_yabs run_bench_sh "
+
+MT_BBR_PROMPTED=0
+
+# Перед сетевыми тестами (iPerf3, YABS, bench.sh) предлагаем включить BBR +
+# Cake: без него одиночный TCP-поток на дальнем маршруте недобирает, и скорость
+# в тестах выходит ниже реальной. Спрашиваем один раз за запуск скрипта — и на
+# весь мультитест один вопрос, а не по одному перед каждым сетевым тестом;
+# отказ и молчаливый пропуск (не-TTY, уже включено) запоминаются до конца сеанса.
+recommend_bbr_cake() {
+    [[ "$MT_BBR_PROMPTED" == "1" ]] && return 0
+    MT_BBR_PROMPTED=1
+
+    # Headless (--run, задания Telegram-агента) — интерактивного собеседника нет.
+    [[ "${MT_HEADLESS:-0}" == "1" ]] && return 0
+
+    # Уже включено — в том числе из меню утилит: предлагать нечего.
+    local cc qd
+    cc=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)
+    qd=$(sysctl -n net.core.default_qdisc 2>/dev/null)
+    [[ "$cc" == "bbr" && "$qd" == "cake" ]] && return 0
+
+    # Отвечать некому (`wget -qO- … | bash`) — тихо идём дальше.
+    [[ -t 0 ]] || return 0
+
+    echo ""
+    echo -e "  ${YELLOW}Для тестов скорости (iPerf3, YABS, bench.sh) рекомендуем включить${NC}"
+    echo -e "  ${YELLOW}BBR + Cake: без него одиночный TCP-поток на дальнем маршруте недобирает.${NC}"
+    echo -ne "  ${BOLD}Включить сейчас? [y/д — да · Enter — нет]: ${NC}"
+    local answer
+    read -r answer
+    case "$answer" in
+        y | Y | д | Д | yes | да | Yes)
+            enable_bbr_cake
+            ;;
+        *)
+            echo -e "  ${CYAN}Оставляем как есть — включить/выключить потом: Утилиты → 1.${NC}"
+            ;;
+    esac
 }
 
 disable_bbr_cake() {
@@ -4045,6 +4126,400 @@ render_and_upload_summary() {
         echo -e "  ${YELLOW}Загрузка не удалась — файл сохранён локально: ${out}${NC}"
         echo -e "  ${YELLOW}Скопируйте: scp root@<host>:${out} .${NC}"
     fi
+
+    # ВМ подключена к боту — предлагаем отправить сводку в Telegram
+    # (в headless-задании молчит: туда сводку отправляет сам --tg-job).
+    mt_tg_offer_send
+}
+
+# ============================================================
+#  Telegram-бот: подключение ВМ, агент, отправка сводок
+# ============================================================
+# Архитектура: бот общий (MT_TG_BOT), живёт на центральном бэкенде автора
+# (отдельный приватный репозиторий, Docker). Агент на ВМ сам ходит в бэкенд
+# по HTTPS — входящих портов нет; авторизация — личный ключ ВМ из tg.conf
+# (0600). Токен бота на ВМ не появляется никогда. Задания из чата исполняет
+# отдельный процесс (--tg-job), чтобы сам агент (--tg-agent) оставался на
+# линии и отвечал.
+
+MT_TG_JOB_PIDFILE="/tmp/multitest-tg-job.pid"
+MT_TG_JOB_LOG="/tmp/multitest-tg-job.log"
+
+# Конфиг агента: /etc/multitest/tg.conf от root, иначе XDG-каталог.
+# Формат — строки key=value: api, vm_id, key. Пишем только мы, но парсим
+# построчно: source'ить файл нельзя, вдруг его тронули руками.
+mt_tg_conf_path() {
+    if [[ $EUID -eq 0 ]]; then
+        printf '/etc/multitest/tg.conf'
+    else
+        printf '%s/multitest/tg.conf' "${XDG_CONFIG_HOME:-$HOME/.config}"
+    fi
+}
+
+# Читает конфиг в MT_TG_CONF_API / MT_TG_CONF_VM / MT_TG_CONF_KEY.
+mt_tg_conf_load() {
+    MT_TG_CONF_API=""; MT_TG_CONF_VM=""; MT_TG_CONF_KEY=""
+    local f k v
+    f=$(mt_tg_conf_path)
+    [[ -r "$f" ]] || return 1
+    while IFS='=' read -r k v; do
+        case "$k" in
+            api)   MT_TG_CONF_API="$v" ;;
+            vm_id) MT_TG_CONF_VM="$v" ;;
+            key)   MT_TG_CONF_KEY="$v" ;;
+        esac
+    done < "$f"
+    [[ -n "$MT_TG_CONF_API" && -n "$MT_TG_CONF_VM" && -n "$MT_TG_CONF_KEY" ]]
+}
+
+# curl к бэкенду: $1 метод, $2 путь, остальное — доп. аргументы curl.
+# Ключ НЕ должен попадать в argv (виден в ps): заголовок кладём во временный
+# конфиг curl -K с правами 0600 и вытираем за собой.
+mt_tg_curl() {
+    local method="$1" path="$2"; shift 2
+    local api="${MT_TG_CONF_API:-$MT_TG_API}"
+    [[ "$api" == https://* ]] || return 1
+    local hf=""
+    if [[ -n "${MT_TG_CONF_KEY:-}" ]]; then
+        hf=$(mktemp) || return 1
+        chmod 600 "$hf"
+        printf 'header = "Authorization: Bearer %s"\n' "$MT_TG_CONF_KEY" > "$hf"
+    fi
+    curl -fsS -4 -A "$MT_UA" --max-time "${MT_TG_CURL_TIMEOUT:-40}" \
+        -X "$method" ${hf:+-K "$hf"} "$@" "$api$path"
+    local rc=$?
+    [[ -n "$hf" ]] && rm -f "$hf"
+    return $rc
+}
+
+# Случайный код/идентификатор: алфавит без похожих символов (0/O, 1/I/L, U).
+mt_tg_rand() {
+    tr -dc 'ABCDEFGHJKMNPQRSTVWXYZ23456789' < /dev/urandom 2>/dev/null | head -c "${1:-8}"
+}
+
+# Минимальное экранирование значения для JSON (кавычки и обратные слэши).
+mt_tg_je() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+
+# --- Мастер подключения ------------------------------------------------------
+
+mt_tg_wizard() {
+    print_separator "TELEGRAM — управление ВМ из бота"
+
+    # уже подключены — показываем статус независимо от дефолтного домена
+    if mt_tg_conf_load; then mt_tg_wizard_connected; return 0; fi
+
+    if [[ "$MT_TG_API" == *example.com* ]]; then
+        echo -e "  ${RED}Адрес бэкенда не настроен (константа MT_TG_API).${NC}"
+        echo -e "  ${RED}Задайте env MT_TG_API=https://<домен> или смените константу в скрипте.${NC}"
+        return 1
+    fi
+
+    echo -e "  Управляйте тестами этой ВМ прямо из Telegram: выбирайте тесты,"
+    echo -e "  запускайте их удалённо и получайте сводку-альбом в чат. После"
+    echo -e "  прогона бот пришлёт карточку ВМ — описание, страну и рефку можно"
+    echo -e "  править кнопками прямо в чате."
+    echo ""
+    echo -e "  ${CYAN}Бот:${NC} ${BOLD}t.me/${MT_TG_BOT#@}${NC} · ${CYAN}бэкенд:${NC} ${MT_TG_API}"
+    echo ""
+    echo -e "  ${YELLOW}Что сохранится в боте (по вашему разрешению):${NC} имя ВМ, страна,"
+    echo -e "  описание, рефка, маскированный IP (вида 12.34.*.*) и результаты тестов."
+    echo -e "  ${YELLOW}Что НЕ сохраняется:${NC} hostname, полные IP, ключи, логи тестов."
+    echo ""
+    [[ -t 0 ]] || { echo -e "  ${YELLOW}Подключение интерактивно — запустите multitest в терминале.${NC}"; return 0; }
+    echo -ne "  ${BOLD}Подключить эту ВМ к боту? [y/д — да · Enter — нет]: ${NC}"
+    local answer; read -r answer
+    case "$answer" in
+        y | Y | д | Д | yes | да) ;;
+        *) echo -e "  ${CYAN}Отмена.${NC}"; return 0 ;;
+    esac
+
+    echo ""
+    echo -ne "  Собираю данные для карточки (гео, маскированный IP)... "
+    gather_system_facts
+    local mip; mip=$(mask_ip "${SYS_IP4:-${SYS_IP6:-}}")
+    echo -e "${GREEN}✓${NC}"
+
+    # Регистрируем одноразовый код пейринга (живёт 10 минут).
+    local code
+    code=$(mt_tg_rand 8)
+    [[ "$code" =~ ^[A-HJ-NP-Z2-9]{8}$ ]] || { echo -e "  ${RED}Не удалось получить случайный код.${NC}"; return 1; }
+    local facts="{\"masked_ip\":\"$(mt_tg_je "$mip")\",\"country\":\"$(mt_tg_je "$SYS_COUNTRY")\",\"city\":\"$(mt_tg_je "$SYS_CITY")\",\"asn\":\"$(mt_tg_je "$SYS_ASN")\",\"os\":\"$(mt_tg_je "$SYS_OS")\",\"virt\":\"$(mt_tg_je "$SYS_VIRT")\"}"
+    if ! mt_tg_curl POST /agent/pair/init -d "{\"code\":\"$code\",\"facts\":$facts}" >/dev/null; then
+        echo -e "  ${RED}Бэкенд недоступен ($MT_TG_API). Попробуйте позже.${NC}"
+        return 1
+    fi
+
+    echo ""
+    echo -e "  ${BOLD}1.${NC} Откройте бота: ${BOLD}https://t.me/${MT_TG_BOT#@}?start=$code${NC}"
+    echo -e "  ${BOLD}2.${NC} Нажмите ${BOLD}Start${NC} и подтвердите сохранение ВМ кнопкой в чате."
+    echo -e "  ${CYAN}Код одноразовый и действует 10 минут.${NC}"
+    echo -ne "  Ожидаю подтверждение"
+    local i resp vm_id key
+    for i in $(seq 1 100); do
+        printf '.'
+        resp=$(mt_tg_curl POST /agent/pair/status -d "{\"code\":\"$code\"}" 2>/dev/null) || resp=""
+        if [[ "$resp" == *'"status":"ok"'* ]]; then
+            vm_id=$(printf '%s' "$resp" | grep -oE '"vm_id"[ ]*:[ ]*"[A-Za-z0-9_-]+"' | head -1 | sed 's/.*"\([A-Za-z0-9_-]*\)"$/\1/')
+            key=$(printf '%s' "$resp" | grep -oE '"agent_key"[ ]*:[ ]*"[A-Za-z0-9._-]+"' | head -1 | sed 's/.*"\([A-Za-z0-9._-]*\)"$/\1/')
+            break
+        elif [[ "$resp" == *'"status":"denied"'* ]]; then
+            echo ""; echo -e "  ${YELLOW}В подключении отказано в чате.${NC}"; return 1
+        elif [[ "$resp" == *'"status":"expired"'* ]]; then
+            echo ""; echo -e "  ${YELLOW}Код истёк — запустите подключение заново.${NC}"; return 1
+        fi
+        sleep 5
+    done
+
+    if [[ -z "$vm_id" || -z "$key" ]]; then
+        echo ""; echo -e "  ${YELLOW}Не дождались подтверждения — запустите подключение заново.${NC}"; return 1
+    fi
+    echo ""
+    local conf; conf=$(mt_tg_conf_path)
+    mkdir -p "$(dirname "$conf")" 2>/dev/null
+    chmod 700 "$(dirname "$conf")" 2>/dev/null
+    ( umask 077; { printf 'api=%s\nvm_id=%s\nkey=%s\n' "$MT_TG_API" "$vm_id" "$key"; } > "$conf" )
+    echo -e "  ${GREEN}ВМ подключена и сохранена в боте.${NC}"
+    echo -e "  Ключ агента: ${BOLD}$conf${NC} (права 0600 — это единственный секрет на ВМ)."
+
+    mt_tg_offer_systemd
+    echo ""
+    echo -e "  Дальше — в боте: ${BOLD}/vms${NC} → эта ВМ → «Запустить тесты»."
+    echo -e "  После местного прогона multitest сам предложит отправить сводку в чат."
+}
+
+# Экран уже подключённой ВМ: статус, переустановка агента, отвязка.
+mt_tg_wizard_connected() {
+    echo -e "  ${GREEN}ВМ уже подключена:${NC} id ${BOLD}${MT_TG_CONF_VM}${NC} · ${MT_TG_CONF_API}"
+    local state label country
+    state=$(mt_tg_curl GET /agent/state 2>/dev/null) || state=""
+    label=$(printf '%s' "$state"   | grep -oE '"label"[ ]*:[ ]*"[^"]*"'   | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+    country=$(printf '%s' "$state" | grep -oE '"country"[ ]*:[ ]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+    [[ -n "$label" ]] && echo -e "  Карточка в боте: ${BOLD}$label${NC}${country:+ · $country}"
+    if systemctl is-active --quiet multitest-tg.service 2>/dev/null; then
+        echo -e "  Агент-демон: ${GREEN}работает${NC}"
+    else
+        echo -e "  Агент-демон: ${YELLOW}не запущен${NC} (multitest --tg-agent)"
+    fi
+    echo ""
+    echo -e "  ${BOLD}1.${NC} Переустановить агент-демон (systemd)"
+    echo -e "  ${BOLD}2.${NC} Отвязать ВМ от бота (удалить ключ и данные)"
+    echo -e "  ${BOLD}0.${NC} Выход"
+    echo -ne "  ${BOLD}Выбор [0-2]: ${NC}"
+    local a
+    [[ -t 0 ]] && read -r a || a=0
+    case "$a" in
+        1) mt_tg_systemd_install "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null)" ;;
+        2) mt_tg_uninstall ;;
+    esac
+}
+
+# --- Агент-демон (systemd) ---------------------------------------------------
+
+mt_tg_offer_systemd() {
+    command -v systemctl &>/dev/null || return 0
+    if [[ $EUID -ne 0 ]]; then
+        echo -e "  ${YELLOW}Демон ставится от root; без него запускайте агент вручную: multitest --tg-agent${NC}"
+        return 0
+    fi
+    local self
+    self=$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null)
+    if [[ ! -f "$self" ]]; then
+        echo -e "  ${YELLOW}Скрипт не установлен как файл — для демона поставьте его: multitest --install${NC}"
+        return 0
+    fi
+    echo ""
+    echo -e "  Чтобы запускать тесты прямо из Telegram, нужен фоновый агент."
+    echo -ne "  ${BOLD}Поставить systemd-сервис multitest-tg? [y/д — да · Enter — нет]: ${NC}"
+    local a
+    [[ -t 0 ]] && read -r a || return 0
+    case "$a" in
+        y | Y | д | Д | yes | да) mt_tg_systemd_install "$self" ;;
+        *) echo -e "  ${CYAN}Тогда агент запускается вручную: multitest --tg-agent${NC}" ;;
+    esac
+}
+
+mt_tg_systemd_install() {
+    local self="$1"
+    [[ -n "$self" && -f "$self" ]] || return 1
+    cat > /etc/systemd/system/multitest-tg.service <<UNIT
+[Unit]
+Description=Multitest — Telegram-агент (приём заданий из бота)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=$self --tg-agent
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+    systemctl daemon-reload
+    systemctl enable --now multitest-tg.service >/dev/null 2>&1
+    if systemctl is-active --quiet multitest-tg.service; then
+        echo -e "  ${GREEN}Агент запущен и добавлен в автозагрузку.${NC}"
+    else
+        echo -e "  ${YELLOW}Сервис не поднялся — смотрите: journalctl -u multitest-tg -e${NC}"
+    fi
+}
+
+# Отвязка: ревок ключа на бэкенде, снос сервиса и конфига.
+mt_tg_uninstall() {
+    if mt_tg_conf_load; then
+        mt_tg_curl POST /agent/revoke >/dev/null 2>&1
+    fi
+    systemctl disable --now multitest-tg.service >/dev/null 2>&1
+    rm -f /etc/systemd/system/multitest-tg.service
+    systemctl daemon-reload >/dev/null 2>&1
+    rm -f "$(mt_tg_conf_path)"
+    echo "ВМ отвязана от бота (ключ и конфиг удалены локально, ключ отозван)."
+}
+
+# --- Агент: исходящий long-poll ----------------------------------------------
+
+mt_tg_agent_loop() {
+    mt_tg_conf_load || { echo "multitest-tg: нет конфига — сначала multitest --tg" >&2; exit 1; }
+    echo "multitest-tg: агент запущен (vm ${MT_TG_CONF_VM}, ${MT_TG_CONF_API})"
+    trap 'echo "multitest-tg: остановка"; exit 0' INT TERM
+    local backoff=1 resp action
+    while true; do
+        resp=$(mt_tg_curl GET "/agent/poll?wait=25" --max-time 40 2>/dev/null) || resp=""
+        action=$(printf '%s' "$resp" | grep -oE '"action"[ ]*:[ ]*"[a-z_]+"' | head -1 | sed 's/.*"\([a-z_]*\)"$/\1/')
+        if [[ "$action" == "run_tests" ]]; then
+            mt_tg_spawn_job "$resp"
+            backoff=1
+        elif [[ -n "$resp" ]]; then
+            backoff=1
+        else
+            # сеть моргнула — тихо повторяем с нарастающей паузой до минуты
+            sleep "$backoff" 2>/dev/null || sleep 1
+            (( backoff < 60 )) && backoff=$((backoff * 2))
+        fi
+    done
+}
+
+# Запускает задание отдельным процессом ($0 --tg-job): сам агент остаётся на
+# линии. Приоритет проверки — строгий whitelist: job_id буквоцифра, тесты —
+# только цифры/запятые/дефисы; всё прочее игнорируем молча.
+mt_tg_spawn_job() {
+    local json="$1" jid tests
+    jid=$(printf '%s' "$json"  | grep -oE '"job_id"[ ]*:[ ]*"[A-Za-z0-9_-]{1,32}"' | head -1 | sed 's/.*"\([A-Za-z0-9_-]*\)"$/\1/')
+    tests=$(printf '%s' "$json" | grep -oE '"tests"[ ]*:[ ]*"[0-9][0-9, -]{0,40}"' | head -1 | sed 's/.*"\([0-9][0-9, -]*\)"$/\1/')
+    if [[ -z "$jid" || -z "$tests" ]]; then
+        echo "multitest-tg: некорректное задание — игнорирую"
+        return 1
+    fi
+    if mt_tg_job_busy; then
+        echo "multitest-tg: прошлый прогон ещё идёт — задание $jid отклоняю"
+        mt_tg_curl POST /agent/fail -d "{\"job_id\":\"$jid\",\"error\":\"busy\"}" >/dev/null 2>&1
+        return 1
+    fi
+    echo "multitest-tg: задание $jid (тесты: $tests)"
+    MT_TG_JOB_ID="$jid" MT_TG_JOB_TESTS="$tests" \
+        nohup "$0" --tg-job >>"$MT_TG_JOB_LOG" 2>&1 &
+    echo $! > "$MT_TG_JOB_PIDFILE"
+}
+
+mt_tg_job_busy() {
+    local p; p=$(cat "$MT_TG_JOB_PIDFILE" 2>/dev/null)
+    [[ -n "$p" ]] && kill -0 "$p" 2>/dev/null
+}
+
+# --- Исполнение одного задания (дочерний процесс агента) ----------------------
+
+mt_tg_job_run() {
+    mt_tg_conf_load || exit 1
+    local jid="${MT_TG_JOB_ID:-}" tests="${MT_TG_JOB_TESTS:-}"
+    local re_jid='^[A-Za-z0-9_-]{1,32}$' re_tests='^[0-9][0-9, -]{0,40}$'
+    [[ "$jid"   =~ $re_jid ]]   || exit 1
+    [[ "$tests" =~ $re_tests ]] || exit 1
+
+    # Подменяем прогресс: каждый завершённый тест уезжает в бэкенд,
+    # бот редактирует статус-сообщение в чате («⏳ 4/12 · YABS — выполнен»).
+    mt_progress() {
+        mt_tg_curl POST /agent/progress \
+            -d "{\"job_id\":\"$jid\",\"num\":$1,\"total\":$2,\"name\":\"$(mt_tg_je "$3")\",\"status\":\"$(mt_tg_je "$4")\"}" \
+            >/dev/null 2>&1 || true
+    }
+
+    echo "multitest-tg: прогон $jid начат (тесты: $tests)"
+    MT_RUNSEL="$tests" MT_HEADLESS=1 run_all
+    echo "multitest-tg: прогон $jid завершён, отправляю сводку"
+
+    if mt_tg_send_result "$jid"; then
+        echo "multitest-tg: сводка по $jid отправлена"
+    else
+        echo "multitest-tg: сводка по $jid НЕ отправилась"
+        mt_tg_curl POST /agent/fail -d "{\"job_id\":\"$jid\",\"error\":\"send_failed\"}" >/dev/null 2>&1 || true
+    fi
+    rm -f "$MT_TG_JOB_PIDFILE"
+}
+
+# --- Отправка сводки бэкенду ---------------------------------------------------
+# $1 = job_id (пусто — ручная отправка после местного прогона). Бэкенд сам
+# пересобирает медиагруппу в чат: страницы альбома (или одна длинная PNG).
+mt_tg_send_result() {
+    local jid="${1:-}"
+    [[ -n "$SUMMARY_DIR" && -d "$SUMMARY_DIR" ]] || return 1
+
+    local -a args=(); local f url mip done=0 err=0 skip=0 fn idx tsel=""
+    if [[ -s "$SUMMARY_DIR/pages.list" ]]; then
+        while IFS= read -r f; do
+            [[ -s "$f" ]] && args+=( -F "pages=@$f" )
+        done < "$SUMMARY_DIR/pages.list"
+    else
+        f=$(cat "$SUMMARY_DIR/out.path" 2>/dev/null)
+        [[ -n "$f" && -s "$f" ]] && args+=( -F "pages=@$f" )
+    fi
+    (( ${#args[@]} > 0 )) || return 1
+
+    url=$(cat "$SUMMARY_DIR/url.txt" 2>/dev/null)
+    mip=$(mask_ip "${SYS_IP4:-${SYS_IP6:-}}")
+    for fn in "${!MT_STATUS[@]}"; do
+        case "${MT_STATUS[$fn]}" in
+            выполнен) done=$((done+1)) ;;
+            ошибка)   err=$((err+1)) ;;
+            *)        skip=$((skip+1)) ;;
+        esac
+    done
+    # номера выбранных тестов — чтобы в боте работало «Прогон ещё раз»
+    for fn in "${test_funcs[@]:-}"; do
+        for idx in "${!MT_CAT_FUNCS[@]}"; do
+            [[ "${MT_CAT_FUNCS[$idx]}" == "$fn" ]] && tsel+="$((idx+1)),"
+        done
+    done
+    tsel="${tsel%,}"
+
+    local meta
+    meta="{\"masked_ip\":\"$(mt_tg_je "$mip")\",\"country\":\"$(mt_tg_je "$SYS_COUNTRY")\",\"city\":\"$(mt_tg_je "$SYS_CITY")\",\"asn\":\"$(mt_tg_je "$SYS_ASN")\",\"done\":$done,\"err\":$err,\"skip\":$skip,\"tests\":\"$tsel\"}"
+
+    mt_tg_curl POST /agent/result --max-time 300 \
+        -F "job_id=$jid" \
+        -F "album_url=$(mt_tg_je "$url")" \
+        -F "meta=$meta" \
+        "${args[@]}"
+}
+
+# После местного прогона: предложить отправить сводку в бот, если ВМ
+# подключена. В headless-заданиях молчит — там сводку отправляет --tg-job.
+mt_tg_offer_send() {
+    [[ -n "${MT_TG_JOB_ID:-}" ]] && return 0
+    mt_tg_conf_load || return 0
+    [[ -t 0 ]] || return 0
+    local a
+    echo ""
+    echo -ne "  ${BOLD}Отправить сводку в Telegram? [Y/n]: ${NC}"
+    read -r a
+    case "$a" in
+        n | N | н | Н | no | нет) return 0 ;;
+    esac
+    if mt_tg_send_result ""; then
+        echo -e "  ${GREEN}✓ Отправлено в Telegram.${NC}"
+    else
+        echo -e "  ${YELLOW}Не удалось отправить — бэкенд недоступен.${NC}"
+    fi
 }
 
 # ============================================================
@@ -4073,6 +4548,7 @@ show_menu() {
     echo -e "  ${CYAN}${BOLD}── Утилиты ──${NC}"
     echo ""
     echo -e "  ${GREEN}14)${NC}  Утилиты (BBR, IPv6...)"
+    echo -e "  ${GREEN}15)${NC}  Telegram — управлять этой ВМ из бота"
     echo ""
     echo -e "  ${RED} 0)${NC}  Выход"
 
@@ -4090,7 +4566,7 @@ show_menu() {
         MT_PROMO_BELOW=0
         print_stencloud_promo
     fi
-    echo -ne "  ${BOLD}Выберите пункт [0-14]: ${NC}"
+    echo -ne "  ${BOLD}Выберите пункт [0-15]: ${NC}"
 }
 
 # ============================================================
@@ -4099,6 +4575,24 @@ show_menu() {
 
 # Позволяет подключить функции для тестов: MULTITEST_TEST=1 source multitest.sh
 [[ "${MULTITEST_TEST:-0}" == "1" ]] && return 0 2>/dev/null
+
+# --- Одноразовые режимы командной строки (не входят в меню) ---
+# --run "1,4-7"  — headless-прогон выбранных тестов без вопросов (для cron
+#                 и Telegram-агента); пустой выбор/«all» = все тесты
+# --tg           — мастер подключения ВМ к Telegram-боту
+# --tg-agent     — агент: long-poll заданий из бота (для systemd)
+# --tg-job       — внутренний: исполнить одно задание из $MT_TG_JOB_*
+# --tg-off       — отвязать ВМ от бота и снести агент-сервис
+case "${1:-}" in
+    --run)      MT_RUNSEL="${2:-}"; MT_HEADLESS=1; run_all; exit 0 ;;
+    --tg)       mt_tg_wizard; exit 0 ;;
+    --tg-agent) mt_tg_agent_loop; exit 0 ;;
+    --tg-job)   mt_tg_job_run; exit 0 ;;
+    --tg-off)   mt_tg_uninstall; exit 0 ;;
+    "")         ;;
+    *)  echo "Использование: multitest [--install | --run \"1,4-7\" | --tg | --tg-agent | --tg-off]" >&2
+        exit 2 ;;
+esac
 
 # Ctrl+C на приглашении меню убивает скрипт прямо в read, мимо строки с
 # очисткой ниже: блок спонсора остаётся на экране, и шелл потом затирает его
@@ -4126,16 +4620,17 @@ while true; do
         2)  run_censorcheck_geoblock; pause_prompt ;;
         3)  run_censorcheck_dpi; pause_prompt ;;
         4)  run_censorcheck_tlab; pause_prompt ;;
-        5)  run_iperf3_ru; pause_prompt ;;
-        6)  run_iperf3_tlab; pause_prompt ;;
-        7)  run_yabs; pause_prompt ;;
+        5)  recommend_bbr_cake; run_iperf3_ru; pause_prompt ;;
+        6)  recommend_bbr_cake; run_iperf3_tlab; pause_prompt ;;
+        7)  recommend_bbr_cake; run_yabs; pause_prompt ;;
         8)  run_ip_check_place; pause_prompt ;;
-        9)  run_bench_sh; pause_prompt ;;
+        9)  recommend_bbr_cake; run_bench_sh; pause_prompt ;;
         10) run_ip_quality; pause_prompt ;;
         11) run_sysbench_cpu; pause_prompt ;;
         12) run_ping_map; pause_prompt ;;
         13) run_all; pause_prompt ;;
         14) show_utilities_menu ;;
+        15) mt_tg_wizard; pause_prompt ;;
         0)  echo -e "${GREEN}До свидания!${NC}"; exit 0 ;;
         *)  echo -e "${RED}Неверный выбор. Попробуйте снова.${NC}"; pause_prompt ;;
     esac
