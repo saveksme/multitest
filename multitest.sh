@@ -4816,6 +4816,97 @@ mt_render_page() {
     fi
     [[ -s "$png" ]] || return 1
     printf '%s\n' "$png" >> "$SUMMARY_DIR/pages.list"
+    # логический размер — для склейки страниц в альбом Telegram (mt_tg_pages)
+    printf '%s\t%s\t%s\n' "$png" "$W" "$MT_PAGE_H" >> "$SUMMARY_DIR/pages.dim"
+}
+
+# --- Telegram: один альбом ---------------------------------------------------
+# В альбоме Telegram — до 10 картинок: обложка и 9 страниц. Если тестов больше,
+# соседние страницы склеиваются попарно — те пары, что теряют при склейке меньше
+# всего: короткие — одна под другой, длинные — рядом. Склейки нужны только боту:
+# imgdb и папка с оригиналами получают страницы как есть.
+MT_TG_ALBUM=10
+
+# Масштаб картинки <ширина>x<высота> (логических px) после рендера, ×1000 — в MT_SC.
+# Так же считает mt_render_page: MT_PAGE_SCALE, но длинная сторона ≤ MT_MAXSIDE.
+mt_tg_scale() {
+    local x
+    MT_SC=$(( MT_PAGE_SCALE * 1000 ))
+    x=$(( MT_MAXSIDE * 1000 / $1 )); (( x < MT_SC )) && MT_SC=$x
+    x=$(( MT_MAXSIDE * 1000 / $2 )); (( x < MT_SC )) && MT_SC=$x
+    return 0
+}
+
+# План склейки: <ширина> <высоты страниц тестов…> → строки «i» (страница как есть)
+# или «i j stack|side» (пара), i с 1. Жадно: пара с наибольшим масштабом после склейки.
+mt_tg_plan() {
+    local w="$1"; shift
+    local -a h=( 0 "$@" ) used=() pair=()
+    local n=$# need k i best bi m s hi
+    need=$(( n - (MT_TG_ALBUM - 1) ))
+    for (( k = 0; k < need; k++ )); do
+        best=-1; bi=0
+        for (( i = 1; i < n; i++ )); do
+            [[ -n "${used[i]:-}${used[i+1]:-}" ]] && continue
+            mt_tg_scale "$w" $(( h[i] + h[i+1] )); s=$MT_SC; m=stack
+            hi=$(( h[i] > h[i+1] ? h[i] : h[i+1] ))
+            mt_tg_scale $(( w * 2 )) "$hi"
+            (( MT_SC > s )) && { s=$MT_SC; m=side; }
+            (( s > best )) && { best=$s; bi=$i; pair[i]=$m; }
+        done
+        (( bi )) || break
+        used[bi]=${pair[bi]}; used[bi+1]=-
+    done
+    for (( i = 1; i <= n; i++ )); do
+        case "${used[i]:-}" in
+            stack|side) echo "$i $(( i + 1 )) ${used[i]}"; i=$(( i + 1 )) ;;
+            *) echo "$i" ;;
+        esac
+    done
+}
+
+# Склейка двух PNG: <out> <stack|side> <a> <высота a> <b> <высота b> <ширина>.
+# rsvg-convert рисует SVG со ссылками на обе картинки (файлы в той же папке),
+# иначе — ImageMagick -append/+append.
+mt_join_pages() {
+    local out="$1" mode="$2" a="$3" ha="$4" b="$5" hb="$6" w="$7"
+    local wc hc x2=0 y2=0 wpx hpx bg="${C_BG:-#0f0b09}" app=-append im=convert
+    if [[ "$mode" == side ]]; then wc=$(( w * 2 )); hc=$(( ha > hb ? ha : hb )); x2=$w; app=+append
+    else wc=$w; hc=$(( ha + hb )); y2=$ha; fi
+    wpx=$(( wc * MT_PAGE_SCALE )); hpx=$(( hc * MT_PAGE_SCALE ))
+    if (( wpx > MT_MAXSIDE )); then hpx=$(( hpx * MT_MAXSIDE / wpx )); wpx=$MT_MAXSIDE; fi
+    if (( hpx > MT_MAXSIDE )); then wpx=$(( wpx * MT_MAXSIDE / hpx )); hpx=$MT_MAXSIDE; fi
+    rm -f "$out"
+    if command -v rsvg-convert &>/dev/null; then
+        printf '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="%s" height="%s" viewBox="0 0 %s %s">\n<rect width="%s" height="%s" fill="%s"/>\n<image x="0" y="0" width="%s" height="%s" xlink:href="%s"/>\n<image x="%s" y="%s" width="%s" height="%s" xlink:href="%s"/>\n</svg>\n' \
+            "$wc" "$hc" "$wc" "$hc" "$wc" "$hc" "$bg" "$w" "$ha" "${a##*/}" "$x2" "$y2" "$w" "$hb" "${b##*/}" \
+            > "${out%.png}.svg"
+        rsvg-convert -w "$wpx" -o "$out" "${out%.png}.svg" 2>/dev/null
+    elif command -v magick &>/dev/null || command -v convert &>/dev/null; then
+        command -v magick &>/dev/null && im=magick
+        "$im" \( "$a" -resize "$(( wpx * w / wc ))x" \) \( "$b" -resize "$(( wpx * w / wc ))x" \) \
+            -background "$bg" -gravity north "$app" "$out" 2>/dev/null
+    fi
+    [[ -s "$out" ]]
+}
+
+# tg-pages.list — картинки для бота: обложка + не больше 9 страниц.
+mt_tg_pages() {
+    local dims="$SUMMARY_DIR/pages.dim" out="$SUMMARY_DIR/tg-pages.list"
+    local -a files=() hs=()
+    local f w h a b mode joined wd=0
+    rm -f "$out"
+    [[ -s "$dims" ]] || return 1
+    # read на конце файла обнуляет переменные — ширину запоминаем внутри цикла
+    while IFS=$'\t' read -r f w h; do files+=( "$f" ); hs+=( "$h" ); wd=$w; done < "$dims"
+    printf '%s\n' "${files[0]}" > "$out"
+    while read -r a b mode; do
+        if [[ -z "$b" ]]; then printf '%s\n' "${files[a]}" >> "$out"; continue; fi
+        joined=$(printf '%s/tg-%02d-%02d.png' "${files[a]%/*}" "$a" "$b")
+        mt_join_pages "$joined" "$mode" "${files[a]}" "${hs[a]}" "${files[b]}" "${hs[b]}" "$wd" \
+            || { rm -f "$out"; return 1; }
+        printf '%s\n' "$joined" >> "$out"
+    done < <(mt_tg_plan "$wd" "${hs[@]:1}")
 }
 
 step_build_pages() {
@@ -4832,6 +4923,7 @@ step_build_pages() {
     local dir="$SUMMARY_DIR/pages" i idx fn base
     rm -rf "$dir"; mkdir -p "$dir" 2>/dev/null || return 1
     : > "$SUMMARY_DIR/pages.list" || return 1
+    : > "$SUMMARY_DIR/pages.dim"; rm -f "$SUMMARY_DIR/tg-pages.list"
 
     MT_PAGE_N=$(( ${#MT_PAGE_IDX[@]} + 1 ))
     MT_PAGE_I=1
@@ -4847,6 +4939,8 @@ step_build_pages() {
         [[ -s "$base.svg" ]] || return 1
         mt_render_page "$base" || return 1
     done
+    # боту — одним альбомом; не склеилось — уйдут страницы как есть
+    if mt_tg_enabled; then mt_tg_pages || true; fi
     [[ -s "$SUMMARY_DIR/pages.list" ]]
 }
 
@@ -4870,7 +4964,7 @@ mt_tg_enabled() { [[ "${MT_TG:-1}" != 0 ]] && mt_conf_load 2>/dev/null; }
 # Ключ идемпотентности в tg.key: повтор после таймаута не создаст второй пост.
 # Ключ сервера стирает только явный «revoked»; голый 401 — нет.
 step_tg_deliver() {
-    local key f code try wait=5 reason=""
+    local key f code try wait=5 reason="" list
     local -a parts=()
     mt_conf_load || return 1
     rm -f "$SUMMARY_DIR/tg.ok" "$SUMMARY_DIR/tg.blocked" "$SUMMARY_DIR/tg.revoked" "$SUMMARY_DIR/tg.err"
@@ -4883,10 +4977,13 @@ step_tg_deliver() {
     parts=( -F "summary=@$SUMMARY_DIR/summary.txt;type=text/plain" -F "key=$key" )
     # сводка по заданию из Telegram закрывает это задание в боте
     [[ -n "${MT_JOB_ID:-}" ]] && parts+=( -F "job_id=$MT_JOB_ID" )
-    if [[ -s "$SUMMARY_DIR/pages.list" ]]; then
+    # страницы — склеенные под альбом Telegram (tg-pages.list), если они есть
+    list="$SUMMARY_DIR/pages.list"
+    [[ -s "$list" && -s "$SUMMARY_DIR/tg-pages.list" ]] && list="$SUMMARY_DIR/tg-pages.list"
+    if [[ -s "$list" ]]; then
         while IFS= read -r f; do
             [[ -s "$f" ]] && parts+=( -F "page=@$f;type=image/png" )
-        done < "$SUMMARY_DIR/pages.list"
+        done < "$list"
     fi
     for try in 1 2 3; do
         code=$(MT_API_MAXTIME=180 mt_api POST /v1/agent/runs "$SUMMARY_DIR/tg.resp" "${parts[@]}")
