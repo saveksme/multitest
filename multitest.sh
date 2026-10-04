@@ -4,7 +4,7 @@
 #  Multitest — интерактивный скрипт диагностики сервера
 # ============================================================
 
-SCRIPT_VERSION="2.0"
+SCRIPT_VERSION="3.0"
 REPO_URL="https://raw.githubusercontent.com/saveksme/multitest/master/multitest.sh"
 
 # Цвета
@@ -94,14 +94,116 @@ fi
 #  Интерфейс
 # ============================================================
 
+# Логотип шапки: Мику и слово MULTITEST шрифтом figlet small — тем же, что у
+# блока спонсора. Под рисунком лежит маска той же формы: символ маски задаёт
+# цвет символа рисунка над ним, пробел — цвет терминала. Ключи маски: h —
+# волосы, d — тень на волосах, p — заколка, f — лицо и рубашка, e — зрачки,
+# k — круги под глазами, m — рот, t — галстук (цвета — в mt_logo_lines).
+mapfile -t MT_LOGO_ART <<'LOGOART'
+       //_.-====-._
+   ___//#//##/#\## `-._[]
+  /  //##/##/  \###\   \\
+ /  ///#/_#/    \##\\  |\\
+|  /// ((@))\    \#\|  | \\
+| ///|  ===  \ ((@))|  |  \\
+|///  \    o    ===/   |   \\
+|//    `-.___..--'     |    \\
+|/     /|\/##\/|\     |     \\
+/     /_|  ## |_\     |      \\
+LOGOART
+mapfile -t MT_LOGO_MASK <<'LOGOMASK'
+       hhhhhhhhhhhh
+   hhhhhdhhddhdhdd hhhhpp
+  h  hhddhddh  hdddh   hh
+ h  hhhdhhdh    hddhh  hhh
+h  hhh ffeffh    hdhh  h hh
+h hhhh  kkk  h ffeffh  h  hh
+hhhh  f    m    kkkf   h   hh
+hhh    fffffffffff     h    hh
+hh     ffffttffff     h     hh
+h     fff  tt fff     h      hh
+LOGOMASK
+# Надпись: первые 27 колонок — MULTI, дальше — TEST.
+mapfile -t MT_LOGO_WORD <<'LOGOWORD'
+ __  __ _   _ _  _____ ___ _____ ___ ___ _____
+|  \/  | | | | ||_   _|_ _|_   _| __/ __|_   _|
+| |\/| | |_| | |__| |  | |  | | | _|\__ \ | |
+|_|  |_|\___/|____|_| |___| |_| |___|___/ |_|
+LOGOWORD
+
+# Шапка собирается в MT_LOGO под ширину терминала: от 79 колонок — с большой
+# надписью, от 48 — с короткой, уже — одна строка текстом. Хвостик Мику к низу
+# уходит вправо, поэтому надпись стоит в строках 1–4, где рисунок ещё узкий,
+# а у каждой строки справа своя колонка начала (at).
+# Ширину сначала спрашиваем у stty — его stdin это клавиатура меню, а у tput
+# внутри $(…) stdout — канал, и терминал он может не увидеть.
+mt_logo_lines() {
+    local cols i j w ch key cur art mask line
+    local b='' r='' pink='' teal='' grey=''
+    local -a right=() at=()
+    local -A pal=()
+
+    cols=$(stty size 2>/dev/null); cols=${cols##* }
+    [[ $cols =~ ^[1-9][0-9]*$ ]] || cols=$(tput cols 2>/dev/null)
+    [[ $cols =~ ^[1-9][0-9]*$ ]] || cols=80
+
+    if [[ -t 1 && "${NO_COLOR:-}" == "" ]]; then
+        r=$'\033[0m'; b=$'\033[1m'; grey=$'\033[38;5;245m'
+        pink=$'\033[1;38;5;204m'; teal=$'\033[1;38;5;79m'
+        pal=([h]=$'\033[38;5;73m'  [d]=$'\033[38;5;30m'  [p]=$'\033[38;5;204m'
+             [e]=$'\033[38;5;116m' [k]=$'\033[38;5;244m' [m]=$'\033[38;5;211m'
+             [t]=$'\033[38;5;79m')
+    fi
+    # Меню перерисовывает шапку на каждом шаге — красим заново, только если
+    # сменилась ширина терминала или режим цвета.
+    [[ "$cols:${r:+c}" == "${MT_LOGO_KEY:-}" ]] && return 0
+    MT_LOGO_KEY="$cols:${r:+c}"
+
+    if (( cols < 48 )); then
+        MT_LOGO=("  ${b}MULTI${r}${teal}TEST${r} ${pink}v${SCRIPT_VERSION}${r}"
+                 "  Диагностика и тестирование сервера")
+        return 0
+    fi
+    if (( cols >= 79 )); then
+        for i in "${!MT_LOGO_WORD[@]}"; do
+            w=${MT_LOGO_WORD[i]}
+            right[i+1]="${b}${w:0:27}${r}${teal}${w:27}${r}"; at[i+1]=29
+        done
+        right[6]="${pink}v${SCRIPT_VERSION}${r} ${grey}─${r} диагностика и тестирование сервера"
+        right[7]="${grey}IP · DPI · iPerf3 · YABS · Telegram${r}"
+        at[6]=32; at[7]=32
+    else
+        right[1]="${b}M U L T I${r} ${teal}T E S T${r}"; at[1]=27
+        right[2]="${pink}v${SCRIPT_VERSION}${r}";         at[2]=27
+    fi
+
+    MT_LOGO=()
+    for i in "${!MT_LOGO_ART[@]}"; do
+        art=${MT_LOGO_ART[i]}; mask=${MT_LOGO_MASK[i]:-}
+        [[ -n ${right[i]:-} ]] && printf -v art '%-*s' "${at[i]}" "$art"
+        line=$art
+        if [[ -n $r ]]; then
+            # Цвет меняем только на непробельных символах: пробелы не видны,
+            # а так кодов в строке втрое меньше.
+            line=''; cur=' '
+            for (( j = 0; j < ${#art}; j++ )); do
+                ch=${art:j:1}; key=$cur
+                if [[ $ch != ' ' ]]; then key=${mask:j:1}; key=${key:- }; fi
+                [[ $key != "$cur" ]] && { line+=$r${pal[$key]:-}; cur=$key; }
+                line+=$ch
+            done
+            [[ $cur != ' ' ]] && line+=$r
+        fi
+        MT_LOGO+=("  ${line}${right[i]:-}")
+    done
+}
+
 print_header() {
     clear
-    echo -e "${CYAN}${BOLD}"
-    echo "  ╔══════════════════════════════════════════╗"
-    echo "  ║          MULTITEST v${SCRIPT_VERSION}                  ║"
-    echo "  ║   Диагностика и тестирование сервера     ║"
-    echo "  ╚══════════════════════════════════════════╝"
-    echo -e "${NC}"
+    mt_logo_lines
+    echo ""
+    printf '%s\n' "${MT_LOGO[@]}"
+    echo ""
 }
 
 # Блок спонсора для терминала. Строки собираются в массив, а не печатаются на
