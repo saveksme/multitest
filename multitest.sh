@@ -97,31 +97,31 @@ fi
 # Логотип шапки: Мику и слово MULTITEST шрифтом figlet small — тем же, что у
 # блока спонсора. Под рисунком лежит маска той же формы: символ маски задаёт
 # цвет символа рисунка над ним, пробел — цвет терминала. Ключи маски: h —
-# волосы, d — тень на волосах, p — заколка, f — лицо и рубашка, e — зрачки,
-# k — круги под глазами, m — рот, t — галстук (цвета — в mt_logo_lines).
+# волосы, d — тень на волосах, p — заколка, f — лицо и рубашка, e — глаза,
+# k — нос, m — рот, t — галстук (цвета — в mt_logo_lines).
 mapfile -t MT_LOGO_ART <<'LOGOART'
        //_.-====-._
    ___//#//##/#\## `-._[]
   /  //##/##/  \###\   \\
  /  ///#/_#/    \##\\  |\\
-|  /// ((@))\    \#\|  | \\
-| ///|  ===  \ ((@))|  |  \\
-|///  \    o    ===/   |   \\
-|//    `-.___..--'     |    \\
-|/     /|\/##\/|\     |     \\
-/     /_|  ## |_\     |      \\
+|  ///|  0  0 \   \#\|  | \\
+| ///|    -    \   |||  |  \\
+|///  \   \_/    \_/ |  |   \\
+|//    `-.___..--'   |  |    \\
+|/     /|\/##\/|\    |  |     \\
+/     /_|  ## |_\    |  |      \\
 LOGOART
 mapfile -t MT_LOGO_MASK <<'LOGOMASK'
        hhhhhhhhhhhh
    hhhhhdhhddhdhdd hhhhpp
   h  hhddhddh  hdddh   hh
  h  hhhdhhdh    hddhh  hhh
-h  hhh ffeffh    hdhh  h hh
-h hhhh  kkk  h ffeffh  h  hh
-hhhh  f    m    kkkf   h   hh
-hhh    fffffffffff     h    hh
-hh     ffffttffff     h     hh
-h     fff  tt fff     h      hh
+h  hhhf  e  e f   hdhh  h hh
+h hhhf    k    f   hhh  h  hh
+hhhh  f   mmm    fff h  h   hh
+hhh    fffffffffff   h  h    hh
+hh     ffffttffff    h  h     hh
+h     fff  tt fff    h  h      hh
 LOGOMASK
 # Надпись: первые 27 колонок — MULTI, дальше — TEST.
 mapfile -t MT_LOGO_WORD <<'LOGOWORD'
@@ -131,7 +131,7 @@ mapfile -t MT_LOGO_WORD <<'LOGOWORD'
 |_|  |_|\___/|____|_| |___| |_| |___|___/ |_|
 LOGOWORD
 
-# Шапка собирается в MT_LOGO под ширину терминала: от 79 колонок — с большой
+# Шапка собирается в MT_LOGO под ширину терминала: от 80 колонок — с большой
 # надписью, от 48 — с короткой, уже — одна строка текстом. Хвостик Мику к низу
 # уходит вправо, поэтому надпись стоит в строках 1–4, где рисунок ещё узкий,
 # а у каждой строки справа своя колонка начала (at).
@@ -164,14 +164,14 @@ mt_logo_lines() {
                  "  Диагностика и тестирование сервера")
         return 0
     fi
-    if (( cols >= 79 )); then
+    if (( cols >= 80 )); then
         for i in "${!MT_LOGO_WORD[@]}"; do
             w=${MT_LOGO_WORD[i]}
-            right[i+1]="${b}${w:0:27}${r}${teal}${w:27}${r}"; at[i+1]=29
+            right[i+1]="${b}${w:0:27}${r}${teal}${w:27}${r}"; at[i+1]=30
         done
         right[6]="${pink}v${SCRIPT_VERSION}${r} ${grey}─${r} диагностика и тестирование сервера"
         right[7]="${grey}IP · DPI · iPerf3 · YABS · Telegram${r}"
-        at[6]=32; at[7]=32
+        at[6]=33; at[7]=33
     else
         right[1]="${b}M U L T I${r} ${teal}T E S T${r}"; at[1]=27
         right[2]="${pink}v${SCRIPT_VERSION}${r}";         at[2]=27
