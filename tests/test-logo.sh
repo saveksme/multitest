@@ -23,22 +23,27 @@ logo_at() {   # <колонки> → строки шапки в $T_W/logo.<ко�
 }
 widest() { local l m=0; while IFS= read -r l; do (( ${#l} > m )) && m=${#l}; done < "$1"; echo "$m"; }
 
-gap_ok() {    # справа от рисунка до надписи (с 30-й) и подписи (с 33-й) ≥ 2 пробелов
-    local i
-    for i in 1 2 3 4; do (( ${#MT_LOGO_ART[i]} <= 28 )) || return 1; done
-    for i in 6 7;     do (( ${#MT_LOGO_ART[i]} <= 31 )) || return 1; done
+column_ok() { # надпись и подпись — одной колонкой, от рисунка ≥ 2 пробелов
+    local k line pre col=""
+    for k in 1 2 3 4 6; do
+        line=$(sed -n "$((k + 1))p" "$T_W/logo.120")
+        if (( k < 6 )); then pre=${line%%"${MT_LOGO_WORD[k-1]}"*}; else pre=${line%%v3.0*}; fi
+        [[ $pre != "$line" && $pre == *"  " ]] || return 1
+        [[ -z $col || ${#pre} == "$col" ]] || return 1
+        col=${#pre}
+    done
 }
 
-for c in 120 80 79 60 48 47 30; do logo_at "$c"; done
+for c in 120 78 77 60 48 47 30; do logo_at "$c"; done
 check "маска покрывает рисунок"        mask_ok
-check "рисунок не налезает на текст"   gap_ok
+check "текст — одной колонкой"         column_ok
 check "версия 3.0"                     '[ "$SCRIPT_VERSION" = 3.0 ]'
-check "120 кол.: Мику и надпись"       'grep -qF "0  0" "$T_W/logo.120" && grep -qF "|_|  |_|\___/" "$T_W/logo.120"'
+check "120 кол.: Мику и надпись"       'grep -qF "O   O" "$T_W/logo.120" && grep -qF "|_|  |_|\___/" "$T_W/logo.120"'
 check "120 кол.: версия в подписи"     'grep -qF "v3.0 ─ диагностика" "$T_W/logo.120"'
-check "80 кол.: влезает (≤ 79)"        '[ "$(widest "$T_W/logo.80")" -le 79 ] && grep -qF "|_|  |_|" "$T_W/logo.80"'
-check "79 кол.: без большой надписи"   '! grep -qF "|_|  |_|" "$T_W/logo.79" && grep -qF "M U L T I" "$T_W/logo.79"'
-check "48 кол.: влезает (≤ 47)"        '[ "$(widest "$T_W/logo.48")" -le 47 ] && grep -qF "0  0" "$T_W/logo.48"'
-check "47 кол.: одна строка текстом"   '! grep -qF "0  0" "$T_W/logo.47" && grep -qxF "  MULTITEST v3.0" "$T_W/logo.47"'
+check "78 кол.: влезает (≤ 77)"        '[ "$(widest "$T_W/logo.78")" -le 77 ] && grep -qF "|_|  |_|" "$T_W/logo.78"'
+check "77 кол.: без большой надписи"   '! grep -qF "|_|  |_|" "$T_W/logo.77" && grep -qF "M U L T I" "$T_W/logo.77"'
+check "48 кол.: влезает (≤ 47)"        '[ "$(widest "$T_W/logo.48")" -le 47 ] && grep -qF "O   O" "$T_W/logo.48"'
+check "47 кол.: одна строка текстом"   '! grep -qF "O   O" "$T_W/logo.47" && grep -qxF "  MULTITEST v3.0" "$T_W/logo.47"'
 check "без терминала — без цвета"      '! grep -q $'"'"'\033'"'"' "$T_W"/logo.*'
 check "хвостов пробелов нет"           '! grep -q " $" "$T_W"/logo.*'
 t_finish

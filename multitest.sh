@@ -97,31 +97,27 @@ fi
 # Логотип шапки: Мику и слово MULTITEST шрифтом figlet small — тем же, что у
 # блока спонсора. Под рисунком лежит маска той же формы: символ маски задаёт
 # цвет символа рисунка над ним, пробел — цвет терминала. Ключи маски: h —
-# волосы, d — тень на волосах, p — заколка, f — лицо и рубашка, e — глаза,
-# k — нос, m — рот, t — галстук (цвета — в mt_logo_lines).
+# волосы, p — заколки и румянец, e — глаза, m — рот, t — галстук, f — лицо и
+# рубашка (цвета — в mt_logo_lines; у f своего цвета нет, это цвет терминала).
 mapfile -t MT_LOGO_ART <<'LOGOART'
-       //_.-====-._
-   ___//#//##/#\## `-._[]
-  /  //##/##/  \###\   \\
- /  ///#/_#/    \##\\  |\\
-|  ///|  0  0 \   \#\|  | \\
-| ///|    -    \   |||  |  \\
-|///  \   \_/    \_/ |  |   \\
-|//    `-.___..--'   |  |    \\
-|/     /|\/##\/|\    |  |     \\
-/     /_|  ## |_\    |  |      \\
+    []   .-"""""-.   []
+   //  .'/ / | \ \'.  \\
+  //   |/  O   O  \|   \\
+ //     \ .  w  . /     \\
+ ||      '-.___.-'      ||
+ ||       _/\_/\_       ||
+ ||    .-'  |=|  '-.    ||
+  \\                   //
 LOGOART
 mapfile -t MT_LOGO_MASK <<'LOGOMASK'
-       hhhhhhhhhhhh
-   hhhhhdhhddhdhdd hhhhpp
-  h  hhddhddh  hdddh   hh
- h  hhhdhhdh    hddhh  hhh
-h  hhhf  e  e f   hdhh  h hh
-h hhhf    k    f   hhh  h  hh
-hhhh  f   mmm    fff h  h   hh
-hhh    fffffffffff   h  h    hh
-hh     ffffttffff    h  h     hh
-h     fff  tt fff    h  h      hh
+    pp   hhhhhhhhh   pp
+   hh  hhh h h h hhh  hh
+  hh   hh  e   e  hh   hh
+ hh     f p  m  p f     hh
+ hh      fffffffff      hh
+ hh       fftttff       hh
+ hh    fff  ttt  fff    hh
+  hh                   hh
 LOGOMASK
 # Надпись: первые 27 колонок — MULTI, дальше — TEST.
 mapfile -t MT_LOGO_WORD <<'LOGOWORD'
@@ -131,16 +127,16 @@ mapfile -t MT_LOGO_WORD <<'LOGOWORD'
 |_|  |_|\___/|____|_| |___| |_| |___|___/ |_|
 LOGOWORD
 
-# Шапка собирается в MT_LOGO под ширину терминала: от 80 колонок — с большой
-# надписью, от 48 — с короткой, уже — одна строка текстом. Хвостик Мику к низу
-# уходит вправо, поэтому надпись стоит в строках 1–4, где рисунок ещё узкий,
-# а у каждой строки справа своя колонка начала (at).
+# Шапка собирается в MT_LOGO под ширину терминала: справа от рисунка — большая
+# надпись с подписью, если влезает, иначе короткая; в узком терминале — одна
+# строка текстом. Текст стоит через 2 колонки после самой широкой строки
+# рисунка и последнюю колонку терминала не занимает.
 # Ширину сначала спрашиваем у stty — его stdin это клавиатура меню, а у tput
 # внутри $(…) stdout — канал, и терминал он может не увидеть.
 mt_logo_lines() {
-    local cols i j w ch key cur art mask line
+    local cols i j w ch key cur art mask line at=0
     local b='' r='' pink='' teal='' grey=''
-    local -a right=() at=()
+    local -a right=()
     local -A pal=()
 
     cols=$(stty size 2>/dev/null); cols=${cols##* }
@@ -150,37 +146,35 @@ mt_logo_lines() {
     if [[ -t 1 && "${NO_COLOR:-}" == "" ]]; then
         r=$'\033[0m'; b=$'\033[1m'; grey=$'\033[38;5;245m'
         pink=$'\033[1;38;5;204m'; teal=$'\033[1;38;5;79m'
-        pal=([h]=$'\033[38;5;73m'  [d]=$'\033[38;5;30m'  [p]=$'\033[38;5;204m'
-             [e]=$'\033[38;5;116m' [k]=$'\033[38;5;244m' [m]=$'\033[38;5;211m'
-             [t]=$'\033[38;5;79m')
+        pal=([h]=$'\033[38;5;73m' [p]=$'\033[38;5;204m' [e]=$'\033[38;5;116m'
+             [m]=$'\033[38;5;211m' [t]=$'\033[38;5;79m')
     fi
     # Меню перерисовывает шапку на каждом шаге — красим заново, только если
     # сменилась ширина терминала или режим цвета.
     [[ "$cols:${r:+c}" == "${MT_LOGO_KEY:-}" ]] && return 0
     MT_LOGO_KEY="$cols:${r:+c}"
 
-    if (( cols < 48 )); then
-        MT_LOGO=("  ${b}MULTI${r}${teal}TEST${r} ${pink}v${SCRIPT_VERSION}${r}"
-                 "  Диагностика и тестирование сервера")
-        return 0
-    fi
-    if (( cols >= 80 )); then
+    for art in "${MT_LOGO_ART[@]}"; do (( ${#art} + 2 > at )) && at=$(( ${#art} + 2 )); done
+    if (( 2 + at + 47 < cols )); then              # 47 — ширина большой надписи
         for i in "${!MT_LOGO_WORD[@]}"; do
             w=${MT_LOGO_WORD[i]}
-            right[i+1]="${b}${w:0:27}${r}${teal}${w:27}${r}"; at[i+1]=30
+            right[i+1]="${b}${w:0:27}${r}${teal}${w:27}${r}"
         done
         right[6]="${pink}v${SCRIPT_VERSION}${r} ${grey}─${r} диагностика и тестирование сервера"
         right[7]="${grey}IP · DPI · iPerf3 · YABS · Telegram${r}"
-        at[6]=33; at[7]=33
+    elif (( 2 + at + 17 < cols )); then            # 17 — «M U L T I T E S T»
+        right[1]="${b}M U L T I${r} ${teal}T E S T${r}"
+        right[2]="${pink}v${SCRIPT_VERSION}${r}"
     else
-        right[1]="${b}M U L T I${r} ${teal}T E S T${r}"; at[1]=27
-        right[2]="${pink}v${SCRIPT_VERSION}${r}";         at[2]=27
+        MT_LOGO=("  ${b}MULTI${r}${teal}TEST${r} ${pink}v${SCRIPT_VERSION}${r}"
+                 "  Диагностика и тестирование сервера")
+        return 0
     fi
 
     MT_LOGO=()
     for i in "${!MT_LOGO_ART[@]}"; do
         art=${MT_LOGO_ART[i]}; mask=${MT_LOGO_MASK[i]:-}
-        [[ -n ${right[i]:-} ]] && printf -v art '%-*s' "${at[i]}" "$art"
+        [[ -n ${right[i]:-} ]] && printf -v art '%-*s' "$at" "$art"
         line=$art
         if [[ -n $r ]]; then
             # Цвет меняем только на непробельных символах: пробелы не видны,
