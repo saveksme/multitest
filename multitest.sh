@@ -94,32 +94,8 @@ fi
 #  Интерфейс
 # ============================================================
 
-# Логотип шапки: Мику и слово MULTITEST шрифтом figlet small — тем же, что у
-# блока спонсора. Под рисунком лежит маска той же формы: символ маски задаёт
-# цвет символа рисунка над ним, пробел — цвет терминала. Ключи маски: h —
-# волосы, p — заколки и румянец, e — глаза, m — рот, t — галстук, f — лицо и
-# рубашка (цвета — в mt_logo_lines; у f своего цвета нет, это цвет терминала).
-mapfile -t MT_LOGO_ART <<'LOGOART'
-    []   .-"""""-.   []
-   //  .'/ / | \ \'.  \\
-  //   |/  O   O  \|   \\
- //     \ .  w  . /     \\
- ||      '-.___.-'      ||
- ||       _/\_/\_       ||
- ||    .-'  |=|  '-.    ||
-  \\                   //
-LOGOART
-mapfile -t MT_LOGO_MASK <<'LOGOMASK'
-    pp   hhhhhhhhh   pp
-   hh  hhh h h h hhh  hh
-  hh   hh  e   e  hh   hh
- hh     f p  m  p f     hh
- hh      fffffffff      hh
- hh       fftttff       hh
- hh    fff  ttt  fff    hh
-  hh                   hh
-LOGOMASK
-# Надпись: первые 27 колонок — MULTI, дальше — TEST.
+# Шапка меню: слово MULTITEST шрифтом figlet small — тем же, что у блока
+# спонсора. Первые 27 колонок — MULTI, дальше — TEST.
 mapfile -t MT_LOGO_WORD <<'LOGOWORD'
  __  __ _   _ _  _____ ___ _____ ___ ___ _____
 |  \/  | | | | ||_   _|_ _|_   _| __/ __|_   _|
@@ -127,17 +103,12 @@ mapfile -t MT_LOGO_WORD <<'LOGOWORD'
 |_|  |_|\___/|____|_| |___| |_| |___|___/ |_|
 LOGOWORD
 
-# Шапка собирается в MT_LOGO под ширину терминала: справа от рисунка — большая
-# надпись с подписью, если влезает, иначе короткая; в узком терминале — одна
-# строка текстом. Текст стоит через 2 колонки после самой широкой строки
-# рисунка и последнюю колонку терминала не занимает.
+# Шапка собирается в MT_LOGO под ширину терминала: большая надпись и под ней
+# подпись, а если надпись не влезает — две строки текстом.
 # Ширину сначала спрашиваем у stty — его stdin это клавиатура меню, а у tput
 # внутри $(…) stdout — канал, и терминал он может не увидеть.
 mt_logo_lines() {
-    local cols i j w ch key cur art mask line at=0
-    local b='' r='' pink='' teal='' grey=''
-    local -a right=()
-    local -A pal=()
+    local cols w b='' r='' pink='' teal='' grey=''
 
     cols=$(stty size 2>/dev/null); cols=${cols##* }
     [[ $cols =~ ^[1-9][0-9]*$ ]] || cols=$(tput cols 2>/dev/null)
@@ -146,50 +117,19 @@ mt_logo_lines() {
     if [[ -t 1 && "${NO_COLOR:-}" == "" ]]; then
         r=$'\033[0m'; b=$'\033[1m'; grey=$'\033[38;5;245m'
         pink=$'\033[1;38;5;204m'; teal=$'\033[1;38;5;79m'
-        pal=([h]=$'\033[38;5;73m' [p]=$'\033[38;5;204m' [e]=$'\033[38;5;116m'
-             [m]=$'\033[38;5;211m' [t]=$'\033[38;5;79m')
     fi
-    # Меню перерисовывает шапку на каждом шаге — красим заново, только если
-    # сменилась ширина терминала или режим цвета.
-    [[ "$cols:${r:+c}" == "${MT_LOGO_KEY:-}" ]] && return 0
-    MT_LOGO_KEY="$cols:${r:+c}"
 
-    for art in "${MT_LOGO_ART[@]}"; do (( ${#art} + 2 > at )) && at=$(( ${#art} + 2 )); done
-    if (( 2 + at + 47 < cols )); then              # 47 — ширина большой надписи
-        for i in "${!MT_LOGO_WORD[@]}"; do
-            w=${MT_LOGO_WORD[i]}
-            right[i+1]="${b}${w:0:27}${r}${teal}${w:27}${r}"
-        done
-        right[6]="${pink}v${SCRIPT_VERSION}${r} ${grey}─${r} диагностика и тестирование сервера"
-        right[7]="${grey}IP · DPI · iPerf3 · YABS · Telegram${r}"
-    elif (( 2 + at + 17 < cols )); then            # 17 — «M U L T I T E S T»
-        right[1]="${b}M U L T I${r} ${teal}T E S T${r}"
-        right[2]="${pink}v${SCRIPT_VERSION}${r}"
-    else
+    # Надписи с отступом нужно 2 + 47 колонок, последнюю колонку терминала не занимаем.
+    if (( cols < 50 )); then
         MT_LOGO=("  ${b}MULTI${r}${teal}TEST${r} ${pink}v${SCRIPT_VERSION}${r}"
                  "  Диагностика и тестирование сервера")
         return 0
     fi
-
     MT_LOGO=()
-    for i in "${!MT_LOGO_ART[@]}"; do
-        art=${MT_LOGO_ART[i]}; mask=${MT_LOGO_MASK[i]:-}
-        [[ -n ${right[i]:-} ]] && printf -v art '%-*s' "$at" "$art"
-        line=$art
-        if [[ -n $r ]]; then
-            # Цвет меняем только на непробельных символах: пробелы не видны,
-            # а так кодов в строке втрое меньше.
-            line=''; cur=' '
-            for (( j = 0; j < ${#art}; j++ )); do
-                ch=${art:j:1}; key=$cur
-                if [[ $ch != ' ' ]]; then key=${mask:j:1}; key=${key:- }; fi
-                [[ $key != "$cur" ]] && { line+=$r${pal[$key]:-}; cur=$key; }
-                line+=$ch
-            done
-            [[ $cur != ' ' ]] && line+=$r
-        fi
-        MT_LOGO+=("  ${line}${right[i]:-}")
-    done
+    for w in "${MT_LOGO_WORD[@]}"; do MT_LOGO+=("  ${b}${w:0:27}${r}${teal}${w:27}${r}"); done
+    MT_LOGO+=(""
+              "  ${pink}v${SCRIPT_VERSION}${r} ${grey}─${r} диагностика и тестирование сервера"
+              "  ${grey}IP · DPI · iPerf3 · YABS · Telegram${r}")
 }
 
 print_header() {
