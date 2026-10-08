@@ -7,13 +7,15 @@
 SCRIPT_VERSION="3.0"
 REPO_URL="https://raw.githubusercontent.com/saveksme/multitest/master/multitest.sh"
 
-# Цвета
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-NC='\033[0m'
+# Цвета. ANSI-C quoting: внутри уже настоящий ESC, а не текст «\033». Так его
+# одинаково печатают и `echo -e`, и `printf '%s'` — без переинтерпретации, из-за
+# которой недоверенный текст мог бы собрать escape-последовательность.
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+CYAN=$'\033[0;36m'
+BOLD=$'\033[1m'
+NC=$'\033[0m'
 
 # Состояние сводки мультитеста
 SUMMARY_DIR=""             # /tmp/multitest-summary-<ts>
@@ -1419,9 +1421,11 @@ mt_match() { local LC_ALL=C; [[ "$2" =~ $1 ]]; }
 
 # Вопрос «да/нет» с клавиатуры: fd 8 открывает вызывающий (exec 8<"$MT_TTY"). Не stdin:
 # при `curl … | bash` stdin — это сам скрипт. Да — y/д и полные слова, иначе — нет.
+# Только `printf '%s'`: в тексте бывает имя подтвердившего из Telegram, а `echo -e`
+# доинтерпретировал бы `\e`, `\c` и `\n` из него и отдал бы терминал бэкенду.
 mt_tg_ask() {
     local a=""
-    echo -ne "$1"
+    printf '%s' "$1"
     IFS= read -r a <&8 || { echo; return 1; }
     case "$a" in y|Y|yes|Yes|д|Д|да|Да) return 0 ;; *) return 1 ;; esac
 }
@@ -1554,6 +1558,10 @@ mt_tg_pair() {
     elif (( approved )); then
         who=$(printf '%b' "${who//%/\\x}")
         who=$(mt_clean "$who")
+        # Имя — недоверенный ввод бэкенда. mt_clean вырезает управляющие, но не «\»,
+        # а он — единственное, чем из текста собирается escape-последовательность для
+        # стоков с `echo -e` (\e, \c): вырезаем до показа имени.
+        who=${who//\\/}
         who=$(vcut "$who" 64)
         # с кодом: чужая команда привязала бы этот сервер к чужому аккаунту — имя показываем
         if [[ -n "$join" ]]; then

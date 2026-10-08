@@ -55,6 +55,27 @@ t_respond 200 "ok $CODE 600 47" "$(printf '\033[2J')"; t_respond 200 "approved %
 mt_tg_pair > "$T_W/out" 2>&1
 check "ESC от бэкенда не доходит до терминала" '! grep -q "$(printf "\033\\[2J")" "$T_W/out"'
 
+# Имя подтвердившего приходит в %-кодировке. Обратный слэш в нём mt_clean не трогает,
+# и после `printf '%b'` из имени собирались `\e`, `\c`, `\n` — а `echo -e` в подсказке
+# их исполнял: «\e[2J» чистил экран, «\c» обрывал вопрос, «\n» рвал его на строки.
+# Идём быстрой привязкой (как в блоке ниже): там имя стоит в вопросе «Привязать сервер…».
+JOIN="mtp_$(printf 'A%.0s' {1..24})"
+rm -f "$MT_CONF"; fresh; answers n
+t_respond 200 "approved %5Ce%5B2Jx"; t_respond 200 "cancelled"
+mt_tg_pair "$JOIN" > "$T_W/out" 2>&1; rc=$?
+check "«\\e» в имени не чистит экран"      '[ $rc = 1 ] && ! grep -q "$(printf "\033\\[2J")" "$T_W/out"'
+
+fresh; answers n
+t_respond 200 "approved %5Cc"; t_respond 200 "cancelled"
+mt_tg_pair "$JOIN" > "$T_W/out" 2>&1; rc=$?
+check "«\\c» в имени не обрывает вопрос"   '[ $rc = 1 ] && grep -qF "Привязать сервер" "$T_W/out"'
+
+fresh; answers n
+t_respond 200 "approved %5Cn"; t_respond 200 "cancelled"
+mt_tg_pair "$JOIN" > "$T_W/out" 2>&1; rc=$?
+check "«\\n» в имени не рвёт вопрос"       '[ $rc = 1 ] && grep -q "Команда из Telegram-аккаунта.*Привязать сервер.*Enter" "$T_W/out"'
+check "цвета не печатаются текстом"        '! grep -qF "\033[" "$T_W/out"'
+
 fresh; MT_TTY="$T_W/нет-такого"
 mt_tg_pair > "$T_W/out" 2>&1; rc=$?
 check "без терминала → 1, запросов нет"  '[ $rc = 1 ] && [ "$(t_calls)" = 0 ] && grep -qF "только из терминала" "$T_W/out"'
