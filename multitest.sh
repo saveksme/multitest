@@ -2448,10 +2448,10 @@ brand_slug_for() {
 # ============================================================
 #  Парсеры вывода тестов -> .metrics / .services
 #  .metrics:  label \t value \t colorkey(ok|bad|warn|pri|"")
-#  .services: kind \t name \t slug \t state(ok|bad|warn|na) \t value \t frac(0..1|-1) \t aux
+#  .services: kind \t name \t slug \t state(ok|bad|warn|na) \t value \t frac(0..1|-1) \t aux \t lat
 #    chip — строка-сервис: value — ответ (код страны, да/нет, блок…);
-#    bar  — скорость: value — приём, aux — отдача (Мбит/с, числом);
-#    net  — сеть YABS: name — место, value — Мбит/с, aux — провайдер;
+#    bar  — скорость: value — приём, aux — отдача (Мбит/с, числом), slug — подпись
+#           под именем (провайдер), lat — пинг до узла в мс (пусто — не ответил);
 #    ping — узел пинга: slug — узел, value — avg ms, aux — «потери|группа»;
 #    sep  — разделитель секций (name — заголовок).
 # ============================================================
@@ -2460,7 +2460,7 @@ brand_slug_for() {
 # (например, отсутствующий slug или slug у строк-шкал) при read «схлопывается»,
 # сдвигая остальные поля. \x1f непробельный — пустые поля сохраняются.
 mt_metric() { printf '%s\x1f%s\x1f%s\n' "$1" "$2" "${3:-}" >> "$MT_MFILE"; }
-mt_service() { printf '%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\n' "$1" "$2" "${3:-}" "${4:-na}" "${5:-}" "${6:--1}" "${7:-}" >> "$MT_SFILE"; }
+mt_service() { printf '%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\n' "$1" "$2" "${3:-}" "${4:-na}" "${5:-}" "${6:--1}" "${7:-}" "${8:-}" >> "$MT_SFILE"; }
 
 # Разбирает ячейку таблицы ipregion в «состояние<US>подпись».
 # inv=1 переворачивает Yes/No: у «Google Search Captcha» ipregion считает
@@ -2595,34 +2595,71 @@ parse_censorcheck() {
     done
 }
 
+# iPerf3 до РФ: две тулзы, одна таблица «узел · две скорости · пинг».
+#   russian-iperf3-servers: «Moscow   942.0 Mbps   610.0 Mbps   12 ms» — приём, отдача;
+#   bench.tlab.pw:          « Moscow, MTS   610 Mbit/s   942 Mbit/s   12.34 ms» — отдача
+#                           и приём (порядок колонок берём из шапки таблицы).
+# Имя — всё до первой скорости: длинный город с «(F)» отделён от неё одним пробелом.
+# У tlab в имени провайдер, а зарубежные узлы — «NL Amsterdam»: строка становится
+# «Moscow, RU» с подписью «MTS» или «Amsterdam, NL», и страница рисует ей флаг.
+# Максимум и минимальный пинг в метриках — только по узлам в России.
+# Строка на узел: приём и отдача числами, пинг в мс. Шкалу страница строит сама —
+# по максимуму обоих направлений, иначе отдача вылезала бы за край.
 parse_iperf3() {
-    local txt="$1" maxd minp cnt
-    # строки вида "City   942.0 Mbps   610.0 Mbps   12 ms"
-    local data; data=$(printf '%s\n' "$txt" | grep -E 'Mbps' | sed -E 's/\t/  /g' || true)
-    maxd=$(printf '%s\n' "$data" | grep -oE '[0-9]+(\.[0-9]+)?[[:space:]]*Mbps' | grep -oE '[0-9]+(\.[0-9]+)?' | sort -gr | head -1)
-    # запас: формат iperf3 Mbits/Gbits
-    if [[ -z "$maxd" ]]; then
-        maxd=$(printf '%s\n' "$txt" | grep -oE '[0-9]+(\.[0-9]+)?[[:space:]]*[MG]bits/sec' \
-            | awk '{v=$1; if($0~/Gbit/)v*=1000; if(v>m)m=v} END{if(m)printf "%.0f", m}')
-    fi
-    minp=$(printf '%s\n' "$data" | grep -oE '[0-9]+(\.[0-9]+)?[[:space:]]*ms' | grep -oE '[0-9]+(\.[0-9]+)?' | sort -g | head -1)
-    cnt=$(printf '%s\n' "$data" | grep -cE '[0-9]+(\.[0-9]+)?[[:space:]]*Mbps' || true)
-    [[ -n "$maxd" ]] && mt_metric "Макс ↓" "${maxd} Mbps" "ok"
-    [[ -n "$minp" ]] && mt_metric "Мин ping" "${minp} ms" "pri"
-    [[ -n "$cnt" && "$cnt" -gt 0 ]] && mt_metric "Серверов" "$cnt" ""
-    [[ -z "$maxd" ]] && return
-    # Строка на город: приём и отдача числами. Шкалу страница строит сама —
-    # по максимуму обоих направлений, иначе отдача вылезала бы за край.
-    printf '%s\n' "$data" | while read -r line; do
-        local city d u
-        city=$(printf '%s' "$line" | sed -E 's/[[:space:]]{2,}.*//' | sed 's/[[:space:]]*$//')
-        [[ -z "$city" ]] && continue
-        printf '%s' "$line" | grep -qE '[0-9].*Mbps' || continue
-        d=$(printf '%s' "$line" | grep -oE '[0-9]+(\.[0-9]+)?[[:space:]]*Mbps' | grep -oE '[0-9]+(\.[0-9]+)?' | sed -n '1p')
-        u=$(printf '%s' "$line" | grep -oE '[0-9]+(\.[0-9]+)?[[:space:]]*Mbps' | grep -oE '[0-9]+(\.[0-9]+)?' | sed -n '2p')
-        [[ -z "$d" ]] && continue
-        mt_service bar "$city" "" "ok" "$d" "-1" "$u"
-    done
+    local txt="$1" tlab=0 rows city sub d u p dom v n=0 nd=0
+    local mxa=0 mxas="" mxd=0 mxds="" mpa=-1 mpas="" mpd=-1 mpds=""
+    [[ "${2:-}" == run_iperf3_tlab ]] && tlab=1
+    rows=$(printf '%s\n' "$txt" | LC_ALL=C awk -v US=$'\x1f' -v tlab=$tlab '
+        BEGIN { up1 = tlab }
+        /Upload/ && /Download/ { up1 = index($0, "Upload") < index($0, "Download"); next }
+        /^[ \t]*\[/ || /sender|receiver/ { next }
+        {
+            s = $0; n = 0; name = ""; sp[1] = ""; sp[2] = ""
+            while (match(s, /[0-9]+(\.[0-9]+)?[ \t]*([MG]bps|[MG]bit\/s|[MG]bits\/sec)/)) {
+                if (!n) name = substr(s, 1, RSTART - 1)
+                v = substr(s, RSTART, RLENGTH); g = (v ~ /G/); sub(/[ \t]*[MG]b.*/, "", v)
+                if (g) v = sprintf("%.0f", v * 1000)
+                if (n < 2) sp[++n] = v
+                s = substr(s, RSTART + RLENGTH)
+            }
+            if (!n) next
+            gsub(/^[ \t]+|[ \t]+$/, "", name)
+            if (name == "") next
+            p = ""
+            if (match(s, /[0-9]+(\.[0-9]+)?[ \t]*ms/)) { p = substr(s, RSTART, RLENGTH); sub(/[ \t]*ms$/, "", p) }
+            cc = ""; sb = ""
+            if (tlab) {
+                if (name ~ /^[A-Z][A-Z] [^ ]/) { cc = substr(name, 1, 2); name = substr(name, 4) }
+                else {
+                    cc = "RU"
+                    if (i = index(name, ",")) { sb = substr(name, i + 1); name = substr(name, 1, i - 1) }
+                    gsub(/^[ \t]+|[ \t]+$/, "", sb); gsub(/[ \t]+$/, "", name)
+                }
+                name = name ", " cc
+            }
+            if (up1 && n == 2) { d = sp[2]; u = sp[1] } else { d = sp[1]; u = sp[2] }
+            print name US sb US d US u US p US (cc == "" || cc == "RU")
+        }' || true)
+    while IFS=$'\x1f' read -r city sub d u p dom; do
+        [[ -n "$city" ]] || continue
+        mt_service bar "$city" "$sub" "ok" "$d" "-1" "$u" "$p"
+        n=$(( n + 1 )); (( dom )) && nd=$(( nd + 1 ))
+        for v in "$d" "$u"; do
+            [[ -n "$v" ]] || continue
+            num10 "$v"
+            (( N10 > mxa )) && { mxa=$N10; mxas=$v; }
+            (( dom && N10 > mxd )) && { mxd=$N10; mxds=$v; }
+        done
+        [[ -n "$p" ]] || continue
+        num10 "$p"
+        (( mpa < 0 || N10 < mpa )) && { mpa=$N10; mpas=$p; }
+        (( dom )) && (( mpd < 0 || N10 < mpd )) && { mpd=$N10; mpds=$p; }
+    done <<< "$rows"
+    (( nd )) && { mxas=$mxds; mpas=$mpds; }
+    [[ -n "$mxas" ]] && mt_metric "Макс ↓" "${mxas} Mbps" "ok"
+    [[ -n "$mpas" ]] && mt_metric "Мин ping" "${mpas} ms" "pri"
+    (( n )) && mt_metric "Серверов" "$n" ""
+    return 0
 }
 
 parse_yabs() {
@@ -2648,18 +2685,25 @@ parse_yabs() {
     [[ -n "$f1" ]] && mt_metric "fio 1m" "$f1" "pri"
     [[ -n "$gs" ]] && mt_metric "GB6 single" "$gs" "ok"
     [[ -n "$gm" ]] && mt_metric "GB6 multi" "$gm" "ok"
-    # iperf3 локации: место («London, UK» — без «(10G)»), провайдер и приём
-    # (Recv) в Мбит/с. Страница рисует флаг по коду страны в конце места.
+    # iperf3 локации: «Provider | Location (Link) | Send | Recv | Ping». Место —
+    # «London, UK» без «(10G)», по коду страны в конце страница рисует флаг;
+    # приём (Recv) и отдача (Send) в Мбит/с, пинг в мс. «busy» и «--» — пусто.
     local loc; loc=$(printf '%s\n' "$txt" | awk '/iperf3 Network Speed Tests/{f=1;next} /Geekbench|YABS completed/{f=0} f' | grep -E '\|' | grep -viE 'Provider|----' || true)
     printf '%s\n' "$loc" | while IFS='|' read -r prov location send recv ping; do
-        local place r rn
+        local place r s p
         place=$(printf '%s' "$location" | sed -E 's/\(.*//; s/[[:space:]]+/ /g; s/^ //; s/ $//')
         prov=$(printf '%s' "$prov" | sed -E 's/[[:space:]]+/ /g; s/^ //; s/ $//')
         [[ -z "$place" ]] && continue
-        r=$(printf '%s' "$recv" | grep -oE '[0-9]+(\.[0-9]+)?[[:space:]]*[MG]bits/sec' | head -1)
-        [[ -z "$r" ]] && continue
-        rn=$(printf '%s' "$r" | awk '{v=$1; if($0~/Gbit/)v*=1000; printf "%.0f", v}')
-        mt_service net "$place" "" "ok" "$rn" "-1" "$prov"
+        read -r r s p < <(printf '%s|%s|%s\n' "$recv" "$send" "$ping" | LC_ALL=C awk -F'|' '
+            function mb(x,  v) {
+                if (!match(x, /[0-9]+(\.[0-9]+)?[ \t]*[MG]bits\/sec/)) return "-"
+                v = substr(x, RSTART, RLENGTH); return sprintf("%.0f", (v ~ /G/) ? v * 1000 : v + 0)
+            }
+            { p = match($3, /[0-9]+(\.[0-9]+)?[ \t]*ms/) ? substr($3, RSTART, RLENGTH) : "-"; sub(/[ \t]*ms$/, "", p)
+              print mb($1), mb($2), p }')
+        [[ -z "$r" || "$r" == - ]] && continue
+        [[ "$s" == - ]] && s=""; [[ "$p" == - ]] && p=""
+        mt_service bar "$place" "$prov" "ok" "$r" "-1" "$s" "$p"
     done
 }
 
@@ -2680,16 +2724,18 @@ parse_benchsh() {
     [[ -n "$io" ]] && mt_metric "I/O сред." "$io" "pri"
     [[ -n "$cc" ]] && mt_metric "CC" "$cc" ""
     [[ -n "$org" ]] && mt_metric "Сеть" "$org" ""
-    # Узлы speedtest: колонки Upload / Download / Latency — приём и отдача числами
+    # Узлы speedtest: колонки Upload / Download / Latency — приём и отдача числами,
+    # пинг в мс
     local nodes; nodes=$(printf '%s\n' "$txt" | grep -E ' Mbps' | grep -E ' ms' | sed -E 's/  +/\t/g' || true)
     printf '%s\n' "$nodes" | while IFS=$'\t' read -r node up down lat _; do
-        local nm d u
+        local nm d u p
         nm=$(printf '%s' "$node" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
         [[ -z "$nm" ]] && continue
         d=$(printf '%s' "$down" | grep -oE '[0-9]+(\.[0-9]+)?' | head -1)
         u=$(printf '%s' "$up" | grep -oE '[0-9]+(\.[0-9]+)?' | head -1)
+        p=$(printf '%s' "$lat" | grep -oE '[0-9]+(\.[0-9]+)?' | head -1)
         [[ -z "$d" ]] && continue
-        mt_service bar "$nm" "" "ok" "$d" "-1" "$u"
+        mt_service bar "$nm" "" "ok" "$d" "-1" "$u" "$p"
     done
 }
 
@@ -2873,7 +2919,7 @@ parse_test_output() {
     case "$fn" in
         run_ip_region)                      parse_ipregion "$txt" ;;
         run_censorcheck_geoblock|run_censorcheck_dpi|run_censorcheck_tlab) parse_censorcheck "$txt" ;;
-        run_iperf3_ru|run_iperf3_tlab)      parse_iperf3 "$txt" ;;
+        run_iperf3_ru|run_iperf3_tlab)      parse_iperf3 "$txt" "$fn" ;;
         run_yabs)                           parse_yabs "$txt" ;;
         run_bench_sh)                       parse_benchsh "$txt" ;;
         run_ip_check_place)                 parse_ipcheck "$txt" ;;
@@ -3365,6 +3411,7 @@ language	M323-111.5Q250-143 196-197t-85-127.5Q80-398 80-482t31-156.5Q142-711 196
 check	m378-358 350-349q14-14 34-14t34 14q14 14 14 34t-14 34L412-256q-14 14-34 14t-34-14L164-436q-14-14-14-34t14-34q14-14 34-14t34 14l146 146Z
 close	M480-414 282-216q-14 14-33 14t-33-14q-14-14-14-33t14-33l198-198-198-198q-14-14-14-33t14-33q14-14 33-14t33 14l198 198 198-198q14-14 33-14t33 14q14 14 14 33t-14 33L546-480l198 198q14 14 14 33t-14 33q-14 14-33 14t-33-14L480-414Z
 database	M480-120q-151 0-255.5-46.5T120-280v-400q0-66 105.5-113T480-840q149 0 254.5 47T840-680v400q0 67-104.5 113.5T480-120Zm0-488q86 0 176.5-26.5T773-694q-27-32-117.5-59T480-780q-88 0-177 26t-117 60q28 35 116 60.5T480-608Zm-1 214q42 0 84-4.5t80.5-13.5q38.5-9 73.5-22t63-29v-155q-29 16-64 29t-74 22q-39 9-80 14t-83 5q-42 0-84-5t-80.5-14q-38.5-9-73-22T180-618v155q27 16 61 29t72.5 22q38.5 9 80.5 13.5t85 4.5Zm1 214q48 0 99-8.5t93.5-22.5q42.5-14 72-31t35.5-35v-125q-28 16-63 28.5T643.5-352q-38.5 9-80 13.5T479-334q-43 0-85-4.5T313.5-352q-38.5-9-72.5-21.5T180-402v126q5 17 34 34.5t72 31q43 13.5 94 22t100 8.5Z
+timer	M390-860q-13 0-21.5-8.5T360-890q0-13 8.5-21.5T390-920h180q13 0 21.5 8.5T600-890q0 13-8.5 21.5T570-860H390Zm111.5 438.5Q510-430 510-443v-170q0-13-8.5-21.5T480-643q-13 0-21.5 8.5T450-613v170q0 13 8.5 21.5T480-413q13 0 21.5-8.5Zm-161 312Q275-138 226-187t-77.5-114.5Q120-367 120-441t28.5-139.5Q177-646 226-695t114.5-77.5Q406-801 480-801q67 0 126 22.5T711-716l30-30q9-9 21-9t21 9q9 9 9 21t-9 21l-30 30q36 40 61.5 97T840-441q0 74-28.5 139.5T734-187q-49 49-114.5 77.5T480-81q-74 0-139.5-28.5Zm352-119Q780-316 780-441t-87.5-212.5Q605-741 480-741t-212.5 87.5Q180-566 180-441t87.5 212.5Q355-141 480-141t212.5-87.5ZM480-440Z
 MTICONEOF
     while IFS=$'\t' read -r a b; do [[ -n "$b" ]] && MT_FLAG[$a]="$b"; done <<'MTFLAGEOF'
 nl	<path fill="#eee" d="m0 167 253.8-19.3L512 167v178l-254.9 32.3L0 345z"/><path fill="#a2001d" d="M0 0h512v167H0z"/><path fill="#0052b4" d="M0 345h512v167H0z"/>
@@ -4082,12 +4129,12 @@ mt_read_metrics() {
 
 # Строки -> RK RN RS RT RV RF RA (вид, имя, slug, состояние, значение, доля, доп. поле)
 mt_read_rows() {
-    RK=(); RN=(); RS=(); RT=(); RV=(); RF=(); RA=()
-    local f="$SUMMARY_DIR/$1.services" k n s st v fr a
+    RK=(); RN=(); RS=(); RT=(); RV=(); RF=(); RA=(); RL=()
+    local f="$SUMMARY_DIR/$1.services" k n s st v fr a l
     [[ -s "$f" ]] || return 0
-    while IFS=$'\x1f' read -r k n s st v fr a; do
+    while IFS=$'\x1f' read -r k n s st v fr a l; do
         [[ -n "$k" ]] || continue
-        RK+=("$k"); RN+=("$n"); RS+=("$s"); RT+=("$st"); RV+=("$v"); RF+=("$fr"); RA+=("$a")
+        RK+=("$k"); RN+=("$n"); RS+=("$s"); RT+=("$st"); RV+=("$v"); RF+=("$fr"); RA+=("$a"); RL+=("$l")
     done < "$f"
 }
 
@@ -4149,21 +4196,32 @@ mt_test_meta() {
     esac
 }
 
-# Строки iPerf3 / bench.sh (вид bar: значение — приём, доп. поле — отдача)
-# -> LR_NAME LR_DN LR_UP LR_CC и максимум IMX (как в логе) / IMX10 / IMX_CITY / IMX_DIR
+# Строки скорости iPerf3 / YABS / bench.sh (вид bar: значение — приём, доп. поле —
+# отдача, slug — подпись, lat — пинг) -> LR_NAME LR_DN LR_UP LR_CC LR_SUB LR_MS,
+# максимум IMX (как в логе) / IMX10 / IMX_CITY / IMX_DIR, IDOM — сколько узлов без
+# флага или в России, и IMXA10 — максимум по всем строкам, для шкалы. С «ru» IMX
+# ищем только среди узлов в России (у iPerf3 tlab есть зарубежные), если такие есть.
 mt_speed_rows() {
-    LR_NAME=(); LR_DN=(); LR_UP=(); LR_CC=()
-    IMX=""; IMX10=0; IMX_CITY=""; IMX_DIR=""
-    local i nm cc
+    LR_NAME=(); LR_DN=(); LR_UP=(); LR_CC=(); LR_SUB=(); LR_MS=()
+    IMX=""; IMX10=0; IMX_CITY=""; IMX_DIR=""; IDOM=0; IMXA10=0
+    local i j nm cc v
     for i in "${!RK[@]}"; do
         [[ "${RK[i]}" == bar && -n "${RV[i]}" ]] || continue
         nm="${RN[i]}"; cc=""
         [[ "$nm" =~ ,\ (${MT_CC_RE})$ ]] && cc="${BASH_REMATCH[1]}"
         LR_NAME+=("$nm"); LR_DN+=("${RV[i]}"); LR_UP+=("${RA[i]}"); LR_CC+=("$cc")
-        num10 "${RV[i]}"; (( N10 > IMX10 )) && { IMX10=$N10; IMX="${RV[i]}"; IMX_CITY="$nm"; IMX_DIR="приём"; }
-        if [[ -n "${RA[i]}" ]]; then
-            num10 "${RA[i]}"; (( N10 > IMX10 )) && { IMX10=$N10; IMX="${RA[i]}"; IMX_CITY="$nm"; IMX_DIR="отдача"; }
-        fi
+        LR_SUB+=("${RS[i]}"); LR_MS+=("${RL[i]:-}")
+        [[ -z "$cc" || "$cc" == RU ]] && IDOM=$(( IDOM + 1 ))
+    done
+    for i in "${!LR_NAME[@]}"; do
+        for j in DN UP; do
+            [[ $j == DN ]] && v="${LR_DN[i]}" || v="${LR_UP[i]}"
+            [[ -n "$v" ]] || continue
+            num10 "$v"; (( N10 > IMXA10 )) && IMXA10=$N10
+            [[ "${1:-}" == ru ]] && (( IDOM )) && [[ -n "${LR_CC[i]}" && "${LR_CC[i]}" != RU ]] && continue
+            (( N10 > IMX10 )) || continue
+            IMX10=$N10; IMX="$v"; IMX_CITY="${LR_NAME[i]}"; IMX_DIR="приём"; [[ $j == UP ]] && IMX_DIR="отдача"
+        done
     done
 }
 
@@ -4186,7 +4244,7 @@ mt_test_key() {
             if (( CNT_ALL )); then K="$CNT_OK доступно · $CNT_BAD блок"
             elif [[ -n "${M[Доступно]:-}${M[Заблокировано]:-}" ]]; then K="${M[Доступно]:-0} доступно · ${M[Заблокировано]:-0} блок"; fi ;;
         run_iperf3_*|run_bench_sh)
-            mt_speed_rows
+            if [[ "$fn" == run_bench_sh ]]; then mt_speed_rows; else mt_speed_rows ru; fi
             if [[ "$fn" == run_bench_sh && -n "${M["I/O сред."]:-}" ]]; then K="I/O ${M["I/O сред."]}"
             elif [[ -n "$IMX" ]]; then K="до $IMX Мбит/с"; fi ;;
         run_yabs) [[ -n "${M["fio 4k"]:-}" ]] && K="fio 4k ${M["fio 4k"]}" ;;
@@ -4272,7 +4330,7 @@ mt_write_summary() {
             mt_read_rows "$fn"
             case "$fn" in
                 run_iperf3_ru|run_iperf3_tlab|run_bench_sh)
-                    mt_speed_rows
+                    if [[ "$fn" == run_bench_sh ]]; then mt_speed_rows; else mt_speed_rows ru; fi
                     if [[ -n "$IMX" ]]; then
                         dir=down; [[ "$IMX_DIR" == "отдача" ]] && dir=up
                         mt_sum_put best "$id" "$IMX" "$IMX_CITY" "$dir"
@@ -4509,35 +4567,90 @@ page_censor() {
 }
 
 page_iperf() {
-    local fn="$1" n ping pnum sub
-    mt_read_metrics "$fn"; mt_read_rows "$fn"; mt_speed_rows
+    local fn="$1" n cnt ping pnum sub city
+    mt_read_metrics "$fn"; mt_read_rows "$fn"; mt_speed_rows ru
     n=${#LR_NAME[@]}
     if (( n == 0 )); then page_fallback; return; fi
-    rp $n сервер сервера серверов; sub="$n $RP в России"
+    # у tlab есть зарубежные узлы — «в России» считаем только российские
+    cnt=$IDOM; (( cnt )) || cnt=$n
+    rp $cnt сервер сервера серверов; sub="$cnt $RP"; (( IDOM )) && sub+=" в России"
+    city="$IMX_CITY"; [[ "$city" =~ ^(.+),\ ${MT_CC_RE}$ ]] && city="${BASH_REMATCH[1]}"
     ping="${M["Мин ping"]:-}"; pnum="${ping%% *}"
+    [[ -n "$pnum" ]] && { num10 "$pnum"; mt_ms $N10; pnum=$MS; }   # как в пилюлях: 12.34 -> 12
     if [[ -n "$pnum" ]]; then
-        hero_right sunny8 "максимум · $IMX_CITY, $IMX_DIR" "$IMX" "Мбит/с" "$sub" "$pnum" "ms · мин. ping"
+        hero_right sunny8 "максимум · $city, $IMX_DIR" "$IMX" "Мбит/с" "$sub" "$pnum" "ms · мин. ping"
     else
-        hero_right sunny8 "максимум · $IMX_CITY, $IMX_DIR" "$IMX" "Мбит/с" "" "$n" "$RP"
+        hero_right sunny8 "максимум · $city, $IMX_DIR" "$IMX" "Мбит/с" "" "$cnt" "$RP"
     fi
-    mt_nice $(( (IMX10 + 9) / 10 )) 100 250 500 1000 2500 5000 10000 25000 50000 100000
-    pg_section "Города" "" "Мбит/с · шкала $NICE"
-    mt_updown_rows
+    mt_nice $(( (IMXA10 + 9) / 10 )) 100 250 500 1000 2500 5000 10000 25000 50000 100000
+    mt_speed_note; pg_section "Города" "" "$NOTE"
+    mt_updown_rows ru
 }
 
-# Строки «город · ↓ волна · ↑ волна» из LR_NAME / LR_DN / LR_UP (+ флаг из LR_CC).
+# Подпись секции скоростей -> NOTE: «Мбит/с · шкала 2500», а если у строк есть
+# пинг — «ping · скорость в Мбит/с · шкала 2500».
+mt_speed_note() {
+    NOTE="Мбит/с · шкала $NICE"
+    [[ "${LR_MS[*]:-}" == *[0-9]* ]] && NOTE="ping · скорость в $NOTE"
+}
+
+# Пинг для пилюли -> MS: до 10 мс — с десятыми («0.4»), дальше — целым («46»). <мс×10>
+mt_ms() {
+    if (( $1 < 100 )); then MS="$(( $1 / 10 )).$(( $1 % 10 ))"; else MS=$(( ($1 + 5) / 10 )); fi
+}
+
+# Пилюля пинга под именем строки: секундомер и «46 ms». <x> <центр y> <текст> <вид>:
+# 1 — лучший пинг страницы, в цвете; 0 — обычный; -1 — узел не ответил. Ширина -> PW.
+mt_ping_chip() {
+    local x=$1 cy=$2 bg="$C_TRACK" fg="$C_ON2" h=34
+    (( $4 > 0 )) && { bg="$C_PRIC"; fg="$C_ONPRIC"; }
+    (( $4 < 0 )) && fg="$C_OUT"
+    tw "$3" 18 700
+    PW=$(( 12 + 20 + 6 + TW + 14 ))
+    rr $x $(( cy - h / 2 )) $PW $h 12 12 12 12 "$bg"
+    mt_icon timer $(( x + 12 )) $(( cy - 10 )) 20 "$fg"
+    t $(( x + 38 )) $(( cy + 6 )) 18 700 "$fg" "$3"
+}
+
+# Строки «имя · ↓ волна · ↑ волна» из LR_NAME / LR_DN / LR_UP (+ флаг из LR_CC).
+# Есть пинг (LR_MS) или подпись (LR_SUB) — имя встаёт к верхней волне, а у нижней
+# под ним — пилюля пинга (лучший пинг страницы — в цвете) и подпись. С «ru» лучший
+# пинг ищем среди узлов в России (как «мин. ping» в hero), если они есть.
 mt_updown_rows() {
     local n=${#LR_NAME[@]} i y=$(( PG_Y + GAP )) c1 c2 bx=$(( PX + 348 )) bw=690 vx=$(( PX + CW - 28 )) nx nwid nm flags=0
-    for (( i=0; i<n; i++ )); do [[ -n "${LR_CC[i]:-}" ]] && flags=1; done
+    local two=0 anyms=0 best=-1 sx
+    for (( i=0; i<n; i++ )); do
+        [[ -n "${LR_CC[i]:-}" ]] && flags=1
+        [[ -n "${LR_MS[i]:-}${LR_SUB[i]:-}" ]] && two=1
+        [[ -n "${LR_MS[i]:-}" ]] || continue
+        anyms=1
+        [[ "${1:-}" == ru ]] && (( IDOM )) && [[ -n "${LR_CC[i]:-}" && "${LR_CC[i]}" != RU ]] && continue
+        num10 "${LR_MS[i]}"; (( best < 0 || N10 < best )) && best=$N10
+    done
     for (( i=0; i<n; i++ )); do
         segr $i $n 28 8; rr $PX $y $CW 122 "${R[@]}" "$C_SURF"
         nx=$(( PX + 28 )); nwid=250; nm="${LR_NAME[i]}"
-        # страну уже сказал флаг — «Paris, FR» сокращаем до «Paris»
-        if [[ -n "${LR_CC[i]:-}" ]]; then mt_flag "${LR_CC[i]}" $nx $(( y + 39 )) 44; nm="${nm%, *}"
+        # страну уже сказал флаг — «Paris, FR» и «Los Angeles, CA, US» сокращаем до города
+        if [[ -n "${LR_CC[i]:-}" ]]; then mt_flag "${LR_CC[i]}" $nx $(( y + 39 )) 44; nm="${nm%%, *}"
         elif (( flags )); then mt_icon language $(( nx + 4 )) $(( y + 43 )) 36 "$C_ON2"; fi
         (( flags )) && { nx=$(( nx + 60 )); nwid=190; }
-        ellip "$nm" $nwid 26 700; t $nx $(( y + 70 )) 26 700 "$C_ON" "$EL"
         c1=$(( y + 38 )); c2=$(( y + 84 ))
+        if (( two )); then
+            fitsz "$nm" $nwid 26 700 0 20; ellip "$nm" $nwid $FS 700; t $nx $(( c1 + 9 )) $FS 700 "$C_ON" "$EL"
+            sx=$nx
+            if (( anyms )); then
+                if [[ -n "${LR_MS[i]:-}" ]]; then
+                    num10 "${LR_MS[i]}"; mt_ms $N10; mt_ping_chip $nx $c2 "$MS ms" $(( N10 == best ))
+                else mt_ping_chip $nx $c2 "—" -1; fi
+                sx=$(( nx + PW + 10 ))
+            fi
+            # подпись (провайдер) тянется до стрелок шкал
+            if [[ -n "${LR_SUB[i]:-}" ]] && (( PX + 296 - sx >= 40 )); then
+                ellip "${LR_SUB[i]}" $(( PX + 296 - sx )) 17; t $sx $(( c2 + 6 )) 17 400 "$C_ON2" "$EL"
+            fi
+        else
+            ellip "$nm" $nwid 26 700; t $nx $(( y + 70 )) 26 700 "$C_ON" "$EL"
+        fi
         mt_icon arrow_downward $(( PX + 306 )) $(( c1 - 13 )) 26 "$C_PRI"
         num10 "${LR_DN[i]}"; mt_bar $bx $c1 $bw $(( N10 * 100 / NICE )) "$C_PRI"
         t $vx $(( c1 + 8 )) 24 700 "$C_ON" "${LR_DN[i]}" end
@@ -4551,7 +4664,7 @@ mt_updown_rows() {
     PG_Y=$(( y - 4 ))
 }
 
-# Строки «флаг · место / подпись · волна · значение» (сеть YABS, узлы пинга).
+# Строки «флаг · место / подпись · волна · значение» (узлы Ping-карты).
 # LR_NAME LR_SUB LR_CC LR_N10 (значение ×10 для шкалы) LR_VN LR_VU (число и единица)
 mt_net_rows() {
     local n=${#LR_NAME[@]} i y=$(( PG_Y + GAP )) c bx=$(( PX + 334 )) bw=648 vx=$(( PX + CW - 28 )) vc
@@ -4603,15 +4716,8 @@ yabs_fio() {
     PG_Y=$(( top + 286 ))
 }
 
-# Подпись шкалы: 2500 -> «2.5 Гбит/с», 500 -> «500 Мбит/с»
-mt_scale_label() {
-    if (( $1 >= 1000 )); then
-        if (( $1 % 1000 == 0 )); then SCL="$(( $1 / 1000 )) Гбит/с"; else SCL="$(( $1 / 1000 )).$(( $1 % 1000 / 100 )) Гбит/с"; fi
-    else SCL="$1 Мбит/с"; fi
-}
-
 page_yabs() {
-    local f4 f1 i loc cc mx=0
+    local f4 f1
     mt_read_metrics run_yabs; mt_read_rows run_yabs
     f4="${M["fio 4k"]:-}"; f1="${M["fio 1m"]:-}"
     [[ -n "$f4$f1" ]] && yabs_fio "$f4" "$f1"
@@ -4625,19 +4731,12 @@ page_yabs() {
         G_L=("Одно ядро" "Все ядра"); G_V=("${M["GB6 single"]:-—}" "${M["GB6 multi"]:-—}"); G_S=()
         pg_section "Geekbench 6"; mt_grid 2 23
     fi
-    LR_NAME=(); LR_SUB=(); LR_CC=(); LR_N10=(); LR_VN=(); LR_VU=()
-    for i in "${!RK[@]}"; do
-        [[ "${RK[i]}" == net ]] || continue
-        loc="${RN[i]}"; cc=""; [[ "$loc" =~ ,\ (${MT_CC_RE})$ ]] && cc="${BASH_REMATCH[1]}"
-        num10 "${RV[i]}"; mt_speed $N10
-        LR_NAME+=("$loc"); LR_SUB+=("${RA[i]}"); LR_CC+=("$cc"); LR_N10+=("$N10"); LR_VN+=("$SPD_N"); LR_VU+=("$SPD_U")
-        (( N10 > mx )) && mx=$N10
-    done
+    # сеть — как у iPerf3: приём и отдача волнами, под местом пинг и провайдер
+    mt_speed_rows
     if (( ${#LR_NAME[@]} )); then
-        mt_nice $(( (mx + 9) / 10 )) 100 250 500 1000 2500 5000 10000 25000 50000 100000
-        mt_scale_label $NICE
-        pg_section "Сеть" "${#LR_NAME[@]}" "до дата-центров по миру · шкала $SCL"
-        mt_net_rows
+        mt_nice $(( (IMXA10 + 9) / 10 )) 100 250 500 1000 2500 5000 10000 25000 50000 100000
+        mt_speed_note; pg_section "Сеть" "${#LR_NAME[@]}" "$NOTE"
+        mt_updown_rows
     fi
     (( ${#ML[@]} )) || [[ ${#LR_NAME[@]} -gt 0 ]] || page_fallback
 }
@@ -4660,8 +4759,8 @@ page_bench() {
     [[ -n "${M[Диск]:-}" ]] && { G_L+=("Диск"); G_V+=("${M[Диск]}"); G_FR+=(10); }
     (( ${#G_L[@]} )) && { pg_section "Сервер"; mt_grid ${#G_L[@]} 23; }
     if (( n )); then
-        mt_nice $(( (IMX10 + 9) / 10 )) 100 250 500 1000 2500 5000 10000 25000 50000 100000
-        pg_section "Сеть" "$n" "Мбит/с · шкала $NICE"
+        mt_nice $(( (IMXA10 + 9) / 10 )) 100 250 500 1000 2500 5000 10000 25000 50000 100000
+        mt_speed_note; pg_section "Сеть" "$n" "$NOTE"
         mt_updown_rows
     fi
     [[ -n "$io" ]] || (( n )) || page_fallback

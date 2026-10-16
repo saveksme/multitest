@@ -33,9 +33,9 @@ out="$PWD/.preview/out"
 rm -rf "$out"; mkdir -p "$out"
 US=$'\x1f'
 
-# m <файл> <подпись> <значение> [цвет] ; s <файл> <вид> <имя> <slug> <состояние> <значение> [доп.]
+# m <файл> <подпись> <значение> [цвет] ; s <файл> <вид> <имя> <slug> <состояние> <значение> [доп.] [пинг]
 m() { printf '%s\x1f%s\x1f%s\n' "$2" "$3" "${4:-}" >> "$SUMMARY_DIR/$1.metrics"; }
-s() { printf '%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\n' "$2" "$3" "$4" "$5" "$6" "-1" "${7:-}" >> "$SUMMARY_DIR/$1.services"; }
+s() { printf '%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\n' "$2" "$3" "$4" "$5" "$6" "-1" "${7:-}" "${8:-}" >> "$SUMMARY_DIR/$1.services"; }
 chip() { s "$1" chip "$2" "$(brand_slug_for "$2")" "$3" "$4"; }
 
 render() {   # <префикс> — обложка и страница на каждый тест, как step_build_pages
@@ -111,24 +111,24 @@ chip run_censorcheck_geoblock "cisco.com" bad "блок"
 chip run_censorcheck_geoblock "dell.com" ok "доступен"
 
 m run_iperf3_ru "Макс ↓" "2140.5 Mbps" ok; m run_iperf3_ru "Мин ping" "46 ms" pri; m run_iperf3_ru "Серверов" 5
-while IFS='|' read -r c d u; do s run_iperf3_ru bar "$c" "" ok "$d" "$u"; done <<'EOF'
-Moscow|2065.4|2079.3
-Saint Petersburg|2074.3|2094.8
-Nizhny Novgorod|1906.9|1928.7
-Chelyabinsk|2120.7|2140.5
-Tyumen|716.5|735.4
+while IFS='|' read -r c d u p; do s run_iperf3_ru bar "$c" "" ok "$d" "$u" "$p"; done <<'EOF'
+Moscow|2065.4|2079.3|52
+Saint Petersburg|2074.3|2094.8|46
+Nizhny Novgorod|1906.9|1928.7|58
+Chelyabinsk|2120.7|2140.5|74
+Tyumen|716.5|735.4|79
 EOF
 
 m run_yabs CPU "AMD Ryzen 9 9950X 16-Core Processor"; m run_yabs "Ядер" 2; m run_yabs RAM "3.8 GiB"
 m run_yabs "Диск" "59.0 GiB"; m run_yabs "fio 4k" "1.09 GB/s" pri; m run_yabs "fio 1m" "5.99 GB/s" pri
-while IFS='|' read -r p l v; do s run_yabs net "$l" "" ok "$v" "$p"; done <<'EOF'
-Eranium|Amsterdam, NL|1930
-Clouvider|London, UK|1920
-Leaseweb|NYC, NY, US|1720
-Leaseweb|Singapore, SG|1260
-Uztelecom|Tashkent, UZ|1180
-Edgoo|Sao Paulo, BR|436
-Clouvider|Los Angeles, CA, US|187
+while IFS='|' read -r p l r sd ms; do s run_yabs bar "$l" "$p" ok "$r" "$sd" "$ms"; done <<'EOF'
+Eranium|Amsterdam, NL|1930|1890|0.9
+Clouvider|London, UK|1920|1870|7.4
+Leaseweb|NYC, NY, US|1720|1650|75.2
+Leaseweb|Singapore, SG|1260|980|157
+Uztelecom|Tashkent, UZ|1180|1050|88.6
+Edgoo|Sao Paulo, BR|436|512|191
+Clouvider|Los Angeles, CA, US|187|420|139
 EOF
 
 m run_ip_check_place "Риск" Low ok; m run_ip_check_place "Баз" 9; m run_ip_check_place DNSBL 0 ok
@@ -209,13 +209,13 @@ EOF
 
 m run_bench_sh CPU "Intel Xeon Gold 6248R CPU @ 3.00GHz"; m run_bench_sh "Ядер" 4; m run_bench_sh RAM "7.8 GB"
 m run_bench_sh "Диск" "80.0 GB"; m run_bench_sh "I/O сред." "1.2 GB/s" pri; m run_bench_sh CC bbr; m run_bench_sh "Сеть" "AS64496 Example Hosting B.V."
-while IFS='|' read -r n u d; do s run_bench_sh bar "$n" "" ok "$d" "$u"; done <<'EOF'
-Speedtest.net|939.89|936.66
-Paris, FR|912.40|925.11
-Amsterdam, NL|938.02|941.53
-Los Angeles, US|455.10|803.33
-Singapore, SG|350.77|601.20
-Tokyo, JP|300.12|452.80
+while IFS='|' read -r n u d l; do s run_bench_sh bar "$n" "" ok "$d" "$u" "$l"; done <<'EOF'
+Speedtest.net|939.89|936.66|0.43
+Paris, FR|912.40|925.11|10.50
+Amsterdam, NL|938.02|941.53|1.21
+Los Angeles, US|455.10|803.33|145.80
+Singapore, SG|350.77|601.20|162.33
+Tokyo, JP|300.12|452.80|231.07
 EOF
 
 m run_ping_map "РФ avg" "41.3 ms" pri; m run_ping_map "ЕС avg" "8.2 ms" ok; m run_ping_map "США avg" "112.6 ms" warn
