@@ -2643,17 +2643,18 @@ parse_iperf3() {
     while IFS=$'\x1f' read -r city sub d u p dom; do
         [[ -n "$city" ]] || continue
         mt_service bar "$city" "$sub" "ok" "$d" "-1" "$u" "$p"
-        n=$(( n + 1 )); (( dom )) && nd=$(( nd + 1 ))
+        # dom — из разбора лога: только сравнением строк, в (( )) bash выполнил бы «a[$(cmd)]»
+        n=$(( n + 1 )); [[ "$dom" == 1 ]] && nd=$(( nd + 1 ))
         for v in "$d" "$u"; do
             [[ -n "$v" ]] || continue
             num10 "$v"
             (( N10 > mxa )) && { mxa=$N10; mxas=$v; }
-            (( dom && N10 > mxd )) && { mxd=$N10; mxds=$v; }
+            [[ "$dom" == 1 ]] && (( N10 > mxd )) && { mxd=$N10; mxds=$v; }
         done
         [[ -n "$p" ]] || continue
         num10 "$p"
         (( mpa < 0 || N10 < mpa )) && { mpa=$N10; mpas=$p; }
-        (( dom )) && (( mpd < 0 || N10 < mpd )) && { mpd=$N10; mpds=$p; }
+        [[ "$dom" == 1 ]] && (( mpd < 0 || N10 < mpd )) && { mpd=$N10; mpds=$p; }
     done <<< "$rows"
     (( nd )) && { mxas=$mxds; mpas=$mpds; }
     [[ -n "$mxas" ]] && mt_metric "Макс ↓" "${mxas} Mbps" "ok"
@@ -2914,7 +2915,9 @@ parse_test_output() {
     MT_MFILE="$3"; MT_SFILE="$4"
     : > "$MT_MFILE"; : > "$MT_SFILE"
     [[ -f "$log" ]] || return 0
-    local txt; txt=$(strip_ansi < "$log" | tr -d '\r')
+    # Кроме таба и перевода строки, управляющим символам в разборе делать нечего: \x1f
+    # разделяет поля .metrics/.services и сдвинул бы их, а \r и NUL ломают регулярки.
+    local txt; txt=$(strip_ansi < "$log" | LC_ALL=C tr -d '\000-\010\013-\037\177')
     [[ -z "$txt" ]] && return 0
     case "$fn" in
         run_ip_region)                      parse_ipregion "$txt" ;;
@@ -3613,7 +3616,8 @@ mt_style_init() {
     MT_FONT="Onest, Roboto, 'Noto Sans', 'DejaVu Sans', sans-serif"
     W=1280; PX=48; PY=40; CW=$(( W - 2*PX )); GAP=16
     local p=$'\xd0\x96'; MT_U8=0; (( ${#p} == 1 )) && MT_U8=1
-    MT_DATE=$(date '+%Y-%m-%d %H:%M')
+    # Подписанные страницы рисует бот: время прогона — его, а не часы рендера
+    MT_DATE="${MT_RUN_DATE:-$(date '+%Y-%m-%d %H:%M')}"
     load_logos; mt_load_assets
 }
 
@@ -3687,6 +3691,7 @@ mt_stencloud() {
 # Подвал как в макете: «multitest vX» слева; справа «powered by» над маркой,
 # разделитель, промокод и строка флаги · скидка · бот.
 pg_footer() {
+    [[ -n "${MT_PROOF_ID:-}" ]] && mt_proof_band
     local top=$(( PG_Y + GAP + 20 )) cy x1 xd x3 w1 w3 wd wb wrow ry rc fx
     sv "<rect x=\"$PX\" y=\"$top\" width=\"$CW\" height=\"1\" fill=\"$C_DIV\"/>"
     cy=$(( top + 1 + 22 + 24 ))
@@ -3707,6 +3712,102 @@ pg_footer() {
     t $fx $(( rc + 5 )) 15 600 "$C_ON" "$AD_DISCOUNT"; fx=$(( fx + wd + 6 ))
     t $fx $(( rc + 5 )) 14 400 "$C_OUT" "· $AD_BOT"
     PG_Y=$(( top + 1 + 22 + 48 ))
+}
+
+# --- Подпись Multitest --------------------------------------------------------
+# Подписанные страницы рисует бот (--render-data). Над подвалом — полоса подписи: QR на
+# белой плашке, код прогона и номер страницы. QR — готовая матрица из манифеста бота
+# (строки 0/1 на каждую страницу), здесь её только раскладываем в прямоугольники.
+# Telegram ужимает картинку до 1280 по длинной стороне: страницу высотой H — в H/1280
+# раз. Модуль QR растёт вместе со страницей, чтобы после ужатия остаться ≥ 3 px.
+mt_proof_band() {
+    local rows="${MT_PROOF_QR[$MT_PAGE_I]:-}" top=$(( PG_Y + GAP )) n m tile h qx qy r c run y row d="" tx ty
+    [[ -n "$rows" && -n "$MT_PROOF_CODE" ]] || return 0
+    local -a q=()
+    IFS=, read -r -a q <<< "$rows"
+    n=${#q[@]}
+    # Высота готовой страницы ≈ PG_Y + полоса (плашка + 40) + подвал и поля (≈ 206);
+    # вокруг QR — 3 модуля белого поля, без него сканеры не находят квадраты-метки.
+    m=$(( (3 * (PG_Y + 206) + 1280 - 3 * (n + 6) - 1) / (1280 - 3 * (n + 6)) ))
+    (( m < 4 )) && m=4; (( m > 9 )) && m=9
+    tile=$(( (n + 6) * m )); h=$(( tile + 40 ))
+    rr $PX $top $CW $h 28 28 28 28 "$C_SURF"
+    qx=$(( PX + 20 )); qy=$(( top + 20 ))
+    rr $qx $qy $tile $tile 12 12 12 12 "#ffffff"
+    for (( r = 0; r < n; r++ )); do
+        row="${q[r]}"; y=$(( qy + (r + 3) * m )); c=0
+        while (( c < ${#row} )); do
+            if [[ "${row:c:1}" == 1 ]]; then
+                run=1; while [[ "${row:c+run:1}" == 1 ]]; do run=$(( run + 1 )); done
+                d+="M$(( qx + (c + 3) * m )) ${y}h$(( run * m ))v${m}h-$(( run * m ))z"
+                c=$(( c + run ))
+            else c=$(( c + 1 )); fi
+        done
+    done
+    sv "<path d=\"$d\" fill=\"#000000\"/>"
+    tx=$(( qx + tile + 32 )); ty=$(( qy + tile / 2 - 56 ))
+    t $tx $(( ty + 34 )) 36 800 "$C_ON" "$MT_PROOF_CODE" start 20
+    t $tx $(( ty + 72 )) 24 600 "$C_ON2" "Подпись Multitest · стр. $MT_PAGE_I/$MT_PAGE_N"
+    ellip "Проверка: отсканируйте QR или отправьте код боту @$MT_PROOF_BOT" $(( PX + CW - 28 - tx )) 21
+    t $tx $(( ty + 106 )) 21 400 "$C_OUT" "$EL"
+    PG_Y=$(( top + h ))
+}
+
+# Строка из присланных данных -> переменная <имя>: без управляющих символов, ≤ 200.
+mt_clean_set() {
+    local v="${2:-}"
+    v=${v//[$'\t\r\n\x1f']/ }; v=${v//[$MT_SUM_CTRL]/}
+    (( ${#v} > 200 )) && v="${v:0:200}"
+    printf -v "$1" '%s' "$v"
+}
+
+# --render-data <каталог>: бот рисует подписанные страницы из данных, которые сервер
+# прислал по ходу прогона. Без сети и установок. В каталоге:
+#   manifest — от бота: id, код, бот, дата, адреса соединения, страна, ASN, матрицы QR;
+#   facts    — факты о системе «SYS_…<таб>значение» (проверены ботом);
+#   status   — «run_…<таб>выполнен|ошибка|пропущен»;
+#   <тест>.metrics / <тест>.services — как у обычного прогона.
+# Всё прочитанное ещё раз проходит белые списки: имена тестов — из каталога, ключи —
+# известные, значения — без управляющих символов.
+mt_render_data() {
+    local dir="$1" k v x
+    [[ -n "$dir" && -d "$dir" && -f "$dir/manifest" ]] || { echo "render-data: нет каталога с manifest" >&2; return 2; }
+    SUMMARY_DIR="$dir"; MT_FLAG_FETCH=0; MT_FACTS_PRESET=1; MT_RENDER_DATA=1; NO_COLOR=1
+    MT_PROOF_ID=""; MT_PROOF_CODE=""; MT_PROOF_BOT="$MT_BOT_USERNAME"; MT_RUN_DATE=""
+    declare -gA MT_PROOF_QR=() MT_STATUS=()
+    SYS_OS="—"; SYS_KERNEL="—"; SYS_ARCH="—"; SYS_CPU="—"; SYS_CORES="—"; SYS_RAM="—"; SYS_DISK="—"
+    SYS_VIRT="—"; SYS_CC="—"; SYS_QDISC="—"; SYS_UPTIME="—"; SYS_UP_S=""; SYS_LOAD="—"
+    SYS_IP4=""; SYS_IP6=""; SYS_COUNTRY="—"; SYS_CITY="—"; SYS_ASN="—"
+    while IFS=$'\t' read -r k v x; do
+        case "$k" in
+            id)      [[ "$v" =~ ^[0-9A-Z]{12}$ ]] && MT_PROOF_ID="$v" ;;
+            code)    [[ "$v" =~ ^MT(-[0-9A-Z]{4}){3}$ ]] && MT_PROOF_CODE="$v" ;;
+            bot)     [[ "$v" =~ ^[A-Za-z0-9_]{5,32}$ ]] && MT_PROOF_BOT="$v" ;;
+            date)    [[ "$v" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}$ ]] && MT_RUN_DATE="$v" ;;
+            ip4)     [[ "$v" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.\*\.\*$ ]] && SYS_IP4="$v" ;;
+            ip6)     [[ "$v" =~ ^[0-9a-f]{1,4}:[0-9a-f]{0,4}::\*$ ]] && SYS_IP6="$v" ;;
+            country) [[ "$v" =~ ^[A-Z]{2}$ ]] && SYS_COUNTRY="$v" ;;
+            asn)     mt_clean_set SYS_ASN "$v" ;;
+            qr)      [[ "$v" =~ ^[0-9]{1,2}$ && "$x" =~ ^[01]{21,57}(,[01]{21,57}){20,56}$ ]] && MT_PROOF_QR[$v]="$x" ;;
+        esac
+    done < "$dir/manifest"
+    [[ -n "$MT_PROOF_ID" && -n "$MT_PROOF_CODE" && -n "$MT_RUN_DATE" ]] || { echo "render-data: неполный manifest" >&2; return 2; }
+    if [[ -f "$dir/facts" ]]; then
+        while IFS=$'\t' read -r k v; do
+            case "$k" in
+                SYS_OS|SYS_KERNEL|SYS_ARCH|SYS_CPU|SYS_RAM|SYS_DISK|SYS_VIRT|SYS_CC|SYS_QDISC|SYS_UPTIME|SYS_LOAD)
+                    mt_clean_set "$k" "$v" ;;
+                SYS_CORES) [[ "$v" =~ ^[0-9]{1,4}$ ]] && SYS_CORES="$v" ;;
+                SYS_UP_S)  [[ "$v" =~ ^[0-9]{1,10}$ ]] && SYS_UP_S="$v" ;;
+            esac
+        done < "$dir/facts"
+    fi
+    [[ -f "$dir/status" ]] || { echo "render-data: нет status" >&2; return 2; }
+    while IFS=$'\t' read -r k v; do
+        mt_is_test_fn "$k" || continue
+        case "$v" in выполнен|ошибка|пропущен) MT_STATUS[$k]="$v" ;; esac
+    done < "$dir/status"
+    step_build_pages
 }
 
 # --- Пилюли значений -------------------------------------------------------
@@ -3902,6 +4003,14 @@ mt_bar() {
     sv "<circle cx=\"$(( x + w - 4 ))\" cy=\"$cy\" r=\"4\" fill=\"$col\"/>"
 }
 
+# Целое из разобранных данных -> переменная <имя>; всё, что не цифры, — 0. В арифметику
+# bash данные попадают только так: «a[$(cmd)]» внутри $(( )) выполнил бы команду.
+mt_int() {
+    local v="${2:-0}"
+    [[ "$v" =~ ^[0-9]{1,15}$ ]] || v=0
+    printf -v "$1" '%s' "$(( 10#$v ))"
+}
+
 # Число с точкой -> N10 (десятые доли, целое): «2065.4» -> 20654.
 num10() {
     local v="${1//[^0-9.]/}" i f
@@ -4046,7 +4155,7 @@ mt_ident_line() {
     local ip4 ip6 ip
     ip4=$(mask_ip "$SYS_IP4"); ip6=$(mask_ip "$SYS_IP6")
     ip="$ip4${ip4:+${ip6:+ · }}$ip6"; [[ -n "$ip" ]] || ip="—"
-    printf '%s · %s/%s · %s' "$ip" "$SYS_COUNTRY" "$SYS_CITY" "$(date '+%Y-%m-%d %H:%M')"
+    printf '%s · %s/%s · %s' "$ip" "$SYS_COUNTRY" "$SYS_CITY" "${MT_DATE:-$(date '+%Y-%m-%d %H:%M')}"
 }
 
 # --- Мелочи без форков ------------------------------------------------------
@@ -4550,7 +4659,7 @@ page_censor() {
     mt_read_metrics "$fn"; mt_read_rows "$fn"; mt_rows_section 0; mt_count_states
     if (( CNT_ALL )); then ok=$CNT_OK; all=$CNT_ALL; bad=$CNT_BAD
     elif [[ -n "${M[Доступно]:-}${M[Заблокировано]:-}" ]]; then
-        ok=${M[Доступно]:-0}; bad=${M[Заблокировано]:-0}; all=$(( ok + bad ))
+        mt_int ok "${M[Доступно]:-0}"; mt_int bad "${M[Заблокировано]:-0}"; all=$(( ok + bad ))
     else page_fallback; return; fi
     case "$fn" in
         run_censorcheck_geoblock) head="пускают IP этого сервера" ;;
@@ -5089,7 +5198,8 @@ mt_tg_pages() {
 step_build_pages() {
     # ниже идёт rm -rf по этому пути — пустой SUMMARY_DIR превратил бы его в /pages
     [[ -n "$SUMMARY_DIR" && -d "$SUMMARY_DIR" ]] || return 1
-    gather_system_facts
+    # у бота факты уже заданы (--render-data): сети там нет, и спрашивать её незачем
+    [[ -n "${MT_FACTS_PRESET:-}" ]] || gather_system_facts
     mt_style_init
     mt_album_plan
     mt_run_counters
@@ -5117,7 +5227,7 @@ step_build_pages() {
         mt_render_page "$base" || return 1
     done
     # боту — одним альбомом; не склеилось — уйдут страницы как есть
-    if mt_tg_enabled; then mt_tg_pages || true; fi
+    if [[ -n "${MT_RENDER_DATA:-}" ]] || mt_tg_enabled; then mt_tg_pages || true; fi
     [[ -s "$SUMMARY_DIR/pages.list" ]]
 }
 
@@ -5422,6 +5532,7 @@ mt_cli_dispatch() {
         --tg-status) mt_tg_status; exit $? ;;
         --agent) mt_agent_main; exit $? ;;
         --agent-selftest) echo agent-ok; exit 0 ;;
+        --render-data) mt_render_data "${2:-}"; exit $? ;;
         *) echo "Неизвестный параметр: $1" >&2; mt_cli_help >&2; exit 2 ;;
     esac
 }
