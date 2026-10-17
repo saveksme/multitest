@@ -3710,7 +3710,6 @@ mt_stencloud() {
 # Подвал как в макете: «multitest vX» слева; справа «powered by» над маркой,
 # разделитель, промокод и строка флаги · скидка · бот.
 pg_footer() {
-    [[ -n "${MT_PROOF_ID:-}" ]] && mt_proof_band
     local top=$(( PG_Y + GAP + 20 )) cy x1 xd x3 w1 w3 wd wb wrow ry rc fx
     sv "<rect x=\"$PX\" y=\"$top\" width=\"$CW\" height=\"1\" fill=\"$C_DIV\"/>"
     cy=$(( top + 1 + 22 + 24 ))
@@ -3730,49 +3729,25 @@ pg_footer() {
     mt_flag ee $fx $ry 16; fx=$(( fx + 22 ))
     t $fx $(( rc + 5 )) 15 600 "$C_ON" "$AD_DISCOUNT"; fx=$(( fx + wd + 6 ))
     t $fx $(( rc + 5 )) 14 400 "$C_OUT" "· $AD_BOT"
+    [[ -n "${MT_PROOF_CODE:-}" ]] && mt_proof_mark $cy $x1
     PG_Y=$(( top + 1 + 22 + 48 ))
 }
 
 # --- Подпись Multitest --------------------------------------------------------
-# Подписанные страницы рисует бот (--render-data). Над подвалом — полоса подписи: QR на
-# белой плашке, код прогона и номер страницы. QR — готовая матрица из манифеста бота
-# (строки 0/1 на каждую страницу), здесь её только раскладываем в прямоугольники.
-# Telegram ужимает картинку до 1280 по длинной стороне: страницу высотой H — в H/1280
-# раз. Модуль QR растёт вместе со страницей, чтобы после ужатия остаться ≥ 3 px.
-mt_proof_band() {
-    local rows="${MT_PROOF_QR[$MT_PAGE_I]:-}" top=$(( PG_Y + GAP )) n m tile h qx qy r c run y row d="" tx ty
-    [[ -n "$rows" && -n "$MT_PROOF_CODE" ]] || return 0
-    local -a q=()
-    IFS=, read -r -a q <<< "$rows"
-    n=${#q[@]}
-    # QR — квадрат от 21 до 57 модулей; иначе полосу не рисуем
-    (( n >= 21 && n <= 57 )) || return 0
-    for row in "${q[@]}"; do (( ${#row} == n )) || return 0; done
-    # Высота готовой страницы ≈ PG_Y + полоса (плашка + 40) + подвал и поля (≈ 206);
-    # вокруг QR — 3 модуля белого поля, без него сканеры не находят квадраты-метки.
-    m=$(( (3 * (PG_Y + 206) + 1280 - 3 * (n + 6) - 1) / (1280 - 3 * (n + 6)) ))
-    (( m < 4 )) && m=4; (( m > 9 )) && m=9
-    tile=$(( (n + 6) * m )); h=$(( tile + 40 ))
-    rr $PX $top $CW $h 28 28 28 28 "$C_SURF"
-    qx=$(( PX + 20 )); qy=$(( top + 20 ))
-    rr $qx $qy $tile $tile 12 12 12 12 "#ffffff"
-    for (( r = 0; r < n; r++ )); do
-        row="${q[r]}"; y=$(( qy + (r + 3) * m )); c=0
-        while (( c < ${#row} )); do
-            if [[ "${row:c:1}" == 1 ]]; then
-                run=1; while [[ "${row:c+run:1}" == 1 ]]; do run=$(( run + 1 )); done
-                d+="M$(( qx + (c + 3) * m )) ${y}h$(( run * m ))v${m}h-$(( run * m ))z"
-                c=$(( c + run ))
-            else c=$(( c + 1 )); fi
-        done
-    done
-    sv "<path d=\"$d\" fill=\"#000000\"/>"
-    tx=$(( qx + tile + 32 )); ty=$(( qy + tile / 2 - 56 ))
-    t $tx $(( ty + 34 )) 36 800 "$C_ON" "$MT_PROOF_CODE" start 20
-    t $tx $(( ty + 72 )) 24 600 "$C_ON2" "Подпись Multitest · стр. $MT_PAGE_I/$MT_PAGE_N"
-    ellip "Проверка: отсканируйте QR или отправьте код боту @$MT_PROOF_BOT" $(( PX + CW - 28 - tx )) 21
-    t $tx $(( ty + 106 )) 21 400 "$C_OUT" "$EL"
-    PG_Y=$(( top + h ))
+# Подписанные страницы рисует бот (--render-data). Подпись — в подвале, между версией и
+# спонсором: щит, код прогона и где его проверить; страница от подписи не растёт. QR сюда
+# не влезает: Telegram ужимает страницу до 1280 по длинной стороне, и модуль QR высотой
+# в подвал выходит 1,5–2 px — телефон такой не прочтёт. <центр строки> <x блока спонсора>
+mt_proof_mark() {
+    local cy=$1 xr=$2 x
+    tw "multitest v${SCRIPT_VERSION}" 17; x=$(( PX + 8 + TW + 18 ))
+    sv "<rect x=\"$x\" y=\"$(( cy - 19 ))\" width=\"1\" height=\"38\" fill=\"$C_DIV2\"/>"
+    x=$(( x + 1 + 18 ))
+    mt_icon verified_user $x $(( cy - 18 )) 34 "$C_TER"
+    x=$(( x + 34 + 10 ))
+    t $x $(( cy - 4 )) 21 700 "$C_ON" "$MT_PROOF_CODE" start 20
+    ellip "Подпись Multitest · проверка в @$MT_PROOF_BOT" $(( xr - 24 - x )) 14
+    t $x $(( cy + 18 )) 14 400 "$C_OUT" "$EL"
 }
 
 # Строка из присланных данных -> переменная <имя>: без управляющих символов, ≤ 200.
@@ -3785,7 +3760,7 @@ mt_clean_set() {
 
 # --render-data <каталог>: бот рисует подписанные страницы из данных, которые сервер
 # прислал по ходу прогона. Без сети и установок. В каталоге:
-#   manifest — от бота: id, код, бот, дата, адреса соединения, страна, ASN, матрицы QR;
+#   manifest — от бота: id, код, бот, дата, адреса соединения, страна, ASN;
 #   facts    — факты о системе «SYS_…<таб>значение» (проверены ботом);
 #   status   — «run_…<таб>выполнен|ошибка|пропущен»;
 #   <тест>.metrics / <тест>.services — как у обычного прогона.
@@ -3796,7 +3771,7 @@ mt_render_data() {
     [[ -n "$dir" && -d "$dir" && -f "$dir/manifest" ]] || { echo "render-data: нет каталога с manifest" >&2; return 2; }
     SUMMARY_DIR="$dir"; MT_FLAG_FETCH=0; MT_FACTS_PRESET=1; MT_RENDER_DATA=1; NO_COLOR=1
     MT_PROOF_ID=""; MT_PROOF_CODE=""; MT_PROOF_BOT="$MT_BOT_USERNAME"; MT_RUN_DATE=""
-    declare -gA MT_PROOF_QR=() MT_STATUS=()
+    declare -gA MT_STATUS=()
     SYS_OS="—"; SYS_KERNEL="—"; SYS_ARCH="—"; SYS_CPU="—"; SYS_CORES="—"; SYS_RAM="—"; SYS_DISK="—"
     SYS_VIRT="—"; SYS_CC="—"; SYS_QDISC="—"; SYS_UPTIME="—"; SYS_UP_S=""; SYS_LOAD="—"
     SYS_IP4=""; SYS_IP6=""; SYS_COUNTRY="—"; SYS_CITY="—"; SYS_ASN="—"
@@ -3810,9 +3785,6 @@ mt_render_data() {
             ip6)     [[ "$v" =~ ^[0-9a-f]{1,4}:[0-9a-f]{0,4}::\*$ ]] && SYS_IP6="$v" ;;
             country) [[ "$v" =~ ^[A-Z]{2}$ ]] && SYS_COUNTRY="$v" ;;
             asn)     mt_clean_set SYS_ASN "$v" ;;
-            # форму (квадрат 21…57) проверяет mt_proof_band: счётчики {21,57} внутри группы
-            # раздувают автомат регулярки, и проверка строки в 1–3 КБ тянулась минутами
-            qr)      [[ "$v" =~ ^[0-9]{1,2}$ && ${#x} -le 3400 && "$x" =~ ^[01]+(,[01]+)+$ ]] && MT_PROOF_QR[$v]="$x" ;;
         esac
     done < "$dir/manifest"
     [[ -n "$MT_PROOF_ID" && -n "$MT_PROOF_CODE" && -n "$MT_RUN_DATE" ]] || { echo "render-data: неполный manifest" >&2; return 2; }
