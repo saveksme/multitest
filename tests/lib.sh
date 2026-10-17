@@ -4,6 +4,9 @@
 T_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 T_W="$(mktemp -d)"; trap 'rm -rf "$T_W"' EXIT
 T_FAIL=0
+# Подпись Multitest по умолчанию выключена: её проверяют отдельные тесты, остальным она
+# съела бы заготовленные ответы поддельного curl.
+export MT_PROOF=0
 
 check() { if eval "$2"; then echo "  ok: $1"; else echo "  FAIL: $1"; T_FAIL=1; fi; }
 t_need() { local c; for c in "$@"; do command -v "$c" >/dev/null 2>&1 || { echo "SKIP: нет $c"; exit 77; }; done; }

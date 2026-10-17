@@ -34,6 +34,9 @@ AD_BOT="@stencloudbot"     # куда идти за сервером
 # в $MT_STATE_DIR/agent.conf (0600). Переопределение через окружение — для стенда.
 MT_BOT_USERNAME="${MT_BOT_USERNAME:-multitestus_bot}"
 MT_BOT_API="${MT_BOT_API:-https://mtbot.sixseven.cam}"
+# Открытые ключи «Подписи Multitest» (ECDSA P-256, SubjectPublicKeyInfo DER в base64):
+# «kid ключ [дата отзыва]». Приватный ключ живёт только на сервере бота.
+MT_PROOF_KEYS="${MT_PROOF_KEYS:-mt1 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE+jtC/IF2U1nUu4FwZRQHyoK0HFn+Uu6ytOkLZAjJudw+SdLT5yuM4IO4JBhJw0BWJ1VX40ZJL+r7PML6Qes9sQ==}"
 MT_STATE_DIR="${MT_STATE_DIR:-/etc/multitest}"
 MT_CONF="$MT_STATE_DIR/agent.conf"
 MT_CURL="${MT_CURL:-curl}"         # тесты подменяют curl
@@ -862,6 +865,8 @@ mt_run_selected() {
         return 1
     fi
     detect_script_flavor
+    # привязанный сервер: бот выдаёт код подписи до первого теста
+    mt_proof_start
 
     for (( i = 0; i < total; i++ )); do
         num=$((i + 1))
@@ -894,6 +899,7 @@ mt_run_selected() {
         case "$action" in
             s|S)
                 echo -e "  ${YELLOW}Пропущено.${NC}"
+                mt_proof_step "$num" "${test_funcs[$i]}" пропущен
                 continue
                 ;;
             q|Q)
@@ -904,6 +910,7 @@ mt_run_selected() {
                 ;;
         esac
 
+        mt_proof_begin "$num" "${test_funcs[$i]}"
         # Задание из Telegram: дедлайн теста для сторожа — ETA × 3, от 2 до 30 минут.
         if [[ -n "${MT_JOB_DIR:-}" ]]; then
             secs=$(( MT_CAT_SECS[$(mt_cat_index "${test_funcs[$i]}")] * 3 ))
@@ -945,6 +952,8 @@ mt_run_selected() {
                 "$SUMMARY_DIR/${test_funcs[$i]}.metrics" "$SUMMARY_DIR/${test_funcs[$i]}.services"
         fi
         MT_STATUS["${test_funcs[$i]}"]="${test_status[$i]}"
+        # данные теста — боту сразу: время окончания ставит он
+        mt_proof_step "$num" "${test_funcs[$i]}" "${test_status[$i]}"
     done
 
     echo ""
@@ -2223,6 +2232,12 @@ ensure_fonts() {
 
 # Собирает характеристики сервера в SYS_* (надёжно, не парсит вывод тестов).
 gather_system_facts() {
+    mt_local_facts
+    mt_net_facts
+}
+
+# Факты о системе без сети: ОС, ядро, CPU, память, диск, виртуализация, сеть ядра, аптайм.
+mt_local_facts() {
     SYS_OS=$(grep -E '^PRETTY_NAME=' /etc/os-release 2>/dev/null | cut -d= -f2- | tr -d '"')
     [[ -z "$SYS_OS" ]] && SYS_OS=$(uname -o 2>/dev/null || echo "unknown")
     SYS_KERNEL=$(uname -r 2>/dev/null || echo "unknown")
@@ -2248,6 +2263,10 @@ gather_system_facts() {
     SYS_UP_S=$(awk '{printf "%d", $1}' /proc/uptime 2>/dev/null)
     SYS_LOAD=$(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null)
     [[ -z "$SYS_LOAD" ]] && SYS_LOAD="—"
+}
+
+# Адреса и гео сервера — через внешние сервисы.
+mt_net_facts() {
     # Адреса тянем порознь: без -4/-6 curl на dual-stack идёт по IPv6, и в сводке
     # оставался только он — IPv4 сервера в отчёте не было вовсе.
     SYS_IP4=$(curl -s4 --max-time 6 https://ifconfig.me 2>/dev/null)
@@ -3726,6 +3745,9 @@ mt_proof_band() {
     local -a q=()
     IFS=, read -r -a q <<< "$rows"
     n=${#q[@]}
+    # QR — квадрат от 21 до 57 модулей; иначе полосу не рисуем
+    (( n >= 21 && n <= 57 )) || return 0
+    for row in "${q[@]}"; do (( ${#row} == n )) || return 0; done
     # Высота готовой страницы ≈ PG_Y + полоса (плашка + 40) + подвал и поля (≈ 206);
     # вокруг QR — 3 модуля белого поля, без него сканеры не находят квадраты-метки.
     m=$(( (3 * (PG_Y + 206) + 1280 - 3 * (n + 6) - 1) / (1280 - 3 * (n + 6)) ))
@@ -3788,7 +3810,9 @@ mt_render_data() {
             ip6)     [[ "$v" =~ ^[0-9a-f]{1,4}:[0-9a-f]{0,4}::\*$ ]] && SYS_IP6="$v" ;;
             country) [[ "$v" =~ ^[A-Z]{2}$ ]] && SYS_COUNTRY="$v" ;;
             asn)     mt_clean_set SYS_ASN "$v" ;;
-            qr)      [[ "$v" =~ ^[0-9]{1,2}$ && "$x" =~ ^[01]{21,57}(,[01]{21,57}){20,56}$ ]] && MT_PROOF_QR[$v]="$x" ;;
+            # форму (квадрат 21…57) проверяет mt_proof_band: счётчики {21,57} внутри группы
+            # раздувают автомат регулярки, и проверка строки в 1–3 КБ тянулась минутами
+            qr)      [[ "$v" =~ ^[0-9]{1,2}$ && ${#x} -le 3400 && "$x" =~ ^[01]+(,[01]+)+$ ]] && MT_PROOF_QR[$v]="$x" ;;
         esac
     done < "$dir/manifest"
     [[ -n "$MT_PROOF_ID" && -n "$MT_PROOF_CODE" && -n "$MT_RUN_DATE" ]] || { echo "render-data: неполный manifest" >&2; return 2; }
@@ -4152,10 +4176,12 @@ mt_run_counters() {
 # Она нужна на КАЖДОЙ странице альбома: из альбома пересылают по одной картинке,
 # и страница без неё уезжает в чужой чат как результат неизвестно чьего сервера.
 mt_ident_line() {
-    local ip4 ip6 ip
+    local ip4 ip6 ip geo="$SYS_COUNTRY"
     ip4=$(mask_ip "$SYS_IP4"); ip6=$(mask_ip "$SYS_IP6")
     ip="$ip4${ip4:+${ip6:+ · }}$ip6"; [[ -n "$ip" ]] || ip="—"
-    printf '%s · %s/%s · %s' "$ip" "$SYS_COUNTRY" "$SYS_CITY" "${MT_DATE:-$(date '+%Y-%m-%d %H:%M')}"
+    # у подписанного прогона города нет: бот знает только страну адреса соединения
+    [[ -n "$SYS_CITY" && "$SYS_CITY" != "—" ]] && geo+="/$SYS_CITY"
+    printf '%s · %s · %s' "$ip" "$geo" "${MT_DATE:-$(date '+%Y-%m-%d %H:%M')}"
 }
 
 # --- Мелочи без форков ------------------------------------------------------
@@ -5293,7 +5319,222 @@ step_tg_deliver() {
     return 1
 }
 
+# --- Подпись Multitest: прогон через бота ----------------------------------------------
+# Прогон привязанного сервера подписывается: перед тестами бот выдаёт код (start), после
+# каждого теста получает его разобранные данные (step) и ставит время по своим часам, в конце
+# — факты о системе (finish). Картинки бот рисует сам из этих данных и подписывает запись
+# ключом, который его сервер не покидает. Все вызовы прогона — с одного адреса и одного
+# семейства (-4, на IPv6-only — -6): с другого бот их не примет. Любая неудача — прогон идёт
+# по-старому: локальные картинки и обычная доставка, без подписи. MT_PROOF=0 — не подписывать.
+# Состояние — файлами в $SUMMARY_DIR/proof: шаги отправки идут и в форках spin_run.
+
+mt_proof_on() { [[ -s "$SUMMARY_DIR/proof/id" && -s "$SUMMARY_DIR/proof/token" ]]; }
+
+# mt_api с токеном прогона и тем семейством адресов, что получило код: <метод> <путь> <out> [аргументы]
+mt_proof_api() {
+    local tok fam
+    tok=$(cat "$SUMMARY_DIR/proof/token" 2>/dev/null); fam=$(cat "$SUMMARY_DIR/proof/fam" 2>/dev/null)
+    mt_match '^prf_[A-Za-z0-9]{32}$' "$tok" && mt_match '^[46]$' "$fam" || return 1
+    MT_API_HEADER="X-Proof-Token: $tok" mt_api "$@" "-$fam" --noproxy '*'
+}
+
+mt_proof_start() {
+    local d="$SUMMARY_DIR/proof" plan="" fn fam code
+    rm -rf "$d"
+    # подписывается альбом; одна длинная картинка (MT_ALBUM=0) в бота не уходит вовсе
+    [[ "${MT_PROOF:-1}" == 1 && "${MT_ALBUM:-1}" == 1 ]] && mt_tg_enabled || return 0
+    # каталог прогона — mktemp -d (0700), токен — под umask 077
+    mkdir -p "$d" 2>/dev/null || return 0
+    for fn in "${test_funcs[@]}"; do plan+="${plan:+,}${fn#run_}"; done
+    local -a job=()
+    [[ -n "${MT_JOB_ID:-}" ]] && job=(--data-urlencode "job_id=$MT_JOB_ID")
+    # семейство — то, по которому бот доступен; нет IPv4 — пробуем IPv6
+    for fam in 4 6; do
+        code=$(mt_api POST /v1/proof/start "$d/resp" "-$fam" --noproxy '*' --connect-timeout 5 \
+            --data-urlencode "plan=$plan" --data-urlencode "v=$SCRIPT_VERSION" "${job[@]}")
+        [[ "$code" == 000 ]] || break
+    done
+    mt_resp "$d/resp"
+    if [[ "$code:$MT_RESP_V" == "200:ok" ]] && mt_match '^[0-9A-Z]{12}$' "${MT_RESP_A[0]:-}" \
+        && mt_match '^prf_[A-Za-z0-9]{32}$' "${MT_RESP_A[1]:-}"; then
+        printf '%s' "${MT_RESP_A[0]}" > "$d/id"
+        ( umask 077; printf '%s' "${MT_RESP_A[1]}" > "$d/token" )
+        printf '%s' "$fam" > "$d/fam"
+        # второй адрес сервера — в запись (если бот сам доступен по IPv6)
+        if [[ "$fam" == 4 && "${MT_RESP_A[2]:-0}" == 1 ]]; then
+            MT_API_HEADER="X-Proof-Token: ${MT_RESP_A[1]}" mt_api POST "/v1/proof/${MT_RESP_A[0]}/seen" "$d/seen" \
+                -6 --noproxy '*' --connect-timeout 5 --data '' >/dev/null
+        fi
+        mt_say "  ${GREEN}Подпись Multitest:${NC} код ${BOLD}$(mt_proof_code "${MT_RESP_A[0]}")${NC} — картинки нарисует и подпишет бот."
+    else
+        mt_say "  ${YELLOW}Без подписи Multitest:${NC} $(mt_proof_why "$code" "$MT_RESP_V" "${MT_RESP_A[0]:-}")."
+        rm -rf "$d"
+    fi
+    return 0
+}
+
+mt_proof_code() { printf 'MT-%s-%s-%s' "${1:0:4}" "${1:4:4}" "${1:8:4}"; }
+
+mt_proof_why() {   # <http> <глагол> <причина> → по-человечески
+    case "$1:$2:$3" in
+        000:*)        echo "нет связи с ботом" ;;
+        200:off:closed) echo "бот закрыт владельцем" ;;
+        200:off:busy) echo "бот занят — подпишем в следующий раз" ;;
+        200:off:upgrade) echo "бот ещё не знает такой тест — обновите скрипт позже" ;;
+        200:off:ip)   echo "бот не видит публичный адрес сервера" ;;
+        200:off:*)    echo "подпись выключена" ;;
+        *:retry:*)    echo "слишком частые прогоны — подпишем следующий" ;;
+        *)            echo "HTTP ${1:0:3} $(mt_clean "$2")" ;;
+    esac
+}
+
+mt_say() { [[ "$MT_HEADLESS" == 1 ]] || echo -e "$1"; }
+
+# Начало теста — ради длительности в записи; без повторов: необязательно.
+mt_proof_begin() {   # <номер> <функция>
+    mt_proof_on || return 0
+    MT_API_MAXTIME=10 mt_proof_api POST "/v1/proof/$(cat "$SUMMARY_DIR/proof/id")/step" "$SUMMARY_DIR/proof/resp" \
+        --data-urlencode "n=$1" --data-urlencode "t=${2#run_}" --data-urlencode "event=begin" >/dev/null || true
+}
+
+# Конец теста: данные — сразу, пока бот ставит время. Не дошло за 3 попытки — дошлём в finish.
+mt_proof_step() {   # <номер> <функция> <выполнен|ошибка|пропущен>
+    mt_proof_on || return 0
+    local st m="$SUMMARY_DIR/$2.metrics" s="$SUMMARY_DIR/$2.services" i code
+    case "$3" in выполнен) st=ok ;; ошибка) st=err ;; *) st=skip ;; esac
+    [[ -f "$m" ]] || : > "$m"; [[ -f "$s" ]] || : > "$s"
+    for i in 1 2 3; do
+        code=$(MT_API_MAXTIME=20 mt_proof_api POST "/v1/proof/$(cat "$SUMMARY_DIR/proof/id")/step" \
+            "$SUMMARY_DIR/proof/resp" --data-urlencode "n=$1" --data-urlencode "t=${2#run_}" \
+            --data-urlencode "status=$st" --data-urlencode "metrics@$m" --data-urlencode "services@$s")
+        [[ "$code" == 200 ]] && return 0
+        [[ "$code" == 4* ]] && return 0     # бот отказал (адрес, данные) — повтор не поможет
+        (( i < 3 )) && sleep 2
+    done
+    printf '%s\t%s\t%s\n' "$1" "$2" "$3" >> "$SUMMARY_DIR/proof/late"
+    return 0
+}
+
+# Шаг spin_run: поздние шаги, факты, finish и ожидание картинок (до 5 минут).
+step_proof_finish() {
+    local d="$SUMMARY_DIR/proof" id n fn st code i k
+    mt_proof_on || return 1
+    id=$(cat "$d/id")
+    if [[ -s "$d/late" ]]; then
+        mv "$d/late" "$d/late.retry"
+        while IFS=$'\t' read -r n fn st; do mt_proof_step "$n" "$fn" "$st"; done < "$d/late.retry"
+    fi
+    mt_local_facts
+    : > "$d/facts"
+    for k in SYS_OS SYS_KERNEL SYS_ARCH SYS_CPU SYS_CORES SYS_RAM SYS_DISK SYS_VIRT SYS_CC SYS_QDISC SYS_UPTIME SYS_UP_S SYS_LOAD; do
+        printf '%s\t%s\n' "$k" "${!k//[$'\t\r\n']/ }" >> "$d/facts"
+    done
+    code=$(mt_proof_api POST "/v1/proof/$id/finish" "$d/resp" --data-urlencode "facts@$d/facts")
+    mt_resp "$d/resp"
+    if [[ "$code:$MT_RESP_V" != "200:ok" ]]; then
+        printf '%s' "$(mt_proof_why "$code" "$MT_RESP_V" "${MT_RESP_A[0]:-}")" > "$d/fail"
+        return 1
+    fi
+    for (( i = 0; i < 60; i++ )); do
+        sleep "${MT_PROOF_POLL:-5}"
+        code=$(MT_API_MAXTIME=15 mt_proof_api GET "/v1/proof/$id/status" "$d/resp")
+        mt_resp "$d/resp"
+        case "$code:$MT_RESP_V" in
+            200:done)   printf '%s' "${MT_RESP_A[0]:-}" > "$SUMMARY_DIR/tg.ok"; : > "$d/done"; return 0 ;;
+            200:failed) printf 'бот не нарисовал картинки (%s)' "$(mt_clean "${MT_RESP_A[0]:-}")" > "$d/fail"; return 1 ;;
+        esac
+    done
+    # бот не успел за 5 минут — пост придёт позже; второй, неподписанный, не шлём
+    : > "$d/slow"; : > "$d/done"; : > "$SUMMARY_DIR/tg.ok"
+    return 0
+}
+
+# Открытый ключ подписи по kid (SubjectPublicKeyInfo DER, base64) из MT_PROOF_KEYS; с датой
+# отзыва ключ годен только для записей до неё.
+mt_proof_key() {   # <kid> <дата записи ГГГГ-ММ-ДД> -> ключ
+    local kid key revoked
+    while read -r kid key revoked; do
+        [[ "$kid" == "$1" && -n "$key" ]] || continue
+        if [[ -n "$revoked" && ! "$2" < "$revoked" ]]; then return 2; fi
+        printf '%s' "$key"; return 0
+    done <<< "$MT_PROOF_KEYS"
+    return 1
+}
+
+# --verify <код|файл>: проверка подписи Multitest вшитым открытым ключом бота. openssl — любой,
+# с 1.0.2: подпись ECDSA P-256 / SHA-256. Код — запись скачивается у бота (без ключа сервера).
+mt_verify() {
+    local arg="${1:-}" d pid code tag kid sig key day line f rc
+    [[ -n "$arg" ]] || { echo "Использование: multitest --verify MT-XXXX-XXXX-XXXX | файл.txt"; return 2; }
+    command -v openssl &>/dev/null || install_package openssl >/dev/null 2>&1
+    command -v openssl &>/dev/null || { echo "Нужен openssl — или проверьте код в боте @$MT_BOT_USERNAME."; return 1; }
+    d=$(mktemp -d) || return 1
+    if [[ -f "$arg" ]]; then
+        cp "$arg" "$d/signed" || { rm -rf "$d"; return 1; }
+    else
+        pid=$(printf '%s' "$arg" | tr 'a-z' 'A-Z' | tr -d ' -' | sed 's/^MT//' | tr 'OIL' '011')
+        if ! mt_match '^[0-9A-Z]{12}$' "$pid"; then
+            echo "Код подписи — вида MT-XXXX-XXXX-XXXX."; rm -rf "$d"; return 2
+        fi
+        code=$(MT_SRV_TOKEN="" mt_api GET "/v1/proof/$pid.txt" "$d/signed")
+        case "$code" in
+            200) ;;
+            404) echo -e "${RED}Подпись не найдена:${NC} код $(mt_proof_code "$pid") бот не выдавал."; rm -rf "$d"; return 1 ;;
+            410) echo -e "${YELLOW}Подпись удалена владельцем сервера.${NC}"; rm -rf "$d"; return 1 ;;
+            *)   echo "Бот не ответил (HTTP ${code:0:3}) — попробуйте позже или проверьте в @$MT_BOT_USERNAME."; rm -rf "$d"; return 1 ;;
+        esac
+    fi
+    # редакторы добавляют BOM и CRLF — их прощаем, остальное должно совпасть байт в байт
+    LC_ALL=C sed -e '1s/^\xEF\xBB\xBF//' -e 's/\r$//' "$d/signed" > "$d/clean"
+    IFS=$'\t' read -r tag kid sig < <(tail -n 1 "$d/clean")
+    day=$(awk -F'\t' '$1 == "start" { print substr($2, 1, 10); exit }' "$d/clean")
+    rc=1
+    if [[ "$tag" == signature ]] && [[ "$(head -n 1 "$d/clean")" == "multitest-proof 1" ]]; then
+        sed '$d' "$d/clean" > "$d/rec.txt"
+        printf '%s' "$sig" | openssl base64 -d -A > "$d/sig.der" 2>/dev/null
+        key=$(mt_proof_key "$kid" "$day")
+        case $? in
+            0) printf '%s' "$key" | openssl base64 -d -A > "$d/key.der" 2>/dev/null
+               openssl pkey -pubin -inform DER -in "$d/key.der" -out "$d/key.pem" 2>/dev/null \
+                   && openssl dgst -sha256 -verify "$d/key.pem" -signature "$d/sig.der" "$d/rec.txt" >/dev/null 2>&1 \
+                   && rc=0 ;;
+            2) echo -e "${RED}Ключ $(mt_clean "$kid") отозван${NC} — записи после даты отзыва не принимаются." ;;
+            *) echo -e "${YELLOW}Незнакомый ключ $(mt_clean "$kid")${NC} — обновите multitest." ;;
+        esac
+    fi
+    if (( rc )); then
+        echo -e "${RED}${BOLD}Подпись НЕВЕРНА${NC} — запись подделана или изменена."
+        rm -rf "$d"; return 1
+    fi
+    echo -e "${GREEN}${BOLD}Подпись верна${NC} — запись подписана ботом Multitest и не менялась."
+    while IFS=$'\t' read -r -a f; do
+        case "${f[0]}" in
+            code)  line="  Код: ${f[1]}" ;;
+            start) line="  Начало: ${f[1]} (по часам бота, UTC)" ;;
+            finish) line="  Конец:  ${f[1]}" ;;
+            ip4|ip6) [[ "${f[1]}" == - ]] && continue; line="  Адрес (${f[0]}): ${f[1]} · ${f[2]} · ${f[3]}" ;;
+            launch) [[ "${f[1]}" == bot ]] && line="  Запуск: из бота" || line="  Запуск: на сервере" ;;
+            test)  line="  Тест ${f[2]}: ${f[3]}${f[6]:+ · ${f[6]}}" ;;
+            *) continue ;;
+        esac
+        printf '%s\n' "$(mt_clean "$line")"
+    done < "$d/rec.txt"
+    echo "  Цифры тестов — со слов сервера; подпись подтверждает, что их не меняли после прогона."
+    rm -rf "$d"
+    return 0
+}
+
 mt_tg_report() {
+    if [[ -e "$SUMMARY_DIR/proof/slow" ]]; then
+        echo -e "  ${GREEN}Подпись Multitest:${NC} бот ещё рисует картинки — пост с кодом" \
+            "${BOLD}$(mt_proof_code "$(cat "$SUMMARY_DIR/proof/id")")${NC} придёт в Telegram."
+        return
+    fi
+    if [[ -e "$SUMMARY_DIR/proof/done" ]]; then
+        echo -e "  ${GREEN}Подписанная сводка отправлена в Telegram${NC} (@${MT_BOT:-$MT_BOT_USERNAME}):" \
+            "код ${BOLD}$(mt_proof_code "$(cat "$SUMMARY_DIR/proof/id")")${NC}."
+        return
+    fi
     if [[ -e "$SUMMARY_DIR/tg.ok" ]]; then
         echo -e "  ${GREEN}Сводка отправлена в Telegram${NC} (@${MT_BOT:-$MT_BOT_USERNAME})."
     elif [[ -e "$SUMMARY_DIR/tg.blocked" ]]; then
@@ -5350,10 +5591,23 @@ render_album_summary() {
     (( ${#MT_PAGE_IDX[@]} > 0 && n <= MT_ALBUM_MAX )) || return 1
 
     rm -f "$SUMMARY_DIR/pages.list"
-    local tg=0 dir="$SUMMARY_DIR/pages"
+    local tg=0 proofed=0 dir="$SUMMARY_DIR/pages"
+    # Подписанный прогон: картинки рисует и присылает в Telegram сам бот. Не вышло — как раньше.
+    if mt_proof_on; then
+        if spin_run "Подпись Multitest: бот рисует и подписывает картинки" step_proof_finish; then
+            proofed=1; tg=1
+        else
+            echo -e "  ${YELLOW}Без подписи:${NC} $(cat "$SUMMARY_DIR/proof/fail" 2>/dev/null || echo "бот не ответил") — отправлю как обычно."
+        fi
+    fi
+    # агенту (без imgdb) с подписанным прогоном свои картинки не нужны
+    if (( proofed )) && [[ "$MT_IMGDB" != "1" ]]; then
+        mt_tg_report
+        return 0
+    fi
     if ! spin_run "Собираю страницы альбома (${n})" step_build_pages; then
         # недостроенный альбом в бот не шлём — только сводку, бот напишет пост текстом
-        if mt_tg_enabled && [[ -s "$SUMMARY_DIR/summary.txt" ]]; then
+        if (( !proofed )) && mt_tg_enabled && [[ -s "$SUMMARY_DIR/summary.txt" ]]; then
             rm -f "$SUMMARY_DIR/pages.list"
             spin_run "Отправляю сводку в Telegram" step_tg_deliver
             mt_tg_report
@@ -5361,7 +5615,7 @@ render_album_summary() {
         echo -e "  ${YELLOW}Страницы не собрались — соберу одной картинкой.${NC}"
         return 1
     fi
-    if mt_tg_enabled; then
+    if (( !proofed )) && mt_tg_enabled; then
         spin_run "Отправляю сводку в Telegram" step_tg_deliver
         [[ -e "$SUMMARY_DIR/tg.ok" ]] && tg=1
     fi
@@ -5517,6 +5771,7 @@ mt_cli_help() {
     echo "                    (код mtp_… — из кнопки «Добавить сервер» в боте: без ссылки и QR)"
     echo "  --tg-status       привязан ли сервер и есть ли связь с ботом"
     echo "  --unpair          отвязать сервер и удалить ключ"
+    echo "  --verify КОД      проверить подпись Multitest (MT-XXXX-XXXX-XXXX или файл записи)"
     echo "  --agent           служба запуска тестов из Telegram (её запускает systemd)"
     echo "  --help            эта справка"
 }
@@ -5533,6 +5788,7 @@ mt_cli_dispatch() {
         --agent) mt_agent_main; exit $? ;;
         --agent-selftest) echo agent-ok; exit 0 ;;
         --render-data) mt_render_data "${2:-}"; exit $? ;;
+        --verify) mt_verify "${2:-}"; exit $? ;;
         *) echo "Неизвестный параметр: $1" >&2; mt_cli_help >&2; exit 2 ;;
     esac
 }
