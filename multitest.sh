@@ -5,7 +5,9 @@
 # ============================================================
 
 SCRIPT_VERSION="3.0"
-REPO_URL="https://raw.githubusercontent.com/saveksme/multitest/master/multitest.sh"
+# Откуда --install и подсказки качают скрипт. Версия 3 (бот, агент) пока живёт в этой ветке,
+# в master — 2.0 без агента: её ставить нельзя. При слиянии в master вернуть master.
+REPO_URL="https://raw.githubusercontent.com/saveksme/multitest/dev-material-summary/multitest.sh"
 
 # Цвета. ANSI-C quoting: внутри уже настоящий ESC, а не текст «\033». Так его
 # одинаково печатают и `echo -e`, и `printf '%s'` — без переинтерпретации, из-за
