@@ -40,8 +40,9 @@ if pid == 0:
     os.execvp("bash", ["bash", script])
 buf = b""
 def wait_for(token, t=10):
+    """Ждать token в выводе, пришедшем после вызова (старый вывод и эхо ввода не в счёт)."""
     global buf
-    end = time.time() + t
+    start, end = len(buf), time.time() + t
     while time.time() < end:
         r, _, _ = select.select([fd], [], [], 0.2)
         if r:
@@ -52,15 +53,14 @@ def wait_for(token, t=10):
             if not chunk:
                 return False
             buf += chunk
-            if token.encode() in buf:
+            if token.encode() in buf[start:]:
                 return True
     return False
 ok = wait_for("Выберите пункт")
 os.write(fd, b"99\r")
 ok = ok and wait_for("Неверный выбор")
-os.write(fd, b"\r")
-n = buf.count("Выберите пункт".encode())
-ok = ok and wait_for("Выберите пункт") and buf.count("Выберите пункт".encode()) > n
+os.write(fd, b"\r")                                    # Enter в паузе — снова меню
+ok = ok and wait_for("Выберите пункт")
 os.write(fd, b"\x04")                                  # Ctrl+D на пустой строке — EOF
 end, status = time.time() + 5, None
 while time.time() < end and status is None:
