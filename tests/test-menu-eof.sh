@@ -32,7 +32,7 @@ check "BBR без TTY: молча дальше"                '[ "$rc" = 0 ] &&
 
 # Меню в настоящем терминале (pty): работает как раньше, Ctrl+D на приглашении — выход 0.
 if t_is_linux && command -v python3 >/dev/null 2>&1; then
-    cat > "$T_W/pty.py" <<'EOF'
+    cat > "$T_W/menu_tty.py" <<'EOF'
 import os, pty, select, sys, time
 script, = sys.argv[1:]
 pid, fd = pty.fork()
@@ -77,7 +77,7 @@ if not ok or status != 0:
     print("tail=%r" % buf[-1500:])
 EOF
     out=$(MT_STATE_DIR="$T_W/state" MT_SYSTEMD="$T_W/nosystemd" MT_AGENT_UNIT="$T_W/unit/x.service" \
-        TERM=xterm timeout 60 python3 "$T_W/pty.py" "$T_ROOT/multitest.sh" 2>&1)
+        TERM=xterm timeout 60 python3 -I "$T_W/menu_tty.py" "$T_ROOT/multitest.sh" 2>&1)
     check "TTY: меню, «Неверный выбор», Enter — как раньше" '[[ "$out" == *"menu=True"* ]]'
     check "TTY: Ctrl+D на приглашении — выход 0"          '[[ "$out" == *"exit=0"* ]]'
     [[ "$out" == *"menu=True exit=0"* ]] || printf '%s\n' "$out" | tail -c 3000 | sed 's/^/    | /'
