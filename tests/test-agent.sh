@@ -6,9 +6,11 @@ t_fake_curl
 MT_STATE_DIR="$T_W/state"; MT_CONF="$MT_STATE_DIR/agent.conf"
 MT_AGENT_DIR="$T_W/agent"; MT_AGENT_UNIT="$T_W/unit/multitest-agent.service"; MT_SYSTEMD="$T_W/systemd"
 MT_LOCK_FILE="$T_W/lock"
+# команда и копия службы — во временном каталоге: отвязка и revoked их удаляют
+MT_CLI_BIN="$T_W/usr/bin/multitest"; MT_AGENT_BIN="$T_W/usr/lib/multitest/multitest"
 mkdir -p "$MT_AGENT_DIR" "$T_W/unit" "$MT_SYSTEMD"
 sleep() { :; }
-systemctl() { echo "systemctl $*" >> "$T_W/systemctl"; }
+systemctl() { echo "systemctl $*" >> "$T_W/systemctl"; [[ "$1" != is-active ]]; }
 capture_test()      { echo "CAPTURE $1" >> "$T_W/calls"; echo "вывод" > "$2"; }
 parse_test_output() { :; }
 install_deps_for()  { :; }
@@ -91,12 +93,11 @@ check "без ключа → 78"                   '[ $rc = 78 ] && [ "$(t_calls
 
 # 10. Установка службы: unit с нужными строками
 pair; fresh
-bash() { if [[ "${2:-}" == --agent-selftest ]]; then echo agent-ok; else command bash "$@"; fi; }
-install() { cp "${@: -2:1}" "${@: -1}" 2>/dev/null || true; }
+MT_SELF="$T_ROOT/multitest.sh"
 mt_agent_install > "$T_W/out" 2>&1; rc=$?
-unset -f bash install
+MT_SELF="$0"
 check "служба установлена"               '[ $rc = 0 ] && [ -f "$MT_AGENT_UNIT" ] && grep -q "enable --now multitest-agent" "$T_W/systemctl"'
-check "unit: --agent, 78 без рестарта"   'grep -q "^ExecStart=/usr/local/bin/multitest --agent$" "$MT_AGENT_UNIT" && grep -q "^RestartPreventExitStatus=78$" "$MT_AGENT_UNIT"'
+check "unit: --agent, 78 без рестарта"   'grep -qx "ExecStart=$MT_AGENT_BIN --agent" "$MT_AGENT_UNIT" && grep -q "^RestartPreventExitStatus=78$" "$MT_AGENT_UNIT"'
 check "unit: SHELL и рабочий каталог"    'grep -q "^Environment=SHELL=/bin/bash HOME=/root" "$MT_AGENT_UNIT" && grep -q "^WorkingDirectory=$MT_AGENT_DIR/work$" "$MT_AGENT_UNIT"'
 check "unit: без Nice/ProtectSystem"     '! grep -qE "^(Nice|IOSchedulingClass|ProtectSystem|UMask)=" "$MT_AGENT_UNIT"'
 t_finish

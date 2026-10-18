@@ -48,6 +48,13 @@ MT_RESP=""; MT_RESP_V=""; MT_RESP_A=()
 MT_AGENT_DIR="${MT_AGENT_DIR:-/var/lib/multitest}"
 MT_AGENT_UNIT="${MT_AGENT_UNIT:-/etc/systemd/system/multitest-agent.service}"
 MT_SYSTEMD="${MT_SYSTEMD:-/run/systemd/system}"
+# Команда multitest и отдельная копия скрипта для службы. Служба запускает только свою копию:
+# /usr/local/bin/multitest переписывает любая установка (README, --install, бот), и версия без
+# агента уронила бы службу в меню. Копию службы кладёт только mt_agent_refresh — после проверки
+# --agent-selftest. MT_SELF — этот скрипт файлом (при bash <(curl …) это /dev/fd/N, не файл).
+MT_CLI_BIN="${MT_CLI_BIN:-/usr/local/bin/multitest}"
+MT_AGENT_BIN="${MT_AGENT_BIN:-/usr/local/lib/multitest/multitest}"
+MT_SELF="${MT_SELF:-$0}"
 MT_LIM_GAP=300; MT_LIM_DAY=12; MT_LIM_HEAVY=4     # раз в 5 мин, 12 в сутки, тяжёлых 4
 MT_HEADLESS=0; MT_JOB_ID=""; MT_JOB_DIR=""; MT_TEST_NUM=""
 
@@ -62,38 +69,42 @@ AD_LOGO_STEN="M 33.6 0.4 C 22.4 1.3, 12.7 9, 9.1 19.8 C 8.1 22.7, 7.7 27.3, 8.1 
 AD_LOGO_CLOUD="M 32 98.6 C 17.8 100.6, 6.3 110.1, 1.9 123.4 C 0.6 127.3, 0 131.4, 0 136.1 C 0 140.6, 0.3 143.3, 1.3 146.9 C 4.8 160.6, 16.5 170.3, 31.5 172 C 35.6 172.5, 38.2 172.4, 42.4 171.8 C 51.1 170.6, 59.2 166.2, 63.8 160.1 C 67.2 155.6, 69.3 150.2, 69.4 145.4 L 69.5 143.2 59.2 143.2 C 49.4 143.1, 48.8 143.1, 48.8 143.6 C 48.8 144, 48.5 145.1, 48.2 146.2 C 46.5 151, 41.4 153.7, 34.7 153.3 C 29 152.9, 24.7 150.1, 22.4 145.5 C 20.9 142.3, 20.5 140.6, 20.5 135.8 C 20.5 131.1, 20.9 129.3, 22.2 126.4 C 23.6 123.5, 24.9 121.9, 27.4 120.2 C 29.9 118.5, 32.4 117.6, 35.5 117.4 C 40 117, 44.4 118.5, 46.5 121.2 C 47.7 122.6, 48.8 125.5, 48.8 127 L 48.8 127.8 59.3 127.8 L 69.8 127.8 69.6 125.1 C 68.6 112.2, 59.8 102.2, 46.7 99.2 C 43.6 98.5, 35.3 98.2, 32 98.6 M 72.5 134.8 L 72.5 171.4 94.4 171.4 L 116.3 171.4 116.3 162.3 L 116.2 153.2 104.4 153.1 L 92.6 153 92.7 146.1 C 92.7 142.3, 92.8 130, 92.7 118.8 L 92.7 98.3 82.6 98.3 L 72.5 98.3 72.5 134.8 M 216.9 124.4 L 217 150.4 217.8 153.4 C 219.1 158.1, 220.8 161.1, 224.1 164.4 C 226.7 167, 227.3 167.5, 230.5 169 C 235.2 171.3, 238.2 172, 243.8 172.2 C 255.5 172.7, 265.2 168.4, 270.3 160.4 C 272.4 157.1, 273.4 154.7, 274.1 150.6 C 274.4 148.6, 274.8 105.2, 274.5 101 L 274.3 98.3 264.3 98.3 L 254.2 98.3 254.1 101.2 C 254 102.8, 253.9 113.8, 253.9 125.7 C 253.8 137.6, 253.7 147.6, 253.6 148.1 C 253.3 149.5, 252.2 151.2, 251.1 151.9 C 246.6 155.1, 240.2 153.8, 238.2 149.3 C 237.5 147.9, 237.5 147.5, 237.4 123.1 L 237.3 98.3 227.1 98.3 L 216.8 98.3 216.9 124.4 M 278.4 134.8 L 278.4 171.1 295 171 C 310.8 170.9, 311.7 170.9, 314.2 170.2 C 323.8 167.7, 329.5 164.2, 334.2 157.9 C 336.3 155, 337.5 152.7, 338.6 149.1 C 339.9 144.8, 340.1 142.3, 339.9 133.3 C 339.8 125.4, 339.7 124.7, 339 121.8 C 335.6 109.7, 326.9 101.9, 313.9 99.4 C 311.7 98.9, 308.3 98.8, 294.8 98.7 L 278.4 98.5 278.4 134.8 M 167 99.3 C 160.7 100.2, 155.1 103.1, 150.9 107.5 C 147.8 110.7, 145.9 113.7, 144.5 117.7 C 143.8 119.6, 143.3 120.1, 141.9 120.1 C 140 120.1, 135.6 121.3, 133.3 122.4 C 126 126.1, 121.4 131.7, 119.4 139.2 C 116.3 151.3, 121.7 163.5, 132.4 168.8 C 137.8 171.4, 135.5 171.2, 168.1 171.2 L 197.1 171.2 199.8 170.2 C 203.7 168.9, 205.7 167.6, 208.4 164.9 C 212.4 160.9, 214.5 156.2, 214.9 150.7 C 215.4 141, 210 132.4, 201.2 129.1 L 198.9 128.3 198.7 125.2 C 198.4 120.2, 197.1 116.2, 194.5 112.1 C 192.5 109, 191.2 107.6, 188.9 105.7 C 182.4 100.4, 174.6 98.1, 167 99.3 M 298.9 135 L 298.9 152.8 304.5 152.7 C 309.9 152.6, 310 152.6, 312.1 151.6 C 313.2 151, 314.9 149.9, 315.9 149 C 318.8 146.2, 319.8 142.6, 319.8 134.2 C 319.8 127.3, 318.9 123.9, 316.5 121.3 C 313.8 118.4, 310.1 117.3, 303.2 117.3 L 298.9 117.3 298.9 135 M 144.5 148.7 C 142.4 149.3, 141 151.9, 141.4 154.2 C 141.7 155.7, 143.2 157.3, 144.6 157.7 C 145.3 157.9, 149.9 158, 155.9 158 C 165.7 158, 166 158, 167.4 157.3 C 169.1 156.5, 169.9 155.1, 169.9 153.2 C 169.9 151.3, 169.1 149.9, 167.4 149.1 C 166 148.4, 165.8 148.4, 155.7 148.4 C 150.1 148.4, 145 148.6, 144.5 148.7 M 178.4 148.7 C 177.8 148.9, 177 149.5, 176.5 150.1 C 173.1 153.8, 177.2 159.5, 181.8 157.5 C 185.3 155.9, 185.4 150.9, 182 149.1 C 180.5 148.3, 179.9 148.3, 178.4 148.7 M 192.4 149 C 190 150.1, 189 153.1, 190.3 155.5 C 191.1 157.1, 193.3 158.2, 195.1 157.9 C 197.6 157.4, 199.4 154.8, 198.9 152.2 C 198.7 150.8, 197.1 149.1, 195.7 148.7 C 194.2 148.3, 193.8 148.3, 192.4 149"
 
 # ============================================================
-#  Установка (--install)
+#  Параметры — до всего остального
 # ============================================================
+# Незнакомый параметр — справка в stderr и код 2, никогда не меню: служба systemd с флагом,
+# которого версия не знает, иначе уйдёт в интерактивный цикл на stdin=/dev/null (так версия
+# 2.0 без разбора флагов залила диск журналом). Здесь только проверка; режимы выполняет
+# mt_cli_dispatch в конце файла, когда определены все функции.
 
-if [[ "$1" == "--install" ]]; then
-    echo -e "${CYAN}Установка multitest...${NC}"
-    INSTALL_PATH="/usr/local/bin/multitest"
-    TMP_FILE=$(mktemp)
+mt_cli_help() {
+    echo "Использование: multitest [параметр]"
+    echo "  (без параметров)  интерактивное меню (нужен терминал)"
+    echo "  --install         установить как команду multitest"
+    echo "  --pair [код]      привязать сервер к Telegram-боту @${MT_BOT_USERNAME}"
+    echo "                    (код mtp_… — из кнопки «Добавить сервер» в боте: без ссылки и QR)"
+    echo "  --tg-status       привязан ли сервер и есть ли связь с ботом"
+    echo "  --unpair          отвязать сервер и удалить ключ"
+    echo "  --verify КОД      проверить подпись Multitest (MT-XXXX-XXXX-XXXX или файл записи)"
+    echo "  --agent           служба запуска тестов из Telegram (её запускает systemd)"
+    echo "  --version         версия"
+    echo "  --help            эта справка"
+}
 
-    if command -v curl &>/dev/null; then
-        curl -sL "$REPO_URL" -o "$TMP_FILE"
-    elif command -v wget &>/dev/null; then
-        wget -qO "$TMP_FILE" "$REPO_URL"
-    else
-        echo -e "${RED}Нужен curl или wget для установки.${NC}"
-        exit 1
-    fi
-
-    # Проверяем что скачался именно скрипт, а не страница ошибки
-    if head -1 "$TMP_FILE" 2>/dev/null | grep -q "^#!/bin/bash"; then
-        mv "$TMP_FILE" "$INSTALL_PATH"
-        chmod +x "$INSTALL_PATH"
-        echo -e "${GREEN}Установлено в ${INSTALL_PATH}${NC}"
-        echo -e "${GREEN}Теперь можно запускать командой: ${BOLD}multitest${NC}"
-    else
-        rm -f "$TMP_FILE"
-        echo -e "${RED}Ошибка: загрузка не удалась (CDN кэш). Установите напрямую:${NC}"
-        echo ""
-        echo "  curl -sL $REPO_URL -o /usr/local/bin/multitest && chmod +x /usr/local/bin/multitest"
-        echo ""
-    fi
-    exit 0
-fi
+mt_cli_check() {   # <параметры…>: известный флаг с верным числом аргументов — дальше, иначе выход 2
+    local n=$(( $# - 1 ))
+    case "$1" in
+        -h|--help)    (( n == 0 )) && { mt_cli_help; exit 0; } ;;
+        -V|--version) (( n == 0 )) && { echo "multitest $SCRIPT_VERSION"; exit 0; } ;;
+        --install|--unpair|--tg-status|--agent|--agent-selftest) (( n == 0 )) && return 0 ;;
+        --pair)       (( n <= 1 )) && return 0 ;;
+        --verify|--render-data) (( n == 1 )) && return 0 ;;
+        *) printf 'multitest: неизвестный параметр: %q\n\n' "$1" >&2; mt_cli_help >&2; exit 2 ;;
+    esac
+    printf 'multitest: неверное число аргументов у %s\n\n' "$1" >&2
+    mt_cli_help >&2
+    exit 2
+}
+[[ "${MULTITEST_TEST:-0}" == 1 || $# -eq 0 ]] || mt_cli_check "$@"
 
 # ============================================================
 #  Интерфейс
@@ -194,10 +205,28 @@ print_separator() {
     echo ""
 }
 
+# Ввод в меню и вопросах. Конец ввода (Ctrl+D, закрытый терминал) — выход из скрипта: ни одно
+# меню не крутится на пустом вводе (на stdin=/dev/null меню перерисовывалось сотни раз в
+# секунду). Таймаут read -t — не конец ввода: код > 128 возвращаем как есть. Своих локальных
+# переменных нет — read пишет в переменные вызывающего.
+mt_read() {
+    read "$@" && return 0
+    set -- $?
+    (( $1 > 128 )) && return "$1"
+    mt_menu_exit
+}
+
+mt_menu_exit() {
+    [[ "${MT_PROMO_BELOW:-0}" == "1" ]] && printf '\033[J'
+    [[ -t 1 ]] && printf '\033[?25h'      # выбор тестов прячет курсор
+    echo
+    exit 0
+}
+
 pause_prompt() {
     echo ""
     echo -e "${YELLOW}Нажмите Enter для возврата в меню...${NC}"
-    read -r
+    mt_read -r
 }
 
 # ============================================================
@@ -644,7 +673,7 @@ mt_select_tests() {
         echo -e "  Выбрано ${BOLD}${selected}${NC} из ${n} · всего $(fmt_eta $total)${need:+ · доставим: ${YELLOW}${need// /, }${NC}}"
         echo -e "  ${CYAN}Время примерное${NC} — зависит от канала и соседей по ноде."
 
-        IFS= read -rsn1 key
+        IFS= mt_read -rsn1 key
         # Кириллическая раскладка: клавиша та же физически, буква другая. Ловим
         # и её, но в подсказке не показываем — там латиница, как на клавише.
         # В C-локали read -n1 отдаёт БАЙТ, а кириллица в UTF-8 двухбайтовая,
@@ -711,7 +740,7 @@ run_all() {
             echo ""
             echo -e "  Номера через пробел или запятую (например: ${BOLD}1 3 5${NC}); диапазоны: ${BOLD}4-7${NC}"
             echo -ne "  ${BOLD}Выбор (Enter = все тесты): ${NC}"
-            read -r selection
+            mt_read -r selection
         fi
         for k in $(seq 0 $((catalog_total - 1))); do MT_SEL[$k]=0; done
         if [[ -z "$selection" || "$selection" =~ ^([Aa][Ll][Ll]|[Вв]се)$ ]]; then
@@ -890,7 +919,7 @@ mt_run_selected() {
             if read -r -t 5 -n 1 _key; then
                 echo ""
                 echo -ne "  ${BOLD}Enter${NC} — запустить | ${YELLOW}s${NC} — пропустить | ${RED}q${NC} — выход: "
-                read -r action
+                read -r action || action=q      # конец ввода — как q: стоп и сводка готового
             else
                 echo ""
             fi
@@ -1062,7 +1091,7 @@ recommend_bbr_cake() {
     echo -e "  ${YELLOW}BBR + Cake: без него одиночный TCP-поток на дальнем маршруте недобирает.${NC}"
     echo -ne "  ${BOLD}Включить сейчас? [y/д — да · Enter — нет]: ${NC}"
     local answer
-    read -r answer
+    mt_read -r answer
     case "$answer" in
         y | Y | д | Д | yes | да | Yes)
             enable_bbr_cake
@@ -1287,7 +1316,7 @@ show_utilities_menu() {
         echo -e "  ${RED}0)${NC}  Назад"
         echo ""
         echo -ne "  ${BOLD}Выберите пункт [0-${tg_max}]: ${NC}"
-        read -r util_choice || return 0
+        mt_read -r util_choice
 
         case "$util_choice" in
             1) if [[ $bbr_on -eq 1 ]]; then disable_bbr_cake; else enable_bbr_cake; fi; pause_prompt ;;
@@ -1688,7 +1717,7 @@ mt_tg_menu() {
         echo -e "  ${RED}0)${NC}  Назад"
         echo ""
         echo -ne "  ${BOLD}Выберите пункт: ${NC}"
-        read -r c || return 0
+        mt_read -r c
         case "$paired:$c" in
             1:1) mt_tg_status; pause_prompt ;;
             1:2) if mt_agent_installed; then mt_agent_uninstall; else mt_agent_install; fi; pause_prompt ;;
@@ -1851,7 +1880,7 @@ mt_agent_selfremove() {
     mt_conf_wipe
     if mt_systemd; then
         systemctl disable multitest-agent >/dev/null 2>&1
-        rm -f "$MT_AGENT_UNIT"
+        rm -f "$MT_AGENT_UNIT" "$MT_AGENT_BIN"
         systemctl daemon-reload >/dev/null 2>&1
     fi
 }
@@ -1863,6 +1892,16 @@ mt_agent_main() {
     if (( rc == 1 )); then echo "агент: сервер не привязан — выхожу"; return 78; fi
     if (( rc == 78 )); then echo "агент: $MT_CONF испорчен — ничего не трогаю"; return 78; fi
     mt_headless_init
+    # Старый unit запускал /usr/local/bin/multitest, а его переписывает любая установка.
+    # Кладём себя (проверенной копией) в отдельный файл службы и сразу уходим в него.
+    if mt_systemd && mt_agent_installed && [[ "$MT_SELF" -ef "$MT_CLI_BIN" ]] && ! [[ "$MT_SELF" -ef "$MT_AGENT_BIN" ]]; then
+        tmp=$(mt_candidate) && mt_agent_ok "$tmp" && mt_agent_refresh "$tmp" && {
+            rm -f "$tmp"
+            echo "агент: переезжаю в $MT_AGENT_BIN — эту копию обновления multitest не трогают"
+            mt_agent_reexec
+        }
+        rm -f "$tmp"
+    fi
     mkdir -p "$MT_AGENT_DIR/runs" "$MT_AGENT_DIR/work" 2>/dev/null
     cd "$MT_AGENT_DIR/work" 2>/dev/null || cd /tmp || return 1
     tmp=$(mktemp) || return 1
@@ -1890,39 +1929,53 @@ mt_agent_main() {
     return 0
 }
 
-# Включить запуск из Telegram: скрипт в /usr/local/bin (проверяем, что он умеет агента),
-# unit systemd, enable --now. Без systemd пока не умеем — доставка сводок работает и так.
-mt_agent_install() {
-    local bin=/usr/local/bin/multitest tmp
-    if ! mt_systemd; then
-        echo -e "  ${YELLOW}Запуск из Telegram пока работает только с systemd — здесь его нет.${NC}"; return 1
-    fi
+# Умеет ли скрипт-кандидат агента: шебанг, синтаксис и ответ на --agent-selftest. Старые
+# версии флаги не разбирают и уходят в меню, а на /dev/null крутят его вечно — поэтому
+# stdin=/dev/null, таймаут и не больше 64 байт ответа (без head вывод копился бы в памяти).
+mt_agent_ok() {
+    local out
+    [[ -s "$1" ]] && head -n 1 "$1" | grep -q '^#!/bin/bash' && bash -n "$1" 2>/dev/null || return 1
+    out=$(timeout 20 bash "$1" --agent-selftest </dev/null 2>/dev/null | head -c 64)
+    [[ "$out" == agent-ok ]]
+}
+
+# Этот скрипт во временный файл -> путь: запущен файлом — копия себя, через bash <(curl …) — REPO_URL
+mt_candidate() {
+    local tmp
     tmp=$(mktemp) || return 1
-    if [[ -f "$0" && -r "$0" ]] && head -1 "$0" | grep -q '^#!/bin/bash'; then
-        cp "$0" "$tmp"
-    elif ! curl -fsSL --proto =https --max-time 60 "$REPO_URL" -o "$tmp" 2>/dev/null; then
-        rm -f "$tmp"; echo -e "  ${RED}Не удалось скачать multitest для службы.${NC}"; return 1
-    fi
-    if ! head -1 "$tmp" | grep -q '^#!/bin/bash' || ! bash -n "$tmp" 2>/dev/null \
-        || [[ "$(bash "$tmp" --agent-selftest 2>/dev/null)" != agent-ok ]]; then
-        rm -f "$tmp"
-        echo -e "  ${YELLOW}Эта версия multitest не умеет запуск из Telegram. Установите свежую:${NC}"
-        echo -e "    curl -sL $REPO_URL -o $bin && chmod +x $bin && multitest"
-        return 1
-    fi
-    if [[ ! "$tmp" -ef "$bin" ]] && ! { [[ -f "$0" ]] && [[ "$0" -ef "$bin" ]]; }; then
-        install -m 755 "$tmp" "$bin" || { rm -f "$tmp"; return 1; }
+    if [[ -f "$MT_SELF" && -r "$MT_SELF" ]]; then
+        cp "$MT_SELF" "$tmp" 2>/dev/null && { printf '%s' "$tmp"; return 0; }
+    elif command -v "$MT_CURL" >/dev/null 2>&1; then
+        "$MT_CURL" -fsSL --proto =https --max-time 60 "$REPO_URL" -o "$tmp" 2>/dev/null && { printf '%s' "$tmp"; return 0; }
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO "$tmp" "$REPO_URL" 2>/dev/null && { printf '%s' "$tmp"; return 0; }
     fi
     rm -f "$tmp"
-    mkdir -p "$MT_AGENT_DIR/work" "$MT_AGENT_DIR/runs"
-    cat > "$MT_AGENT_UNIT" <<EOF
+    return 1
+}
+
+# <источник> <куда>: копия 755 через переименование — bash, который уже читает старый файл,
+# дочитает его, а не подменённый посреди строки
+mt_put() {
+    mkdir -p "${2%/*}" 2>/dev/null
+    cp "$1" "$2.new.$$" 2>/dev/null && chmod 755 "$2.new.$$" && mv -f "$2.new.$$" "$2" && return 0
+    rm -f "$2.new.$$"
+    return 1
+}
+
+mt_agent_unit() {
+    cat <<EOF
 [Unit]
 Description=Multitest agent — тесты по заданиям из Telegram-бота
 After=network-online.target
 Wants=network-online.target
+# падает раз за разом — остановиться, а не крутиться
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
-ExecStart=$bin --agent
+# своя копия скрипта: /usr/local/bin/multitest переписывает любая установка
+ExecStart=$MT_AGENT_BIN --agent
 Restart=on-failure
 RestartSec=15
 RestartPreventExitStatus=78
@@ -1931,11 +1984,69 @@ WorkingDirectory=$MT_AGENT_DIR/work
 # SHELL обязателен: иначе script -c идёт через /bin/sh (dash), и тесты теряют функции
 Environment=SHELL=/bin/bash HOME=/root TERM=xterm-256color
 StandardInput=null
+# В журнал — только короткие строки агента: вывод тестов идёт в файлы прогона (в нём полные
+# IP). Потолок на случай поломки — 1000 строк за 30 с, лишнее journald отбросит.
+StandardOutput=journal
+StandardError=journal
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=1000
 
 [Install]
 WantedBy=multi-user.target
 EOF
-    if systemctl daemon-reload >/dev/null 2>&1 && systemctl enable --now multitest-agent >/dev/null 2>&1; then
+}
+
+# Служба — на проверенный (mt_agent_ok) скрипт <файл>: копия службы, свежий unit, daemon-reload
+mt_agent_refresh() {
+    mt_put "$1" "$MT_AGENT_BIN" || return 1
+    mkdir -p "$MT_AGENT_DIR/work" "$MT_AGENT_DIR/runs" 2>/dev/null
+    if ! { mt_agent_unit > "$MT_AGENT_UNIT.new.$$" && mv -f "$MT_AGENT_UNIT.new.$$" "$MT_AGENT_UNIT"; }; then
+        rm -f "$MT_AGENT_UNIT.new.$$"; return 1
+    fi
+    systemctl daemon-reload >/dev/null 2>&1
+    return 0
+}
+
+# Перезапуск службы на новую копию — только без прогона: задание из бота не обрываем, тогда
+# новая версия включится при следующем запуске службы. 1 — идёт прогон.
+mt_agent_restart_idle() {
+    mt_run_lock || return 1
+    exec 9>&-
+    systemctl try-restart multitest-agent >/dev/null 2>&1
+    return 0
+}
+
+mt_agent_reexec() { exec "$MT_AGENT_BIN" --agent; }
+
+# Включить запуск из Telegram: этот скрипт (проверенный на --agent-selftest) — в команду
+# multitest и в копию службы, unit, enable --now. Без systemd пока не умеем — доставка сводок
+# работает и так. Служба уже идёт (пункт «Обновить агент») — перезапуск, если нет прогона.
+mt_agent_install() {
+    local tmp
+    if ! mt_systemd; then
+        echo -e "  ${YELLOW}Запуск из Telegram пока работает только с systemd — здесь его нет.${NC}"; return 1
+    fi
+    tmp=$(mt_candidate) || { echo -e "  ${RED}Не удалось скачать multitest для службы.${NC}"; return 1; }
+    if ! mt_agent_ok "$tmp"; then
+        rm -f "$tmp"
+        echo -e "  ${YELLOW}Эта версия multitest не умеет запуск из Telegram — службу не ставлю.${NC}"
+        echo -e "  Скачайте свежую и запустите её: curl -fsSL $REPO_URL -o $MT_CLI_BIN && chmod +x $MT_CLI_BIN && multitest"
+        return 1
+    fi
+    if ! { { [[ "$MT_SELF" -ef "$MT_CLI_BIN" ]] || mt_put "$tmp" "$MT_CLI_BIN"; } && mt_agent_refresh "$tmp"; }; then
+        rm -f "$tmp"; echo -e "  ${RED}Не удалось записать скрипт службы (нужен root).${NC}"; return 1
+    fi
+    rm -f "$tmp"
+    if systemctl is-active --quiet multitest-agent 2>/dev/null; then
+        systemctl enable multitest-agent >/dev/null 2>&1
+        if mt_agent_restart_idle; then
+            echo -e "  ${GREEN}Агент обновлён и перезапущен.${NC}"
+        else
+            echo -e "  ${GREEN}Агент обновлён${NC} — идёт прогон, новая версия включится при следующем запуске службы."
+        fi
+        return 0
+    fi
+    if systemctl enable --now multitest-agent >/dev/null 2>&1; then
         echo -e "  ${GREEN}Запуск из Telegram включён: в боте у сервера появилась кнопка «Запустить тест».${NC}"
         return 0
     fi
@@ -1943,10 +2054,54 @@ EOF
     return 1
 }
 
+# Обычное обновление (новая версия в /usr/local/bin) догоняет службу при запуске меню: копия
+# службы становится этой же версией. Только из /usr/local/bin/multitest и только при службе.
+mt_agent_sync() {
+    local tmp
+    mt_agent_installed && [[ "$MT_SELF" -ef "$MT_CLI_BIN" && -w "${MT_AGENT_UNIT%/*}" ]] || return 0
+    if [[ -f "$MT_AGENT_BIN" && "$(cksum < "$MT_SELF")" == "$(cksum < "$MT_AGENT_BIN")" \
+        && "$(mt_agent_unit)" == "$(cat "$MT_AGENT_UNIT" 2>/dev/null)" ]]; then
+        return 0
+    fi
+    tmp=$(mt_candidate) || return 0
+    mt_agent_ok "$tmp" && mt_agent_refresh "$tmp" && mt_agent_restart_idle
+    rm -f "$tmp"
+    return 0
+}
+
+# --install: этот скрипт — в команду multitest. Ставим только сборку с агентом и разбором
+# параметров: старая без них уронила бы службу в меню. Служба есть — обновляем и её копию.
+mt_install() {
+    local tmp
+    echo -e "${CYAN}Установка multitest...${NC}"
+    tmp=$(mt_candidate) || { echo -e "${RED}Не удалось скачать multitest (нужен curl или wget).${NC}" >&2; return 1; }
+    if ! mt_agent_ok "$tmp"; then
+        rm -f "$tmp"
+        echo -e "${RED}Эта версия multitest устарела (нет агента и разбора параметров) — не ставлю.${NC}" >&2
+        mt_agent_installed && echo -e "${YELLOW}На сервере работает служба multitest-agent — эта версия её бы сломала.${NC}" >&2
+        return 1
+    fi
+    if ! mt_put "$tmp" "$MT_CLI_BIN"; then
+        rm -f "$tmp"; echo -e "${RED}Не удалось записать ${MT_CLI_BIN} (нужен root).${NC}" >&2; return 1
+    fi
+    echo -e "${GREEN}Установлено в ${MT_CLI_BIN}${NC} — запуск: ${BOLD}multitest${NC}"
+    if mt_agent_installed; then
+        if ! mt_agent_refresh "$tmp"; then
+            echo -e "${YELLOW}Службу multitest-agent обновить не удалось — она работает на прежней версии.${NC}" >&2
+        elif mt_agent_restart_idle; then
+            echo -e "${GREEN}Служба multitest-agent обновлена.${NC}"
+        else
+            echo -e "${YELLOW}Служба multitest-agent: новая версия включится при следующем запуске (сейчас идёт прогон).${NC}"
+        fi
+    fi
+    rm -f "$tmp"
+    return 0
+}
+
 mt_agent_uninstall() {
     if mt_systemd; then
         systemctl disable --now multitest-agent >/dev/null 2>&1
-        rm -f "$MT_AGENT_UNIT"
+        rm -f "$MT_AGENT_UNIT" "$MT_AGENT_BIN"
         systemctl daemon-reload >/dev/null 2>&1
     fi
     mt_conf_load 2>/dev/null && mt_agent_hello 0 >/dev/null
@@ -5735,25 +5890,12 @@ show_menu() {
 # Позволяет подключить функции для тестов: MULTITEST_TEST=1 source multitest.sh
 [[ "${MULTITEST_TEST:-0}" == "1" ]] && return 0 2>/dev/null
 
-mt_cli_help() {
-    echo "Использование: multitest [параметр]"
-    echo "  (без параметров)  интерактивное меню"
-    echo "  --install         установить как команду multitest"
-    echo "  --pair [код]      привязать сервер к Telegram-боту @${MT_BOT_USERNAME}"
-    echo "                    (код mtp_… — из кнопки «Добавить сервер» в боте: без ссылки и QR)"
-    echo "  --tg-status       привязан ли сервер и есть ли связь с ботом"
-    echo "  --unpair          отвязать сервер и удалить ключ"
-    echo "  --verify КОД      проверить подпись Multitest (MT-XXXX-XXXX-XXXX или файл записи)"
-    echo "  --agent           служба запуска тестов из Telegram (её запускает systemd)"
-    echo "  --help            эта справка"
-}
-
-# Флаги разбираем здесь, а не в начале файла: ниже этой строки определено уже всё.
-# Каждый режим завершает процесс; незнакомый флаг в меню не проваливается.
+# Режимы — здесь, когда определено всё; флаги и число аргументов уже проверил mt_cli_check
+# в начале файла. Каждый режим завершает процесс.
 mt_cli_dispatch() {
     case "${1:-}" in
         "") return 0 ;;
-        -h|--help) mt_cli_help; exit 0 ;;
+        --install) mt_install; exit $? ;;
         --pair) mt_tg_pair "${2:-}"; exit $? ;;
         --unpair) mt_tg_unpair; exit $? ;;
         --tg-status) mt_tg_status; exit $? ;;
@@ -5761,10 +5903,22 @@ mt_cli_dispatch() {
         --agent-selftest) echo agent-ok; exit 0 ;;
         --render-data) mt_render_data "${2:-}"; exit $? ;;
         --verify) mt_verify "${2:-}"; exit $? ;;
-        *) echo "Неизвестный параметр: $1" >&2; mt_cli_help >&2; exit 2 ;;
+        *) printf 'multitest: неизвестный параметр: %q\n' "$1" >&2; exit 2 ;;
     esac
 }
 mt_cli_dispatch "$@"
+
+# Меню — только в терминале. Без TTY (служба systemd, cron, curl | bash) read сразу получает
+# конец ввода: меню там делать нечего, честнее выйти с ошибкой.
+if [[ ! -t 0 ]]; then
+    {
+        echo "multitest: меню работает только в терминале, а stdin — не терминал."
+        echo "  Запуск: multitest   ·   без установки: bash <(curl -sL $REPO_URL)"
+        echo "  Без меню: multitest --help"
+    } >&2
+    exit 1
+fi
+mt_agent_sync
 
 # Ctrl+C на приглашении меню убивает скрипт прямо в read, мимо строки с
 # очисткой ниже: блок спонсора остаётся на экране, и шелл потом затирает его
@@ -5782,7 +5936,7 @@ while true; do
     trap mt_menu_sigint INT
     show_menu
     # Конец ввода (stdin закрыт, не терминал) — выходим, а не крутим меню вечно.
-    read -r choice || { [[ "${MT_PROMO_BELOW:-0}" == "1" ]] && printf '\033[J'; echo; exit 0; }
+    mt_read -r choice
     trap - INT
     # Блок спонсора висит ниже строки ввода — стираем его до низа экрана,
     # иначе вывод теста ляжет прямо поверх букв.
