@@ -39,7 +39,7 @@ pid, fd = pty.fork()
 if pid == 0:
     os.execvp("bash", ["bash", script])
 buf = b""
-def wait_for(token, t=15):
+def wait_for(token, t=10):
     global buf
     end = time.time() + t
     while time.time() < end:
@@ -73,11 +73,14 @@ while time.time() < end and status is None:
         status = os.waitstatus_to_exitcode(st)
     time.sleep(0.05)
 print("menu=%s exit=%s bytes=%d" % (ok, status, len(buf)))
+if not ok or status != 0:
+    print("tail=%r" % buf[-1500:])
 EOF
     out=$(MT_STATE_DIR="$T_W/state" MT_SYSTEMD="$T_W/nosystemd" MT_AGENT_UNIT="$T_W/unit/x.service" \
-        TERM=xterm timeout 40 python3 "$T_W/pty.py" "$T_ROOT/multitest.sh" 2>&1)
+        TERM=xterm timeout 60 python3 "$T_W/pty.py" "$T_ROOT/multitest.sh" 2>&1)
     check "TTY: меню, «Неверный выбор», Enter — как раньше" '[[ "$out" == *"menu=True"* ]]'
     check "TTY: Ctrl+D на приглашении — выход 0"          '[[ "$out" == *"exit=0"* ]]'
+    [[ "$out" == *"menu=True exit=0"* ]] || printf '%s\n' "$out" | tail -c 3000 | sed 's/^/    | /'
 else
     echo "  skip: pty-проверка меню — нужен Linux и python3"
 fi

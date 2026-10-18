@@ -1931,11 +1931,13 @@ mt_agent_main() {
 
 # Умеет ли скрипт-кандидат агента: шебанг, синтаксис и ответ на --agent-selftest. Старые
 # версии флаги не разбирают и уходят в меню, а на /dev/null крутят его вечно — поэтому
-# stdin=/dev/null, таймаут и не больше 64 байт ответа (без head вывод копился бы в памяти).
+# stdin=/dev/null и только первая строка ответа (не больше 64 знаков) с таймаутом. Ждать
+# конца вывода нельзя: под systemd SIGPIPE игнорируется, и старое меню крутилось бы до
+# таймаута; так вердикт — по первой строке, а timeout добивает кандидата сам.
 mt_agent_ok() {
-    local out
+    local out=""
     [[ -s "$1" ]] && head -n 1 "$1" | grep -q '^#!/bin/bash' && bash -n "$1" 2>/dev/null || return 1
-    out=$(timeout 20 bash "$1" --agent-selftest </dev/null 2>/dev/null | head -c 64)
+    IFS= read -r -t 20 -n 64 out < <(timeout 20 bash "$1" --agent-selftest </dev/null 2>/dev/null)
     [[ "$out" == agent-ok ]]
 }
 
