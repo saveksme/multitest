@@ -15,6 +15,7 @@ capture_test()      { echo "CAPTURE $1" >> "$T_W/calls"; echo "вывод" > "$2
 parse_test_output() { :; }
 install_deps_for()  { :; }
 render_and_upload_summary() { echo "RENDER job=$MT_JOB_ID imgdb=$MT_IMGDB" >> "$T_W/calls"; : > "$SUMMARY_DIR/tg.ok"; }
+mt_agent_reexec() { echo "REEXEC" >> "$T_W/calls"; }
 fresh() { rm -rf "$T_W/curl" "$T_W/calls" "$T_W/systemctl"; mkdir -p "$T_W/curl"; }
 pair()  { MT_SRV_ID=AbCdEf123456; MT_SRV_TOKEN="mtk_$(printf 'f%.0s' {1..64})"; MT_API=https://bot.test; MT_BOT=test_bot; mt_conf_save; }
 JID=Jx7Kp2Lm9Qr4St6Uv8Wz
@@ -100,4 +101,36 @@ check "служба установлена"               '[ $rc = 0 ] && [ -f "
 check "unit: --agent, 78 без рестарта"   'grep -qx "ExecStart=$MT_AGENT_BIN --agent" "$MT_AGENT_UNIT" && grep -q "^RestartPreventExitStatus=78$" "$MT_AGENT_UNIT"'
 check "unit: SHELL и рабочий каталог"    'grep -q "^Environment=SHELL=/bin/bash HOME=/root" "$MT_AGENT_UNIT" && grep -q "^WorkingDirectory=$MT_AGENT_DIR/work$" "$MT_AGENT_UNIT"'
 check "unit: без Nice/ProtectSystem"     '! grep -qE "^(Nice|IOSchedulingClass|ProtectSystem|UMask)=" "$MT_AGENT_UNIT"'
+
+# 11. upgrade из бота: скачивание из захардкоженного репозитория, замена копии, reexec
+pair; fresh
+t_respond 200 "ok"                                   # hello
+t_respond 200 "upgrade"                              # poll
+t_respond 200 "$(cat "$T_ROOT/multitest.sh")"        # «новый» скрипт из репозитория
+MT_AGENT_POLLS=1 mt_agent_main > "$T_W/out" 2>&1
+check "upgrade: reexec вызван"             'grep -qx "REEXEC" "$T_W/calls"'
+check "upgrade: копия службы заменена"     'grep -q "run_tspu_check" "$MT_AGENT_BIN"'
+check "upgrade: тянул из REPO_URL скрипта" 'grep -qxF "$REPO_URL" "$T_W/curl/argv.3"'
+
+# 12. Слежение за репозиторием: таймер — самообновление между опросами
+pair; fresh
+t_respond 200 "ok"                                   # hello
+t_respond 200 "$(cat "$T_ROOT/multitest.sh")"        # проверка репозитория (итерация 1)
+t_respond 200 "idle"                                 # poll
+t_respond 200 "$(cat "$T_ROOT/multitest.sh")"        # проверка репозитория (итерация 2)
+t_respond 200 "idle"                                 # poll
+MT_REPO_CHECK_EVERY=0 MT_AGENT_POLLS=2 mt_agent_main > "$T_W/out" 2>&1
+check "таймер: два скачивания из REPO_URL" '[ "$(grep -lxF "$REPO_URL" "$T_W"/curl/argv.* | wc -l)" = 2 ]'
+check "таймер: reexec по каждому обновлению" '[ "$(grep -c REEXEC "$T_W/calls")" = 2 ]'
+check "таймер: опросы продолжались"        '[ "$(grep -lx "wait=25" "$T_W"/curl/argv.* | wc -l)" = 2 ]'
+
+# 13. Репозиторий недоступен — строка в журнал, reexec нет, опрос продолжается
+pair; fresh
+t_respond 200 "ok"                                   # hello
+# ответа №2 нет: скачивание падает (поддельный curl отвечает кодом 7)
+t_respond 200 "idle"                                 # poll
+MT_REPO_CHECK_EVERY=0 MT_AGENT_POLLS=1 mt_agent_main > "$T_W/out" 2>&1
+check "репозиторий упал: reexec не было"   '[ ! -e "$T_W/calls" ]'
+check "репозиторий упал: строка в журнал"  'grep -q "проверка обновления не удалась" "$T_W/out"'
+check "репозиторий упал: опрос был"        'grep -qx "wait=25" "$T_W/curl/argv.3"'
 t_finish

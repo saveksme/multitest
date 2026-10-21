@@ -4,7 +4,7 @@
 #  Multitest — интерактивный скрипт диагностики сервера
 # ============================================================
 
-SCRIPT_VERSION="3.0"
+SCRIPT_VERSION="3.1"
 # Откуда --install и подсказки качают скрипт. Версия 3 (бот, агент) пока живёт в этой ветке,
 # в master — 2.0 без агента: её ставить нельзя. При слиянии в master вернуть master.
 REPO_URL="https://raw.githubusercontent.com/saveksme/multitest/dev-material-summary/multitest.sh"
@@ -58,6 +58,8 @@ MT_CLI_BIN="${MT_CLI_BIN:-/usr/local/bin/multitest}"
 MT_AGENT_BIN="${MT_AGENT_BIN:-/usr/local/lib/multitest/multitest}"
 MT_SELF="${MT_SELF:-$0}"
 MT_LIM_GAP=300; MT_LIM_DAY=12; MT_LIM_HEAVY=4     # раз в 5 мин, 12 в сутки, тяжёлых 4
+# Как часто агент сам сверяется с репозиторием (секунды, только между прогонами).
+MT_REPO_CHECK_EVERY="${MT_REPO_CHECK_EVERY:-3600}"
 MT_HEADLESS=0; MT_JOB_ID=""; MT_JOB_DIR=""; MT_TEST_NUM=""
 
 # Марка спонсора для подписи: контур обведён с растрового логотипа
@@ -2028,9 +2030,18 @@ mt_agent_main() {
     echo "агент: запущен, бот @${MT_BOT}"
     mt_agent_hello 1 >/dev/null
     [[ "$MT_RESP_V" == revoked ]] && { echo "агент: сервер отвязан в боте — удаляю ключ и службу"; mt_agent_selfremove; return 78; }
+    # Слежение за репозиторием: первая проверка в первые 2 минуты после старта (сходимость
+    # после ручного обновления или рестарта службы), дальше — раз в MT_REPO_CHECK_EVERY.
+    local repo_next=$(( SECONDS + (MT_REPO_CHECK_EVERY < 120 ? MT_REPO_CHECK_EVERY : 120) )) urc=0
     while :; do
         if [[ -n "${MT_AGENT_POLLS:-}" ]]; then        # для тестов: ограничить число опросов
             (( polls++ >= MT_AGENT_POLLS )) && break
+        fi
+        # Проверка репозитория — только в этой точке цикла: здесь заданий не идёт.
+        if (( SECONDS >= repo_next )); then
+            repo_next=$(( SECONDS + MT_REPO_CHECK_EVERY ))
+            mt_agent_selfupdate; urc=$?
+            (( urc == 2 )) && echo "агент: проверка обновления не удалась — следующая через час"
         fi
         code=$(MT_API_MAXTIME=60 mt_api GET /v1/agent/poll "$tmp" --data-urlencode "wait=25")
         mt_resp "$tmp"
@@ -2039,7 +2050,10 @@ mt_agent_main() {
             200:idle)    backoff=5 ;;
             200:revoked) echo "агент: сервер отвязан в боте — удаляю ключ и службу"
                          rm -f "$tmp"; mt_agent_selfremove; return 78 ;;
-            200:upgrade) echo "агент: бот просит обновить multitest (multitest → Утилиты → Telegram-бот → обновить агент)"; sleep 3600 ;;
+            200:upgrade) echo "агент: бот просит обновить multitest"
+                         mt_agent_selfupdate; urc=$?
+                         (( urc == 1 )) && echo "агент: репозиторий уже свежий — продолжаю"
+                         (( urc == 2 )) && { echo "агент: обновление не удалось — повтор через час"; sleep 3600; } ;;
             *)           echo "агент: бот недоступен (HTTP $(mt_clean "${code:0:3}")) — повтор через ${backoff} c"
                          sleep $(( backoff + RANDOM % 5 ))
                          backoff=$(( backoff * 2 )); (( backoff > 21600 )) && backoff=21600 ;;
@@ -2074,6 +2088,42 @@ mt_candidate() {
     fi
     rm -f "$tmp"
     return 1
+}
+
+# Скрипт из репозитория во временный файл -> путь. В отличие от mt_candidate всегда тянет
+# REPO_URL: самообновлению нельзя копировать самого себя. Адрес зашит здесь, в скрипте, —
+# извне (ботом, заданием) он не подменяется.
+mt_repo_download() {
+    local tmp
+    tmp=$(mktemp) || return 1
+    if command -v "$MT_CURL" >/dev/null 2>&1; then
+        "$MT_CURL" -fsSL --proto =https --max-time 60 "$REPO_URL" -o "$tmp" 2>/dev/null \
+            && [[ -s "$tmp" ]] && { printf '%s' "$tmp"; return 0; }
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO "$tmp" "$REPO_URL" 2>/dev/null && [[ -s "$tmp" ]] && { printf '%s' "$tmp"; return 0; }
+    fi
+    rm -f "$tmp"
+    return 1
+}
+
+# Самообновление агента из репозитория: скачать, проверить кандидата (mt_agent_ok), заменить
+# копию службы и уйти в неё перезапуском. 0 — обновились (в проде не возвращается: exec),
+# 1 — репозиторий без изменений, 2 — скачать/проверить/заменить не вышло.
+mt_agent_selfupdate() {
+    local upd
+    upd=$(mt_repo_download) || return 2
+    if [[ -f "$MT_SELF" && -s "$MT_SELF" ]] \
+        && [[ "$(cksum < "$upd" 2>/dev/null)" == "$(cksum < "$MT_SELF" 2>/dev/null)" ]]; then
+        rm -f "$upd"; return 1
+    fi
+    if mt_agent_ok "$upd" && mt_agent_refresh "$upd"; then
+        rm -f "$upd"
+        echo "агент: скрипт обновлён из репозитория — перезапускаюсь"
+        mt_agent_reexec   # в проде не возвращается (exec)
+        return 0          # в тестах reexec подменён — считаем успехом
+    fi
+    rm -f "$upd"
+    return 2
 }
 
 # <источник> <куда>: копия 755 через переименование — bash, который уже читает старый файл,
