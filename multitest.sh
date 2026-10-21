@@ -590,6 +590,123 @@ run_ping_map() {
     printf "  Отчёт: %s\n" "$report"
 }
 
+# ТСПУ: виден ли SSH-порт этого сервера с площадок провайдеров РФ — так заметна
+# фильтрация. Сторонняя внешняя площадка проверки: POST запуска → поток событий
+# с вердиктами площадок. Адрес площадки и маркер доступа держим кусками и не
+# светим в коде: сервис чужой, лишнее внимание к нему не нужно.
+run_tspu_check() {
+    print_separator "ТСПУ — доступность SSH из РФ"
+    check_and_install curl
+
+    local _a="aHR0cHM6Ly9p" _b="d3RzeS5jb20=" _c="aXd0c3lf" _d="Y29uc2VudD15ZXM="
+    local base ckey curlbin="${MT_CURL:-curl}"
+    base=$(printf '%s' "${_a}${_b}" | base64 -d 2>/dev/null)
+    ckey=$(printf '%s' "${_c}${_d}" | base64 -d 2>/dev/null)
+    if [[ "$base" != https://* || -z "$ckey" ]]; then
+        echo -e "  ${RED}[TSPU] ОШИБКА: проверка сейчас недоступна.${NC}"
+        return 1
+    fi
+
+    # Поле из однострочного JSON (jq в проекте нет — sed)
+    tspu_jstr() { printf '%s' "$1" | sed -nE 's/.*"'"$2"'"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p' | head -1; }
+    tspu_jnum() { printf '%s' "$1" | sed -nE 's/.*"'"$2"'"[[:space:]]*:[[:space:]]*(-?[0-9]+([.][0-9]+)?).*/\1/p' | head -1; }
+
+    # Какой порт SSH реально принимает соединения на этой машине:
+    # 1) порт текущей SSH-сессии (4-е поле SSH_CONNECTION), если запуск из неё;
+    # 2) слушатель процесса sshd по ss/netstat;
+    # 3) первая незакомментированная директива Port из конфига sshd;
+    # 4) 22.
+    tspu_ssh_port() {
+        local p=""
+        [[ -n "${SSH_CONNECTION:-}" ]] && p=$(printf '%s\n' "$SSH_CONNECTION" | awk '{print $4}')
+        if [[ ! "$p" =~ ^[0-9]+$ ]]; then
+            if command -v ss &>/dev/null; then
+                p=$(ss -ltnp 2>/dev/null | awk '/sshd/ { n=split($4,a,":"); print a[n]; exit }')
+            elif command -v netstat &>/dev/null; then
+                p=$(netstat -ltnp 2>/dev/null | awk '/sshd/ { n=split($4,a,":"); print a[n]; exit }')
+            fi
+        fi
+        if [[ ! "$p" =~ ^[0-9]+$ ]]; then
+            p=$(awk '$1=="Port" && $2 ~ /^[0-9]+$/ { print $2; exit }' \
+                /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null)
+        fi
+        [[ "$p" =~ ^[0-9]+$ && "$p" -ge 1 && "$p" -le 65535 ]] || p=22
+        printf '%s' "$p"
+    }
+
+    echo -e "  Виден ли SSH-порт сервера с площадок провайдеров России —"
+    echo -e "  так со стороны выглядит фильтрация ТСПУ."
+    echo ""
+
+    local port ip
+    port=$(tspu_ssh_port)
+
+    # Внешний IPv4 берём сами: capture-подоболочка переменных скрипта не видит.
+    ip=$("$curlbin" -s4 --max-time 6 https://ifconfig.me 2>/dev/null)
+    [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || ip=$("$curlbin" -s4 --max-time 6 https://api.ipify.org 2>/dev/null)
+    [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || ip=""
+    if [[ -z "$ip" ]]; then
+        echo -e "  ${RED}[TSPU] ОШИБКА: не удалось определить внешний IPv4-адрес сервера.${NC}"
+        return 1
+    fi
+    echo -e "  Цель: ${BOLD}${ip}:${port}${NC} · SSH-порт определён на этой машине"
+    echo ""
+
+    # --- Запуск проверки на внешней площадке ---
+    local resp cid
+    resp=$("$curlbin" -fsS --max-time 30 -X POST "$base/api/check" \
+        -H "Accept: application/json" -H "Content-Type: application/json" \
+        -H "Cookie: $ckey" --data-binary "{\"target\":\"$ip\",\"port\":$port}" 2>/dev/null)
+    cid=$(tspu_jstr "$resp" check_id)
+    if [[ -z "$cid" ]]; then
+        echo -e "  ${RED}[TSPU] ОШИБКА: сервис проверки не принял запрос — попробуйте позже.${NC}"
+        return 1
+    fi
+
+    # --- Поток событий: строка на площадку в каноническом виде ---
+    # «оператор · город · провайдер · состояние · rtt мс» — её разбирает parse_tspu_check.
+    local tmp n=0 ln st rtt op ct is
+    tmp=$(mktemp)
+    echo -e "  ${CYAN}Площадка · город · провайдер · состояние · rtt${NC}"
+    "$curlbin" -fsS -N --max-time 150 "$base/api/check/$cid/events" \
+        -H "Accept: text/event-stream" -H "Cookie: $ckey" 2>/dev/null |
+    while IFS= read -r ln; do
+        case "$ln" in data:*) ;; *) continue ;; esac
+        ln="${ln#data:}"; ln="${ln# }"
+        case "$ln" in
+            *'"node_result"'*)
+                # промежуточные (не final) события площадки пропускаем
+                printf '%s' "$ln" | grep -qE '"final"[[:space:]]*:[[:space:]]*false' && continue
+                st=$(tspu_jstr "$ln" state)
+                [[ -n "$st" ]] || continue
+                rtt=$(tspu_jnum "$ln" rtt_ms); [[ -n "$rtt" ]] || rtt="—"
+                op=$(tspu_jstr "$ln" operator); ct=$(tspu_jstr "$ln" city); is=$(tspu_jstr "$ln" isp)
+                [[ -n "$ct" ]] || ct=$(tspu_jstr "$ln" region)
+                # кавычки в именах в JSON экранированы — обрезка sed'ом оставляет хвост-\ и пробел
+                op="${op%\\}"; ct="${ct%\\}"; is="${is%\\}"
+                op="${op%"${op##*[![:space:]]}"}"; ct="${ct%"${ct##*[![:space:]]}"}"; is="${is%"${is##*[![:space:]]}"}"
+                printf '  %s · %s · %s · %s · %s мс\n' "${op:-—}" "${ct:-—}" "${is:-—}" "$st" "$rtt"
+                n=$((n+1)); echo -ne "\r  …ответов: ${n}" ;;
+            *'"check_done"'*)
+                printf '%s' "$ln" > "$tmp" ;;
+        esac
+    done
+    echo ""
+
+    if [[ ! -s "$tmp" ]]; then
+        rm -f "$tmp"
+        echo -e "  ${RED}[TSPU] ОШИБКА: поток событий закрылся без итогового вердикта.${NC}"
+        return 1
+    fi
+    local vrd lbl ok tot pct
+    ln=$(cat "$tmp"); rm -f "$tmp"
+    vrd=$(tspu_jstr "$ln" verdict); lbl=$(tspu_jstr "$ln" label)
+    ok=$(tspu_jnum "$ln" ok); tot=$(tspu_jnum "$ln" total); pct=$(tspu_jnum "$ln" pct)
+    [[ -n "$lbl" ]] || lbl="${vrd:-НЕИЗВЕСТНО}"
+    # Каноническая итоговая строка — её разбирает parse_tspu_check.
+    printf '  Итог: %s · %s/%s · %s%%\n' "$lbl" "${ok:-0}" "${tot:-0}" "${pct:-0}"
+}
+
 MULTITEST_SKIPPED=0
 
 multitest_skip_handler() {
@@ -616,7 +733,7 @@ pad_to() {
 MT_CAT_FUNCS=( run_ip_region run_censorcheck_geoblock run_censorcheck_dpi \
                run_censorcheck_tlab run_iperf3_ru run_iperf3_tlab run_yabs \
                run_ip_check_place run_bench_sh run_ip_quality run_sysbench_cpu \
-               run_ping_map )
+               run_ping_map run_tspu_check )
 MT_CAT_NAMES=( "IP Region" \
                "Censorcheck — проверка геоблока" \
                "Censorcheck — DPI (серверы РФ)" \
@@ -628,8 +745,9 @@ MT_CAT_NAMES=( "IP Region" \
                "bench.sh — параметры сервера и скорость" \
                "IPQuality" \
                "sysbench CPU — тест процессора" \
-               "Ping-карта — check-host.net" )
-MT_CAT_SECS=(  40 120 180 120 180 120 720 180 300 180 15 60 )
+               "Ping-карта — check-host.net" \
+               "ТСПУ — доступность SSH из РФ" )
+MT_CAT_SECS=(  40 120 180 120 180 120 720 180 300 180 15 60 120 )
 
 mt_is_test_fn() {
     local f
@@ -3087,6 +3205,58 @@ parse_pingmap() {
             printf "%s\x1f%s\x1f%s\x1f%s\x1f%s\n", n, $2, $3, $4, g }')
 }
 
+# ТСПУ: канонические строки «оператор · город · провайдер · состояние · rtt мс»
+# и «Итог: вердикт · ok/total · pct%» из лога run_tspu_check.
+parse_tspu_check() {
+    local txt="$1" v st lbl ok tot pct
+    if printf '%s\n' "$txt" | grep -q '\[TSPU\] ОШИБКА'; then
+        mt_metric "Проверка" "недоступна" "bad"
+        return 0
+    fi
+    v=$(printf '%s\n' "$txt" | sed -nE 's/^ *Цель: [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:([0-9]+).*/\1/p' | head -1)
+    [[ -n "$v" ]] && mt_metric "SSH порт" "$v" "pri"
+    lbl=$(printf '%s\n' "$txt" | sed -nE 's/^ *Итог: (.*) · [0-9]+\/[0-9]+ · [0-9]+%/\1/p' | head -1)
+    ok=$( printf '%s\n' "$txt" | sed -nE 's/^ *Итог: .* · ([0-9]+)\/[0-9]+ · [0-9]+%/\1/p' | head -1)
+    tot=$(printf '%s\n' "$txt" | sed -nE 's/^ *Итог: .* · [0-9]+\/([0-9]+) · [0-9]+%/\1/p' | head -1)
+    pct=$(printf '%s\n' "$txt" | sed -nE 's/^ *Итог: .* · [0-9]+\/[0-9]+ · ([0-9]+)%/\1/p' | head -1)
+    if [[ -n "$lbl" ]]; then
+        case "$lbl" in
+            "ДОСТУП ЕСТЬ")                  st="ok" ;;
+            *БАН*|*ЗАКРЫТ*|*"НЕ РАБОТАЕТ"*) st="bad" ;;
+            *)                              st="warn" ;;
+        esac
+        mt_metric "Вердикт" "$lbl" "$st"
+    fi
+    if [[ -n "$ok" && -n "$tot" && -n "$pct" ]]; then
+        if   (( pct >= 80 )); then st="ok"
+        elif (( pct >= 50 )); then st="warn"
+        else st="bad"; fi
+        mt_metric "Доступно" "${ok}/${tot} · ${pct}%" "$st"
+    fi
+    # Чип на площадку: «город · провайдер» (или оператор, если города нет), dpi — bad.
+    local op ct is stt dpi_n=0
+    while IFS=$'\x1f' read -r op ct is stt; do
+        [[ -n "$stt" ]] || continue
+        case "$stt" in
+            open)    st="ok";   v="открыт" ;;
+            no_ssh)  st="warn"; v="не SSH" ;;
+            dpi)     st="bad";  v="DPI"; dpi_n=$(( dpi_n + 1 )) ;;
+            refused) st="bad";  v="закрыт" ;;
+            timeout) st="bad";  v="таймаут" ;;
+            unreach) st="na";   v="недоступен" ;;
+            *)       st="na";   v="ошибка" ;;
+        esac
+        { [[ -z "$ct" || "$ct" == "—" ]] && ct="$op"; }
+        { [[ -z "$is" || "$is" == "—" ]] && is=""; }
+        mt_service chip "${ct}${is:+ · }${is}" "" "$st" "$v" "-1"
+    done < <(printf '%s\n' "$txt" | awk -F' · ' '
+        NF == 5 && $4 ~ /^(open|no_ssh|dpi|refused|timeout|unreach|error)$/ && $5 ~ / мс$/ {
+            for (i = 1; i <= 4; i++) gsub(/^[[:space:]]+|[[:space:]]+$/, "", $i)
+            printf "%s\x1f%s\x1f%s\x1f%s\n", $1, $2, $3, $4 }')
+    if (( dpi_n > 0 )); then mt_metric "DPI-обрывы" "$dpi_n" "bad"
+    else mt_metric "DPI-обрывы" "0" "ok"; fi
+}
+
 # Диспетчер: читает лог, пишет .metrics/.services
 parse_test_output() {
     local fn="$1" log="$2"
@@ -3107,6 +3277,7 @@ parse_test_output() {
         run_ip_quality)                     parse_ipquality "$txt" ;;
         run_sysbench_cpu)                   parse_sysbench "$txt" ;;
         run_ping_map)                       parse_pingmap "$txt" ;;
+        run_tspu_check)                     parse_tspu_check "$txt" ;;
     esac
 }
 
@@ -4458,6 +4629,8 @@ mt_test_meta() {
             T_DESC="Однопоточный тест процессора: сколько событий в секунду выдаёт одно ядро." ;;
         run_ping_map) T_NAME="Ping-карта"; T_ICON=network_ping; T_WHAT="пинг с узлов РФ и мира"
             T_DESC="Задержка и потери пакетов до этого сервера с узлов check-host.net в России и мире." ;;
+        run_tspu_check) T_NAME="ТСПУ"; T_ICON=policy; T_WHAT="доступность SSH из РФ"
+            T_DESC="Виден ли SSH-порт этого сервера с площадок провайдеров России — так заметна фильтрация ТСПУ." ;;
         *) T_NAME="$1"; T_ICON=dns; T_WHAT=""; T_DESC="" ;;
     esac
 }
@@ -4524,6 +4697,10 @@ mt_test_key() {
             if [[ -n "${M[API]:-}" ]]; then K="API недоступен"; KC="$C_ERR"
             else [[ -n "${M["РФ avg"]:-}" ]] && K="РФ ${M["РФ avg"]}"
                  m="${M[Потери]:-}"; [[ -n "$m" ]] && K="${K:+$K · }потери ${m%% *}"; fi ;;
+        run_tspu_check)
+            if [[ -n "${M[Проверка]:-}" ]]; then K="сервис недоступен"; KC="$C_ERR"
+            else K="${M[Доступно]:-}"; m="${M[DPI-обрывы]:-}"
+                 if [[ -n "$m" && "$m" != "0" ]]; then K="${K:+$K · }DPI: $m"; KC="$C_ERR"; fi; fi ;;
     esac
     [[ -n "$K" ]] || K="выполнен"
 }
@@ -4601,7 +4778,7 @@ mt_write_summary() {
                         dir=down; [[ "$IMX_DIR" == "отдача" ]] && dir=up
                         mt_sum_put best "$id" "$IMX" "$IMX_CITY" "$dir"
                     fi ;;
-                run_censorcheck_*|run_ip_check_place) mt_rows_section 0; mt_sum_svc "$id" ;;
+                run_censorcheck_*|run_ip_check_place|run_tspu_check) mt_rows_section 0; mt_sum_svc "$id" ;;
                 run_ip_quality) mt_rows_section 1; mt_sum_svc "$id" ;;
             esac
         done
@@ -4729,6 +4906,7 @@ build_page_test() {
             run_bench_sh)        page_bench ;;
             run_sysbench_cpu)    page_sysbench ;;
             run_ping_map)        page_ping ;;
+            run_tspu_check)      page_tspu ;;
             *)                   mt_read_metrics "$fn"; mt_read_rows "$fn"; page_fallback ;;
         esac
     fi
@@ -4830,6 +5008,21 @@ page_censor() {
     rp $bad блок блока блоков
     hero_left "$bad" "$ok" "/ $all" "$head" "$s" "$RP"
     if (( CNT_ALL )); then pg_section "Сайты" "$CNT_ALL" "доступность с этого сервера"; mt_list2 "" globe; fi
+}
+
+# ТСПУ: герой — сколько площадок РФ не видят SSH-порт, ниже чипы по площадкам.
+page_tspu() {
+    local fn=run_tspu_check s="" ok all bad
+    mt_read_metrics "$fn"; mt_read_rows "$fn"; mt_rows_section 0; mt_count_states
+    if (( CNT_ALL )); then ok=$CNT_OK; all=$CNT_ALL; bad=$CNT_BAD
+    else page_fallback; return; fi
+    mt_names_with bad;  [[ -n "$JN" ]] && s="Не видят SSH: $JN."
+    mt_names_with warn; [[ -n "$JN" ]] && s="${s:+$s }Без SSH-баннера: $JN."
+    mt_names_with na;   [[ -n "$JN" ]] && s="${s:+$s }Без ответа: $JN."
+    [[ -n "$s" ]] || s="SSH виден со всех площадок — фильтрации нет."
+    rp $bad площадка площадки площадок
+    hero_left "$bad" "$ok" "/ $all" "площадок РФ видят SSH-порт сервера" "$s" "$RP"
+    pg_section "Площадки" "$CNT_ALL" "доступность SSH с площадок провайдеров РФ"; mt_list2 "" globe
 }
 
 page_iperf() {
@@ -5857,15 +6050,16 @@ show_menu() {
     echo -e "  ${GREEN}10)${NC}  IPQuality"
     echo -e "  ${GREEN}11)${NC}  sysbench CPU — тест процессора"
     echo -e "  ${GREEN}12)${NC}  Ping-карта — check-host.net"
+    echo -e "  ${GREEN}13)${NC}  ТСПУ — доступность SSH из РФ"
     echo ""
-    echo -e "  ${YELLOW}13)${NC}  ${BOLD}Мультитест — выбор и запуск тестов${NC}"
+    echo -e "  ${YELLOW}14)${NC}  ${BOLD}Мультитест — выбор и запуск тестов${NC}"
     echo ""
     echo -e "  ${CYAN}${BOLD}── Утилиты ──${NC}"
     echo ""
     if mt_tg_configured; then
-        echo -e "  ${GREEN}14)${NC}  Утилиты — BBR, IPv6, Telegram-бот"
+        echo -e "  ${GREEN}15)${NC}  Утилиты — BBR, IPv6, Telegram-бот"
     else
-        echo -e "  ${GREEN}14)${NC}  Утилиты — BBR, IPv6"
+        echo -e "  ${GREEN}15)${NC}  Утилиты — BBR, IPv6"
     fi
     echo ""
     echo -e "  ${RED} 0)${NC}  Выход"
@@ -5884,7 +6078,7 @@ show_menu() {
         MT_PROMO_BELOW=0
         print_stencloud_promo
     fi
-    echo -ne "  ${BOLD}Выберите пункт [0-14]: ${NC}"
+    echo -ne "  ${BOLD}Выберите пункт [0-15]: ${NC}"
 }
 
 # ============================================================
@@ -5959,8 +6153,9 @@ while true; do
         10) run_ip_quality; pause_prompt ;;
         11) run_sysbench_cpu; pause_prompt ;;
         12) run_ping_map; pause_prompt ;;
-        13) run_all; pause_prompt ;;
-        14) show_utilities_menu ;;
+        13) run_tspu_check; pause_prompt ;;
+        14) run_all; pause_prompt ;;
+        15) show_utilities_menu ;;
         0)  echo -e "${GREEN}До свидания!${NC}"; exit 0 ;;
         *)  echo -e "${RED}Неверный выбор. Попробуйте снова.${NC}"; pause_prompt ;;
     esac

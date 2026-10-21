@@ -127,5 +127,5 @@ check "статус: revoked стирает конфиг"   '[ $rc = 1 ] && [ ! 
 
 paired d
 check "бот — в утилитах, со статусом"   'show_utilities_menu </dev/null 2>/dev/null | grep -q "3).*Telegram-бот.*привязан к @test_bot"'
-check "в главном меню пункта 15 нет"     '! show_menu </dev/null 2>/dev/null | grep -q "15)" && show_menu </dev/null 2>/dev/null | grep -q "14).*Telegram-бот"'
+check "в главном меню пункта 16 нет"     '! show_menu </dev/null 2>/dev/null | grep -q "16)" && show_menu </dev/null 2>/dev/null | grep -q "15).*Telegram-бот"'
 t_finish
