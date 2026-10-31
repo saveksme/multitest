@@ -4,7 +4,7 @@
 #  Multitest — интерактивный скрипт диагностики сервера
 # ============================================================
 
-SCRIPT_VERSION="3.1"
+SCRIPT_VERSION="3.2"
 # Откуда --install и подсказки качают скрипт. Версия 3 (бот, агент) пока живёт в этой ветке,
 # в master — 2.0 без агента: её ставить нельзя. При слиянии в master вернуть master.
 REPO_URL="https://raw.githubusercontent.com/saveksme/multitest/dev-material-summary/multitest.sh"
@@ -593,25 +593,10 @@ run_ping_map() {
 }
 
 # ТСПУ: виден ли SSH-порт этого сервера с площадок провайдеров РФ — так заметна
-# фильтрация. Сторонняя внешняя площадка проверки: POST запуска → поток событий
-# с вердиктами площадок. Адрес площадки и маркер доступа держим кусками и не
-# светим в коде: сервис чужой, лишнее внимание к нему не нужно.
+# фильтрация. Проверку выполняет наш бэкенд: здесь только порт и чтение его ответа.
 run_tspu_check() {
     print_separator "ТСПУ — доступность SSH из РФ"
     check_and_install curl
-
-    local _a="aHR0cHM6Ly9p" _b="d3RzeS5jb20=" _c="aXd0c3lf" _d="Y29uc2VudD15ZXM="
-    local base ckey curlbin="${MT_CURL:-curl}"
-    base=$(printf '%s' "${_a}${_b}" | base64 -d 2>/dev/null)
-    ckey=$(printf '%s' "${_c}${_d}" | base64 -d 2>/dev/null)
-    if [[ "$base" != https://* || -z "$ckey" ]]; then
-        echo -e "  ${RED}[TSPU] ОШИБКА: проверка сейчас недоступна.${NC}"
-        return 1
-    fi
-
-    # Поле из однострочного JSON (jq в проекте нет — sed)
-    tspu_jstr() { printf '%s' "$1" | sed -nE 's/.*"'"$2"'"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p' | head -1; }
-    tspu_jnum() { printf '%s' "$1" | sed -nE 's/.*"'"$2"'"[[:space:]]*:[[:space:]]*(-?[0-9]+([.][0-9]+)?).*/\1/p' | head -1; }
 
     # Какой порт SSH реально принимает соединения на этой машине:
     # 1) порт текущей SSH-сессии (4-е поле SSH_CONNECTION), если запуск из неё;
@@ -640,73 +625,17 @@ run_tspu_check() {
     echo -e "  так со стороны выглядит фильтрация ТСПУ."
     echo ""
 
-    local port ip
+    local port tmp code
     port=$(tspu_ssh_port)
-
-    # Внешний IPv4 берём сами: capture-подоболочка переменных скрипта не видит.
-    ip=$("$curlbin" -s4 --max-time 6 https://ifconfig.me 2>/dev/null)
-    [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || ip=$("$curlbin" -s4 --max-time 6 https://api.ipify.org 2>/dev/null)
-    [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || ip=""
-    if [[ -z "$ip" ]]; then
-        echo -e "  ${RED}[TSPU] ОШИБКА: не удалось определить внешний IPv4-адрес сервера.${NC}"
-        return 1
-    fi
-    echo -e "  Цель: ${BOLD}${ip}:${port}${NC} · SSH-порт определён на этой машине"
-    echo ""
-
-    # --- Запуск проверки на внешней площадке ---
-    local resp cid
-    resp=$("$curlbin" -fsS --max-time 30 -X POST "$base/api/check" \
-        -H "Accept: application/json" -H "Content-Type: application/json" \
-        -H "Cookie: $ckey" --data-binary "{\"target\":\"$ip\",\"port\":$port}" 2>/dev/null)
-    cid=$(tspu_jstr "$resp" check_id)
-    if [[ -z "$cid" ]]; then
-        echo -e "  ${RED}[TSPU] ОШИБКА: сервис проверки не принял запрос — попробуйте позже.${NC}"
-        return 1
-    fi
-
-    # --- Поток событий: строка на площадку в каноническом виде ---
-    # «оператор · город · провайдер · состояние · rtt мс» — её разбирает parse_tspu_check.
-    local tmp n=0 ln st rtt op ct is
-    tmp=$(mktemp)
-    echo -e "  ${CYAN}Площадка · город · провайдер · состояние · rtt${NC}"
-    "$curlbin" -fsS -N --max-time 150 "$base/api/check/$cid/events" \
-        -H "Accept: text/event-stream" -H "Cookie: $ckey" 2>/dev/null |
-    while IFS= read -r ln; do
-        case "$ln" in data:*) ;; *) continue ;; esac
-        ln="${ln#data:}"; ln="${ln# }"
-        case "$ln" in
-            *'"node_result"'*)
-                # промежуточные (не final) события площадки пропускаем
-                printf '%s' "$ln" | grep -qE '"final"[[:space:]]*:[[:space:]]*false' && continue
-                st=$(tspu_jstr "$ln" state)
-                [[ -n "$st" ]] || continue
-                rtt=$(tspu_jnum "$ln" rtt_ms); [[ -n "$rtt" ]] || rtt="—"
-                op=$(tspu_jstr "$ln" operator); ct=$(tspu_jstr "$ln" city); is=$(tspu_jstr "$ln" isp)
-                [[ -n "$ct" ]] || ct=$(tspu_jstr "$ln" region)
-                # кавычки в именах в JSON экранированы — обрезка sed'ом оставляет хвост-\ и пробел
-                op="${op%\\}"; ct="${ct%\\}"; is="${is%\\}"
-                op="${op%"${op##*[![:space:]]}"}"; ct="${ct%"${ct##*[![:space:]]}"}"; is="${is%"${is##*[![:space:]]}"}"
-                printf '  %s · %s · %s · %s · %s мс\n' "${op:-—}" "${ct:-—}" "${is:-—}" "$st" "$rtt"
-                n=$((n+1)); echo -ne "\r  …ответов: ${n}" ;;
-            *'"check_done"'*)
-                printf '%s' "$ln" > "$tmp" ;;
-        esac
-    done
-    echo ""
-
-    if [[ ! -s "$tmp" ]]; then
+    tmp=$(mktemp) || { echo -e "  ${RED}[TSPU] ОШИБКА: площадка проверки недоступна.${NC}"; return 1; }
+    code=$(MT_API_MAXTIME=180 mt_api POST /v1/tspu "$tmp" --data-urlencode "port=$port")
+    if [[ "$code" != 200 ]] || [[ "$(head -n 1 "$tmp")" != "v 1" ]]; then
         rm -f "$tmp"
-        echo -e "  ${RED}[TSPU] ОШИБКА: поток событий закрылся без итогового вердикта.${NC}"
+        echo -e "  ${RED}[TSPU] ОШИБКА: площадка проверки недоступна — попробуйте позже.${NC}"
         return 1
     fi
-    local vrd lbl ok tot pct
-    ln=$(cat "$tmp"); rm -f "$tmp"
-    vrd=$(tspu_jstr "$ln" verdict); lbl=$(tspu_jstr "$ln" label)
-    ok=$(tspu_jnum "$ln" ok); tot=$(tspu_jnum "$ln" total); pct=$(tspu_jnum "$ln" pct)
-    [[ -n "$lbl" ]] || lbl="${vrd:-НЕИЗВЕСТНО}"
-    # Каноническая итоговая строка — её разбирает parse_tspu_check.
-    printf '  Итог: %s · %s/%s · %s%%\n' "$lbl" "${ok:-0}" "${tot:-0}" "${pct:-0}"
+    tail -n +2 "$tmp"
+    rm -f "$tmp"
 }
 
 MULTITEST_SKIPPED=0
@@ -3263,7 +3192,7 @@ parse_tspu_check() {
         mt_metric "Проверка" "недоступна" "bad"
         return 0
     fi
-    v=$(printf '%s\n' "$txt" | sed -nE 's/^ *Цель: [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:([0-9]+).*/\1/p' | head -1)
+    v=$(printf '%s\n' "$txt" | sed -nE 's/^ *Цель: [0-9.*]+:([0-9]+).*/\1/p' | head -1)
     [[ -n "$v" ]] && mt_metric "SSH порт" "$v" "pri"
     lbl=$(printf '%s\n' "$txt" | sed -nE 's/^ *Итог: (.*) · [0-9]+\/[0-9]+ · [0-9]+%/\1/p' | head -1)
     ok=$( printf '%s\n' "$txt" | sed -nE 's/^ *Итог: .* · ([0-9]+)\/[0-9]+ · [0-9]+%/\1/p' | head -1)
@@ -3300,6 +3229,11 @@ parse_tspu_check() {
         { [[ -z "$is" || "$is" == "—" ]] && is=""; }
         mt_service chip "${ct}${is:+ · }${is}" "" "$st" "$v" "-1"
     done < <(printf '%s\n' "$txt" | awk -F' · ' '
+        NF == 4 && $3 ~ /^(open|no_ssh|dpi|refused|timeout|unreach|error)$/ && $4 ~ / мс$/ {
+            for (i = 1; i <= 3; i++) gsub(/^[[:space:]]+|[[:space:]]+$/, "", $i)
+            printf "\x1f%s\x1f%s\x1f%s\n", $1, $2, $3
+            next
+        }
         NF == 5 && $4 ~ /^(open|no_ssh|dpi|refused|timeout|unreach|error)$/ && $5 ~ / мс$/ {
             for (i = 1; i <= 4; i++) gsub(/^[[:space:]]+|[[:space:]]+$/, "", $i)
             printf "%s\x1f%s\x1f%s\x1f%s\n", $1, $2, $3, $4 }')
