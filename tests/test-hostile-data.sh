@@ -33,11 +33,6 @@ fields_ok() {   # в каждой строке .metrics ровно 3 поля, �
     printf '%-18s %-15s %-15s %-10s\n' "$P3" "1.0 Mbps" "2.0 Mbps" "$P2 ms"
 } | parse run_iperf3_ru
 {
-    printf '%-15s%19s%18s%11s\n' " Node Name" "Upload Speed" "Download Speed" "Latency"
-    printf '%-17s%9s %-8s%7s %-8s%13s\n' " $P1, $P3" 912 Mbit/s 941 Mbit/s "12.34 ms"
-    printf '%-17s%9s %-8s%7s %-8s%13s\n' " NL $P4" 700 Mbit/s 810 Mbit/s "1 ms"
-} | parse run_iperf3_tlab
-{
     echo "Processor  : $EVIL"
     echo "iperf3 Network Speed Tests (IPv4):"
     printf '%-15s | %-25s | %-15s | %-15s | %-15s\n' Provider "Location (Link)" "Send Speed" "Recv Speed" Ping

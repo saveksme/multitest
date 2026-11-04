@@ -295,7 +295,7 @@ test_deps() {
     case "$1" in
         run_ip_region|run_censorcheck_geoblock|run_censorcheck_dpi|run_censorcheck_tlab|run_bench_sh)
             echo "wget" ;;
-        run_iperf3_ru|run_iperf3_tlab)
+        run_iperf3_ru)
             echo "wget iperf3 jq" ;;
         run_yabs|run_ip_check_place|run_ip_quality|run_ping_map)
             echo "curl" ;;
@@ -369,14 +369,6 @@ run_iperf3_ru() {
     check_and_install iperf3
     check_and_install jq
     bash <(wget -qO- https://github.com/itdoginfo/russian-iperf3-servers/raw/main/speedtest.sh)
-}
-
-run_iperf3_tlab() {
-    print_separator "iPerf3 — bench.tlab.pw (РФ)"
-    check_and_install wget
-    check_and_install iperf3
-    check_and_install jq
-    wget -qO- https://bench.tlab.pw | bash
 }
 
 run_yabs() {
@@ -662,7 +654,7 @@ pad_to() {
 # Это же белый список: capture_test и задания из Telegram запускают только эти
 # функции. Оценки времени грубые, порядок величины — прикинуть цену выбора.
 MT_CAT_FUNCS=( run_ip_region run_censorcheck_geoblock run_censorcheck_dpi \
-               run_censorcheck_tlab run_iperf3_ru run_iperf3_tlab run_yabs \
+               run_censorcheck_tlab run_iperf3_ru run_yabs \
                run_ip_check_place run_bench_sh run_ip_quality run_sysbench_cpu \
                run_ping_map run_tspu_check )
 MT_CAT_NAMES=( "IP Region" \
@@ -670,7 +662,6 @@ MT_CAT_NAMES=( "IP Region" \
                "Censorcheck — DPI (серверы РФ)" \
                "Censorcheck — censorcheck.tlab.pw" \
                "iPerf3 — тест до российских серверов" \
-               "iPerf3 — bench.tlab.pw (РФ)" \
                "YABS — бенчмарк сервера" \
                "IP Check Place — блокировки зарубежных сервисов" \
                "bench.sh — параметры сервера и скорость" \
@@ -678,7 +669,7 @@ MT_CAT_NAMES=( "IP Region" \
                "sysbench CPU — тест процессора" \
                "Ping-карта — check-host.net" \
                "ТСПУ — доступность SSH из РФ" )
-MT_CAT_SECS=(  40 120 180 120 180 120 720 180 300 180 15 60 120 )
+MT_CAT_SECS=(  40 120 180 120 180 720 180 300 180 15 60 120 )
 
 mt_is_test_fn() {
     local f
@@ -1112,7 +1103,7 @@ EOF
 # Тесты, ради которых есть смысл предложить BBR + Cake: их результат — скорость
 # TCP, на которой congestion control сказывается напрямую; остальным тестам он
 # безразличен.
-MT_BBR_SPEED_TESTS=" run_iperf3_ru run_iperf3_tlab run_yabs run_bench_sh "
+MT_BBR_SPEED_TESTS=" run_iperf3_ru run_yabs run_bench_sh "
 
 MT_BBR_PROMPTED=0
 
@@ -1789,7 +1780,7 @@ mt_tg_menu() {
 
 mt_systemd() { [[ -d "$MT_SYSTEMD" ]]; }
 mt_agent_installed() { [[ -f "$MT_AGENT_UNIT" ]]; }
-MT_HEAVY_RE=',(yabs|iperf3_ru|iperf3_tlab|bench_sh),'
+MT_HEAVY_RE=',(yabs|iperf3_ru|bench_sh),'
 
 # hello с флагом агента (1 — служба работает, 0 — выключена) и лимитами. stdout — код HTTP.
 mt_agent_hello() {
@@ -2870,22 +2861,18 @@ parse_censorcheck() {
     done
 }
 
-# iPerf3 до РФ: две тулзы, одна таблица «узел · две скорости · пинг».
+# iPerf3 до РФ: таблица «узел · две скорости · пинг».
 #   russian-iperf3-servers: «Moscow   942.0 Mbps   610.0 Mbps   12 ms» — приём, отдача;
-#   bench.tlab.pw:          « Moscow, MTS   610 Mbit/s   942 Mbit/s   12.34 ms» — отдача
-#                           и приём (порядок колонок берём из шапки таблицы).
+#   порядок колонок при наличии шапки Upload/Download уточняем по ней.
 # Имя — всё до первой скорости: длинный город с «(F)» отделён от неё одним пробелом.
-# У tlab в имени провайдер, а зарубежные узлы — «NL Amsterdam»: строка становится
-# «Moscow, RU» с подписью «MTS» или «Amsterdam, NL», и страница рисует ей флаг.
 # Максимум и минимальный пинг в метриках — только по узлам в России.
 # Строка на узел: приём и отдача числами, пинг в мс. Шкалу страница строит сама —
 # по максимуму обоих направлений, иначе отдача вылезала бы за край.
 parse_iperf3() {
-    local txt="$1" tlab=0 rows city sub d u p dom v n=0 nd=0
+    local txt="$1" rows city sub d u p dom v n=0 nd=0
     local mxa=0 mxas="" mxd=0 mxds="" mpa=-1 mpas="" mpd=-1 mpds=""
-    [[ "${2:-}" == run_iperf3_tlab ]] && tlab=1
-    rows=$(printf '%s\n' "$txt" | LC_ALL=C awk -v US=$'\x1f' -v tlab=$tlab '
-        BEGIN { up1 = tlab }
+    rows=$(printf '%s\n' "$txt" | LC_ALL=C awk -v US=$'\x1f' '
+        BEGIN { up1 = 0 }
         /Upload/ && /Download/ { up1 = index($0, "Upload") < index($0, "Download"); next }
         /^[ \t]*\[/ || /sender|receiver/ { next }
         {
@@ -2902,18 +2889,8 @@ parse_iperf3() {
             if (name == "") next
             p = ""
             if (match(s, /[0-9]+(\.[0-9]+)?[ \t]*ms/)) { p = substr(s, RSTART, RLENGTH); sub(/[ \t]*ms$/, "", p) }
-            cc = ""; sb = ""
-            if (tlab) {
-                if (name ~ /^[A-Z][A-Z] [^ ]/) { cc = substr(name, 1, 2); name = substr(name, 4) }
-                else {
-                    cc = "RU"
-                    if (i = index(name, ",")) { sb = substr(name, i + 1); name = substr(name, 1, i - 1) }
-                    gsub(/^[ \t]+|[ \t]+$/, "", sb); gsub(/[ \t]+$/, "", name)
-                }
-                name = name ", " cc
-            }
             if (up1 && n == 2) { d = sp[2]; u = sp[1] } else { d = sp[1]; u = sp[2] }
-            print name US sb US d US u US p US (cc == "" || cc == "RU")
+            print name US "" US d US u US p US 1
         }' || true)
     while IFS=$'\x1f' read -r city sub d u p dom; do
         [[ -n "$city" ]] || continue
@@ -3254,7 +3231,7 @@ parse_test_output() {
     case "$fn" in
         run_ip_region)                      parse_ipregion "$txt" ;;
         run_censorcheck_geoblock|run_censorcheck_dpi|run_censorcheck_tlab) parse_censorcheck "$txt" ;;
-        run_iperf3_ru|run_iperf3_tlab)      parse_iperf3 "$txt" "$fn" ;;
+        run_iperf3_ru)                      parse_iperf3 "$txt" ;;
         run_yabs)                           parse_yabs "$txt" ;;
         run_bench_sh)                       parse_benchsh "$txt" ;;
         run_ip_check_place)                 parse_ipcheck "$txt" ;;
@@ -4599,8 +4576,6 @@ mt_test_meta() {
             T_DESC="Доступность популярных сайтов и сервисов с этого сервера по списку censorcheck.tlab.pw." ;;
         run_iperf3_ru) T_NAME="iPerf3"; T_ICON=swap_vert; T_WHAT="тест до российских серверов"
             T_DESC="Реальная скорость канала между этим сервером и серверами в России, в обе стороны." ;;
-        run_iperf3_tlab) T_NAME="iPerf3 tlab"; T_ICON=swap_vert; T_WHAT="скорость до РФ через tlab.pw"
-            T_DESC="Скорость канала до серверов российских провайдеров через bench.tlab.pw, в обе стороны." ;;
         run_yabs) T_NAME="YABS"; T_ICON=speed; T_WHAT="бенчмарк сервера"
             T_DESC="Бенчмарк сервера: скорость диска и сети до дата-центров в разных странах." ;;
         run_ip_check_place) T_NAME="IP Check Place"; T_ICON=shield; T_WHAT="блокировки зарубежными сервисами"
@@ -4623,7 +4598,7 @@ mt_test_meta() {
 # отдача, slug — подпись, lat — пинг) -> LR_NAME LR_DN LR_UP LR_CC LR_SUB LR_MS,
 # максимум IMX (как в логе) / IMX10 / IMX_CITY / IMX_DIR, IDOM — сколько узлов без
 # флага или в России, и IMXA10 — максимум по всем строкам, для шкалы. С «ru» IMX
-# ищем только среди узлов в России (у iPerf3 tlab есть зарубежные), если такие есть.
+# ищем только среди узлов в России, если такие есть.
 mt_speed_rows() {
     LR_NAME=(); LR_DN=(); LR_UP=(); LR_CC=(); LR_SUB=(); LR_MS=()
     IMX=""; IMX10=0; IMX_CITY=""; IMX_DIR=""; IDOM=0; IMXA10=0
@@ -4756,7 +4731,7 @@ mt_write_summary() {
             for l in "${ML[@]}"; do mt_sum_put metric "$id" "$l" "${M[$l]}"; done
             mt_read_rows "$fn"
             case "$fn" in
-                run_iperf3_ru|run_iperf3_tlab|run_bench_sh)
+                run_iperf3_ru|run_bench_sh)
                     if [[ "$fn" == run_bench_sh ]]; then mt_speed_rows; else mt_speed_rows ru; fi
                     if [[ -n "$IMX" ]]; then
                         dir=down; [[ "$IMX_DIR" == "отдача" ]] && dir=up
@@ -6027,23 +6002,22 @@ show_menu() {
     echo -e "  ${GREEN} 3)${NC}  Censorcheck — DPI (серверы РФ)"
     echo -e "  ${GREEN} 4)${NC}  Censorcheck — censorcheck.tlab.pw"
     echo -e "  ${GREEN} 5)${NC}  iPerf3 — тест до российских серверов"
-    echo -e "  ${GREEN} 6)${NC}  iPerf3 — bench.tlab.pw (РФ)"
-    echo -e "  ${GREEN} 7)${NC}  YABS — бенчмарк сервера"
-    echo -e "  ${GREEN} 8)${NC}  IP Check Place — блокировки зарубежными сервисами"
-    echo -e "  ${GREEN} 9)${NC}  bench.sh — параметры сервера и скорость"
-    echo -e "  ${GREEN}10)${NC}  IPQuality"
-    echo -e "  ${GREEN}11)${NC}  sysbench CPU — тест процессора"
-    echo -e "  ${GREEN}12)${NC}  Ping-карта — check-host.net"
-    echo -e "  ${GREEN}13)${NC}  ТСПУ — доступность SSH из РФ"
+    echo -e "  ${GREEN} 6)${NC}  YABS — бенчмарк сервера"
+    echo -e "  ${GREEN} 7)${NC}  IP Check Place — блокировки зарубежными сервисами"
+    echo -e "  ${GREEN} 8)${NC}  bench.sh — параметры сервера и скорость"
+    echo -e "  ${GREEN} 9)${NC}  IPQuality"
+    echo -e "  ${GREEN}10)${NC}  sysbench CPU — тест процессора"
+    echo -e "  ${GREEN}11)${NC}  Ping-карта — check-host.net"
+    echo -e "  ${GREEN}12)${NC}  ТСПУ — доступность SSH из РФ"
     echo ""
-    echo -e "  ${YELLOW}14)${NC}  ${BOLD}Мультитест — выбор и запуск тестов${NC}"
+    echo -e "  ${YELLOW}13)${NC}  ${BOLD}Мультитест — выбор и запуск тестов${NC}"
     echo ""
     echo -e "  ${CYAN}${BOLD}── Утилиты ──${NC}"
     echo ""
     if mt_tg_configured; then
-        echo -e "  ${GREEN}15)${NC}  Утилиты — BBR, IPv6, Telegram-бот"
+        echo -e "  ${GREEN}14)${NC}  Утилиты — BBR, IPv6, Telegram-бот"
     else
-        echo -e "  ${GREEN}15)${NC}  Утилиты — BBR, IPv6"
+        echo -e "  ${GREEN}14)${NC}  Утилиты — BBR, IPv6"
     fi
     echo ""
     echo -e "  ${RED} 0)${NC}  Выход"
@@ -6062,7 +6036,7 @@ show_menu() {
         MT_PROMO_BELOW=0
         print_stencloud_promo
     fi
-    echo -ne "  ${BOLD}Выберите пункт [0-15]: ${NC}"
+    echo -ne "  ${BOLD}Выберите пункт [0-14]: ${NC}"
 }
 
 # ============================================================
@@ -6130,16 +6104,15 @@ while true; do
         3)  run_censorcheck_dpi; pause_prompt ;;
         4)  run_censorcheck_tlab; pause_prompt ;;
         5)  recommend_bbr_cake; run_iperf3_ru; pause_prompt ;;
-        6)  recommend_bbr_cake; run_iperf3_tlab; pause_prompt ;;
-        7)  recommend_bbr_cake; run_yabs; pause_prompt ;;
-        8)  run_ip_check_place; pause_prompt ;;
-        9)  recommend_bbr_cake; run_bench_sh; pause_prompt ;;
-        10) run_ip_quality; pause_prompt ;;
-        11) run_sysbench_cpu; pause_prompt ;;
-        12) run_ping_map; pause_prompt ;;
-        13) run_tspu_check; pause_prompt ;;
-        14) run_all; pause_prompt ;;
-        15) show_utilities_menu ;;
+        6)  recommend_bbr_cake; run_yabs; pause_prompt ;;
+        7)  run_ip_check_place; pause_prompt ;;
+        8)  recommend_bbr_cake; run_bench_sh; pause_prompt ;;
+        9)  run_ip_quality; pause_prompt ;;
+        10) run_sysbench_cpu; pause_prompt ;;
+        11) run_ping_map; pause_prompt ;;
+        12) run_tspu_check; pause_prompt ;;
+        13) run_all; pause_prompt ;;
+        14) show_utilities_menu ;;
         0)  echo -e "${GREEN}До свидания!${NC}"; exit 0 ;;
         *)  echo -e "${RED}Неверный выбор. Попробуйте снова.${NC}"; pause_prompt ;;
     esac

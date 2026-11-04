@@ -24,6 +24,5 @@ done
 check "A: ключевая цифра IP Region"   "grep -qx 'test${US}ip_region${US}ok${US}NL · 26/30${US}1' '$A'"
 check "A: лучшая скорость iPerf3"     "grep -qx 'best${US}iperf3_ru${US}2140.5${US}Chelyabinsk${US}up' '$A'"
 check "A: Netflix из IP Check Place"  "grep -qx 'svc${US}ip_check_place${US}Netflix${US}ok${US}NL' '$A'"
-check "B: упавший iPerf3 tlab — err"  "grep -q '^test${US}iperf3_tlab${US}err${US}' '$B'"
 check "B: маска IPv6"                 "grep -qx 'sys${US}ip6${US}2001:db8::\*' '$B'"
 t_finish

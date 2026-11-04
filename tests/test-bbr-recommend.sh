@@ -60,19 +60,19 @@ check "enable_bbr_cake вызван"           '[ "$(count_str "$out" "ENABLE_CA
 
 echo "S6: список сетевых тестов"
 out=$(MULTITEST_TEST=1 bash -c 'source "$1";
-    for f in run_iperf3_ru run_iperf3_tlab run_yabs run_bench_sh; do
+    for f in run_iperf3_ru run_yabs run_bench_sh; do
         [[ "$MT_BBR_SPEED_TESTS" == *" $f "* ]] || { echo "NO:$f"; exit 1; }
     done
     for f in run_ip_region run_censorcheck_dpi run_ip_check_place run_ip_quality run_sysbench_cpu run_ping_map; do
         [[ "$MT_BBR_SPEED_TESTS" != *" $f "* ]] || { echo "NO:$f"; exit 1; }
     done
     echo LIST_OK' _ "$SRC" 2>&1)
-check "ровно 4 сетевых теста в списке"   '[ "$out" = "LIST_OK" ]'
+check "ровно 3 сетевых теста в списке"   '[ "$out" = "LIST_OK" ]'
 
 echo "S7: зацеплено в меню и в run_all"
-menu=$(grep -cE '^[[:space:]]*[5679]\)[[:space:]]+recommend_bbr_cake; ' "$SRC")
+menu=$(grep -cE '^[[:space:]]*[568]\)[[:space:]]+recommend_bbr_cake; ' "$SRC")
 runall=$(grep -c 'recommend_bbr_cake; break' "$SRC")
-check "меню: пункты 5,6,7,9"             '[ "$menu" = 4 ]'
+check "меню: пункты 5,6,8"             '[ "$menu" = 3 ]'
 check "run_all: один вызов с break"      '[ "$runall" = 1 ]'
 
 echo ""

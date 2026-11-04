@@ -21,11 +21,11 @@ SYS_CC="cubic"; SYS_QDISC="fq_codel"; SYS_UPTIME="17 minutes"; SYS_UP_S=1020
 SYS_LOAD="0.70 0.38 0.14"
 
 MT_CAT_FUNCS=( run_ip_region run_censorcheck_geoblock run_censorcheck_dpi \
-    run_censorcheck_tlab run_iperf3_ru run_iperf3_tlab run_yabs \
+    run_censorcheck_tlab run_iperf3_ru run_yabs \
     run_ip_check_place run_bench_sh run_ip_quality run_sysbench_cpu run_ping_map )
 MT_CAT_NAMES=( "IP Region" "Censorcheck — проверка геоблока" "Censorcheck — DPI (серверы РФ)" \
     "Censorcheck — censorcheck.tlab.pw" "iPerf3 — тест до российских серверов" \
-    "iPerf3 — bench.tlab.pw (РФ)" "YABS — бенчмарк сервера" \
+    "YABS — бенчмарк сервера" \
     "IP Check Place — блокировки зарубежными сервисами" "bench.sh — параметры сервера и скорость" \
     "IPQuality" "sysbench CPU — тест процессора" "Ping-карта — check-host.net" )
 
@@ -173,7 +173,7 @@ SUMMARY_DIR="$out/data-b"; mkdir -p "$SUMMARY_DIR"
 SYS_IP6="2001:db8:4f8::2"; SYS_CPU="Intel(R) Xeon(R) Gold 6248R CPU @ 3.00GHz"; SYS_CORES=4; SYS_UP_S=$(( 3*86400 + 5*3600 ))
 MT_STATUS=()
 for f in run_ip_region run_censorcheck_tlab run_bench_sh run_ping_map; do MT_STATUS[$f]="выполнен"; done
-MT_STATUS[run_censorcheck_dpi]="пропущен"; MT_STATUS[run_iperf3_tlab]="ошибка"
+MT_STATUS[run_censorcheck_dpi]="пропущен"
 
 m run_ip_region "Консенсус IPv4" DE pri; m run_ip_region "Консенсус IPv6" DE pri
 m run_ip_region "Совпадений v4" 9/12 ok; m run_ip_region "Совпадений v6" 8/10 ok; m run_ip_region "v4≠v6" 2 bad

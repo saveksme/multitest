@@ -32,7 +32,6 @@ svccensorcheck_tlabdiscord.comokдоступен
 svccensorcheck_tlablinkedin.comwarnредирект
 svccensorcheck_tlabrutracker.orgnaN/A
 svccensorcheck_tlabtelegram.orgokдоступен
-testiperf3_tlaberrошибка0
 testbench_shokI/O 1.2 GB/s1
 metricbench_shCPUIntel Xeon Gold 6248R CPU @ 3.00GHz
 metricbench_shЯдер4
