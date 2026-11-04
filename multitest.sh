@@ -1881,11 +1881,8 @@ mt_agent_job() {
     MT_AGENT_SEEN="$(printf '%s\n' $MT_AGENT_SEEN | tail -n 19 | tr '\n' ' ')$jid"
     MT_JOB_ID="$jid"
     if [[ "$spec" == bbr_cake ]]; then
-        # Системное действие, не тест: применяем настройки и завершаем done без альбома.
-        if ! lw=$(mt_agent_limits "$spec"); then
-            echo "агент: лимит запусков — следующий через ${lw} c"
-            mt_job_event failed "reason=local_limit" "wait=$lw"; MT_JOB_ID=""; return 1
-        fi
+        # Системное действие, не тест: лимиты и agent.runs не трогаем, чтобы сразу после
+        # включения BBR можно было запустить любой тест. Завершаем done без альбома.
         mkdir -p "$MT_AGENT_DIR/runs" 2>/dev/null
         if ! MT_JOB_DIR=$(mktemp -d "$MT_AGENT_DIR/runs/job-XXXXXX" 2>/dev/null); then
             mt_job_event failed "reason=no_dir"; MT_JOB_ID=""; MT_JOB_DIR=""; return 1
@@ -1903,7 +1900,6 @@ mt_agent_job() {
         : > "$MT_JOB_DIR/done"
         kill "$wpid" 2>/dev/null; wait "$wpid" 2>/dev/null
         if [[ "$cc" == "bbr" && "$qd" == "cake" ]]; then
-            mt_agent_record "$spec"
             mt_job_event done
         else
             mt_job_event failed "reason=bbr_cake"

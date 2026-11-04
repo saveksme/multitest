@@ -150,6 +150,14 @@ check "BBR: enable_bbr_cake вызван"        'grep -qx "BBR" "$T_W/calls"'
 check "BBR: type=done отправлен"           'grep -qx "type=done" "$T_W/curl/argv.2"'
 check "BBR: тесты не запускались"          '! grep -q "^CAPTURE" "$T_W/calls"'
 
+# 16. Сразу после BBR идёт обычный тест: BBR не пишет agent.runs и не вызывает лимит
+check "BBR: прогона в лимитах нет"          '[ ! -e "$MT_AGENT_DIR/agent.runs" ]'
+t_respond 200 "ok"                                   # start ip_region
+t_respond 200 "ok"                                   # done/render
+mt_agent_job "job Jbbr3333333333333333 ip_region" > "$T_W/out" 2>&1
+check "BBR: следующий тест запустился"      'grep -q "^CAPTURE run_ip_region" "$T_W/calls"'
+check "BBR: local_limit не сработал"        '! grep -q "reason=local_limit" "$T_W"/curl/argv.*'
+
 # 15. Ядро не применило BBR/Cake — failed, а не done
 pair; fresh
 STUB_CC=cubic STUB_QD=fq_codel
