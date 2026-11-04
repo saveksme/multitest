@@ -12,6 +12,13 @@ mkdir -p "$MT_AGENT_DIR" "$T_W/unit" "$MT_SYSTEMD"
 sleep() { :; }
 systemctl() { echo "systemctl $*" >> "$T_W/systemctl"; [[ "$1" != is-active ]]; }
 capture_test()      { echo "CAPTURE $1" >> "$T_W/calls"; echo "вывод" > "$2"; }
+enable_bbr_cake()   { echo "BBR" >> "$T_W/calls"; }
+sysctl() {
+    case "$2" in
+        net.ipv4.tcp_congestion_control) echo "${STUB_CC:-bbr}" ;;
+        net.core.default_qdisc)          echo "${STUB_QD:-cake}" ;;
+    esac
+}
 parse_test_output() { :; }
 install_deps_for()  { :; }
 render_and_upload_summary() { echo "RENDER job=$MT_JOB_ID imgdb=$MT_IMGDB" >> "$T_W/calls"; : > "$SUMMARY_DIR/tg.ok"; }
@@ -133,4 +140,22 @@ MT_REPO_CHECK_EVERY=0 MT_AGENT_POLLS=1 mt_agent_main > "$T_W/out" 2>&1
 check "репозиторий упал: reexec не было"   '[ ! -e "$T_W/calls" ]'
 check "репозиторий упал: строка в журнал"  'grep -q "проверка обновления не удалась" "$T_W/out"'
 check "репозиторий упал: опрос был"        'grep -qx "wait=25" "$T_W/curl/argv.3"'
+
+# 14. BBR + Cake: отдельное действие, без запуска тестов и без сводки
+pair; fresh
+t_respond 200 "ok"                                   # start
+t_respond 200 "ok"                                   # done
+mt_agent_job "job Jbbr1111111111111111 bbr_cake" > "$T_W/out" 2>&1
+check "BBR: enable_bbr_cake вызван"        'grep -qx "BBR" "$T_W/calls"'
+check "BBR: type=done отправлен"           'grep -qx "type=done" "$T_W/curl/argv.2"'
+check "BBR: тесты не запускались"          '! grep -q "^CAPTURE" "$T_W/calls"'
+
+# 15. Ядро не применило BBR/Cake — failed, а не done
+pair; fresh
+STUB_CC=cubic STUB_QD=fq_codel
+t_respond 200 "ok"                                   # start
+t_respond 200 "ok"                                   # failed
+rm -f "$MT_AGENT_DIR/agent.runs"
+mt_agent_job "job Jbbr2222222222222222 bbr_cake" > "$T_W/out" 2>&1
+check "BBR: причина bbr_cake"              'grep -qx "reason=bbr_cake" "$T_W/curl/argv.2"'
 t_finish

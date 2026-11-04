@@ -14,11 +14,11 @@ widest() { local l m=0; while IFS= read -r l; do (( ${#l} > m )) && m=${#l}; don
 
 for c in 120 50 49 30; do logo_at "$c"; done
 { printf '  %s\n' "${MT_LOGO_WORD[@]}"; echo
-  echo "  v3.2 ─ диагностика и тестирование сервера"; echo "  IP · DPI · iPerf3 · YABS · Telegram"; } > "$T_W/want"
-check "версия 3.2"                     '[ "$SCRIPT_VERSION" = 3.2 ]'
+  echo "  v3.3 ─ диагностика и тестирование сервера"; echo "  IP · DPI · iPerf3 · YABS · Telegram"; } > "$T_W/want"
+check "версия 3.3"                     '[ "$SCRIPT_VERSION" = 3.3 ]'
 check "120 кол.: надпись и подпись"    'cmp -s "$T_W/want" "$T_W/logo.120"'
 check "50 кол.: влезает (≤ 49)"        '[ "$(widest "$T_W/logo.50")" -le 49 ] && cmp -s "$T_W/want" "$T_W/logo.50"'
-check "49 кол.: две строки текстом"    '! grep -qF "|_|  |_|" "$T_W/logo.49" && grep -qxF "  MULTITEST v3.2" "$T_W/logo.49"'
+check "49 кол.: две строки текстом"    '! grep -qF "|_|  |_|" "$T_W/logo.49" && grep -qxF "  MULTITEST v3.3" "$T_W/logo.49"'
 check "без терминала — без цвета"      '! grep -q $'"'"'\033'"'"' "$T_W"/logo.*'
 check "хвостов пробелов нет"           '! grep -q " $" "$T_W"/logo.*'
 t_finish

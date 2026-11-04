@@ -4,7 +4,7 @@
 #  Multitest — интерактивный скрипт диагностики сервера
 # ============================================================
 
-SCRIPT_VERSION="3.2"
+SCRIPT_VERSION="3.3"
 # Откуда --install и подсказки качают скрипт. Версия 3 (бот, агент) пока живёт в этой ветке,
 # в master — 2.0 без агента: её ставить нельзя. При слиянии в master вернуть master.
 REPO_URL="https://raw.githubusercontent.com/saveksme/multitest/dev-material-summary/multitest.sh"
@@ -1880,6 +1880,38 @@ mt_agent_job() {
     [[ " $MT_AGENT_SEEN " == *" $jid "* ]] && return 0          # это задание уже было
     MT_AGENT_SEEN="$(printf '%s\n' $MT_AGENT_SEEN | tail -n 19 | tr '\n' ' ')$jid"
     MT_JOB_ID="$jid"
+    if [[ "$spec" == bbr_cake ]]; then
+        # Системное действие, не тест: применяем настройки и завершаем done без альбома.
+        if ! lw=$(mt_agent_limits "$spec"); then
+            echo "агент: лимит запусков — следующий через ${lw} c"
+            mt_job_event failed "reason=local_limit" "wait=$lw"; MT_JOB_ID=""; return 1
+        fi
+        mkdir -p "$MT_AGENT_DIR/runs" 2>/dev/null
+        if ! MT_JOB_DIR=$(mktemp -d "$MT_AGENT_DIR/runs/job-XXXXXX" 2>/dev/null); then
+            mt_job_event failed "reason=no_dir"; MT_JOB_ID=""; MT_JOB_DIR=""; return 1
+        fi
+        echo "агент: задание $jid — BBR + Cake"
+        mt_job_event start "n=1"
+        printf -v now '%(%s)T' -1
+        deadline=$(( now + 600 ))
+        mt_agent_watchdog "$deadline" &
+        wpid=$!
+        enable_bbr_cake > "$MT_JOB_DIR/bbr.log" 2>&1
+        local cc qd
+        cc=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)
+        qd=$(sysctl -n net.core.default_qdisc 2>/dev/null)
+        : > "$MT_JOB_DIR/done"
+        kill "$wpid" 2>/dev/null; wait "$wpid" 2>/dev/null
+        if [[ "$cc" == "bbr" && "$qd" == "cake" ]]; then
+            mt_agent_record "$spec"
+            mt_job_event done
+        else
+            mt_job_event failed "reason=bbr_cake"
+        fi
+        for d in $(ls -1dt "$MT_AGENT_DIR"/runs/job-* 2>/dev/null | tail -n +4); do rm -rf "$d"; done
+        MT_JOB_ID=""; MT_JOB_DIR=""
+        return 0
+    fi
     if ! mt_sel_from_spec "$spec"; then
         mt_job_event failed "reason=bad_tests"; MT_JOB_ID=""; return 1
     fi
