@@ -1510,6 +1510,19 @@ mt_tg_ask() {
     case "$a" in y|Y|yes|Yes|д|Д|да|Да) return 0 ;; *) return 1 ;; esac
 }
 
+# Вопрос привязки с тремя ответами — как mt_tg_ask, только с «с/s»: 0 — да (привязка и запуск
+# тестов из Telegram), 2 — только сводки, 1 — нет (всё прочее, в том числе пустой ответ).
+mt_tg_pick() {
+    local a=""
+    printf '%s' "$1"
+    IFS= read -r a <&8 || { echo; return 1; }
+    case "$a" in
+        y|Y|yes|Yes|д|Д|да|Да) return 0 ;;
+        с|С|s|S) return 2 ;;
+        *) return 1 ;;
+    esac
+}
+
 mt_tg_label() {
     if mt_conf_load 2>/dev/null; then printf 'привязан к @%s' "$MT_BOT"; else printf 'не привязан'; fi
 }
@@ -1532,10 +1545,11 @@ mt_tg_say_fail() {   # <HTTP-код> <файл ответа>
 # Привязка сервера к боту (docs/telegram-protocol.md): ключ создаём здесь. Без кода —
 # device flow: бот показывает три кода, а здесь человек видит, КТО подтвердил. С кодом
 # mtp_… из команды «Добавить сервер» аккаунт известен сразу — ни ссылки, ни QR. В обоих
-# случаях здесь спрашиваем «это ваш Telegram?» и пишем конфиг только после ok на
-# pair/confirm. $1 — код из бота или пусто. 0 — привязан, 1 — нет.
+# случаях здесь спрашиваем «это ваш Telegram?» — одним вопросом вместе с запуском тестов из
+# Telegram — и пишем конфиг только после ok на pair/confirm. $1 — код из бота или пусто.
+# 0 — привязан, 1 — нет.
 mt_tg_pair() {
-    local join="${1:-}" tmp code ttl match who="" approved=0 min re kv deadline q rc=1
+    local join="${1:-}" tmp code ttl match who="" approved=0 min re kv deadline q rc=1 agent=0 ans=1
     local -a form=()
     print_separator "Telegram-бот — привязка сервера"
     if ! mt_tg_configured; then
@@ -1558,7 +1572,7 @@ mt_tg_pair() {
             rm -rf "$tmp"; exec 8<&-; return 0
         fi
         # Служба агента — до bye: иначе она получила бы «revoked» и стёрла бы уже
-        # новый ключ. Включить её снова предложим после привязки.
+        # новый ключ. Включить её снова — в том же вопросе привязки ниже.
         mt_agent_installed && mt_agent_uninstall >/dev/null
         MT_API_MAXTIME=15 mt_api POST /v1/agent/bye "$tmp/r" >/dev/null 2>&1
         mt_conf_wipe
@@ -1643,20 +1657,38 @@ mt_tg_pair() {
         # стоков с `echo -e` (\e, \c): вырезаем до показа имени.
         who=${who//\\/}
         who=$(vcut "$who" 64)
+        # Один вопрос на всё: «да» — привязка и запуск тестов из Telegram, «с» — только сводки.
+        # Без systemd службы не будет — тогда вопрос только про привязку.
+        if mt_systemd; then
+            agent=1
+            mt_agent_terms
+            q="[y/д — да · с — только сводки · Enter — нет]: "
+        else
+            q="[y/д — да · Enter — нет]: "
+        fi
         # с кодом: чужая команда привязала бы этот сервер к чужому аккаунту — имя показываем
         if [[ -n "$join" ]]; then
-            q="  Команда из Telegram-аккаунта ${BOLD}${who}${NC}. Привязать сервер к нему? [y/д — да · Enter — нет]: "
+            q="  Команда из Telegram-аккаунта ${BOLD}${who}${NC}. Привязать сервер к нему? $q"
         else
-            q="  Подтвердил Telegram: ${BOLD}${who}${NC}. Это вы? [y/д — да · Enter — нет]: "
+            q="  Подтвердил Telegram: ${BOLD}${who}${NC}. Это вы? Привязать сервер? $q"
         fi
-        if mt_tg_ask "$q"; then
+        if (( agent )); then
+            mt_tg_pick "$q"; ans=$?
+        else
+            mt_tg_ask "$q" && ans=0
+        fi
+        if (( ans != 1 )); then
             code=$(MT_API_MAXTIME=30 mt_api POST /v1/pair/confirm "$tmp/r" --data-urlencode "answer=yes")
             if [[ "$code" == 200 ]] && mt_resp "$tmp/r" && mt_match '^ok ([A-Za-z0-9]{8,32})$' "$MT_RESP"; then
                 MT_SRV_ID="${BASH_REMATCH[1]}"; MT_API="$MT_BOT_API"; MT_BOT="$MT_BOT_USERNAME"
                 if mt_conf_save; then
                     echo -e "  ${GREEN}Сервер привязан. Сводки мультитеста будут приходить в Telegram.${NC}"
                     rc=0
-                    mt_agent_offer "$who"
+                    if (( agent && ans == 0 )); then
+                        mt_agent_install
+                    elif (( agent )); then
+                        echo -e "  ${CYAN}Запуск тестов из Telegram не включён — только сводки. Включить: multitest → Утилиты → Telegram-бот.${NC}"
+                    fi
                 else
                     echo -e "  ${RED}Не удалось сохранить ключ в ${MT_CONF}.${NC}"
                 fi
@@ -1775,8 +1807,9 @@ mt_tg_menu() {
 #  Telegram-бот: агент — тесты по заданиям из бота
 # ============================================================
 # Служба multitest-agent ждёт задание у бота (long-poll ~25 с) и гоняет только тесты из
-# каталога (MT_CAT_FUNCS). Бот не может обойти локальные лимиты и ничего не меняет в
-# системе: BBR, IPv6 и прочее — только руками. Ключ стирается только по явному «revoked».
+# каталога (MT_CAT_FUNCS). Кроме тестов — исключительно задание bbr_cake: включить BBR + Cake
+# (кнопка и подтверждение в боте). Больше ничего в системе бот не меняет: IPv6 и прочее — только
+# руками. Локальные лимиты бот не обойдёт. Ключ стирается только по явному «revoked».
 
 mt_systemd() { [[ -d "$MT_SYSTEMD" ]]; }
 mt_agent_installed() { [[ -f "$MT_AGENT_UNIT" ]]; }
@@ -2228,20 +2261,17 @@ mt_agent_uninstall() {
     echo -e "  ${GREEN}Запуск из Telegram выключен.${NC}"
 }
 
-# Вопрос согласия: что агент может и чего не может. Только с клавиатуры (fd 8).
-mt_agent_offer() {   # <кто подтвердил>
-    mt_systemd || return 0
+# Что значит «да» в вопросе привязки (его задаёт mt_tg_pair): сводки и запуск тестов из
+# Telegram — что служба может и чего не может. Данных бэкенда здесь нет — echo -e можно.
+mt_agent_terms() {
     echo ""
-    echo -e "  ${BOLD}Запуск тестов прямо из Telegram${NC}"
-    echo -e "  Служба multitest-agent будет спрашивать у бота задания и запускать ${BOLD}только${NC} тесты"
-    echo -e "  Multitest. Настройки системы она не меняет (ставит лишь пакеты для тестов — как ручной"
-    echo -e "  запуск). Лимиты: не чаще раза в $(( MT_LIM_GAP / 60 )) мин, до ${MT_LIM_DAY} прогонов в сутки, тяжёлых"
-    echo -e "  (YABS, iPerf3, bench.sh) — до ${MT_LIM_HEAVY}. Выключить: multitest → Утилиты → Telegram-бот."
-    if mt_tg_ask "  Разрешить запуск тестов из Telegram для ${BOLD}$1${NC}? [y/д — да · Enter — нет]: "; then
-        mt_agent_install
-    else
-        echo -e "  ${CYAN}Хорошо — только сводки. Включить позже: multitest → Утилиты → Telegram-бот.${NC}"
-    fi
+    echo -e "  ${BOLD}«Да» — привязка и запуск тестов прямо из Telegram${NC}"
+    echo -e "  Сводки мультитеста будут приходить в Telegram, а служба multitest-agent — брать у бота"
+    echo -e "  задания и запускать ${BOLD}только${NC} тесты Multitest: не чаще раза в $(( MT_LIM_GAP / 60 )) мин, до ${MT_LIM_DAY} прогонов"
+    echo -e "  в сутки, тяжёлых (YABS, iPerf3, bench.sh) — до ${MT_LIM_HEAVY}. Кроме тестов служба может ${BOLD}исключительно${NC}"
+    echo -e "  включить BBR + Cake — по кнопке и подтверждению в боте; больше ничего в системе она не меняет"
+    echo -e "  (тесты лишь ставят нужные им пакеты, как при ручном запуске). Почему это безопасно — /security"
+    echo -e "  в боте. Выключить: multitest → Утилиты → Telegram-бот."
 }
 
 # ============================================================

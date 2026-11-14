@@ -4,6 +4,9 @@
 export LC_ALL=C.UTF-8                        # QR печатается только в UTF-8-локали
 MULTITEST_TEST=1 source "$T_ROOT/multitest.sh" ""
 t_fake_curl
+# systemd хоста тесту не нужен: по умолчанию его «нет», а служба — заглушка, которая пишет вызов
+MT_SYSTEMD="$T_W/no-systemd"
+mt_agent_install() { echo install >> "$T_W/agent.calls"; }
 MT_STATE_DIR="$T_W/state"; MT_CONF="$MT_STATE_DIR/agent.conf"
 gather_system_facts() { SYS_IP4=203.0.113.42; SYS_IP6=""; SYS_COUNTRY=NL; SYS_CITY=Amsterdam
     SYS_ASN="AS64496 Example Hosting B.V."; SYS_CPU="AMD Ryzen 9 9950X 16-Core Processor"; SYS_CORES=2
@@ -107,6 +110,36 @@ check "устаревший код → понятно"           '[ $rc = 1 ] &&
 fresh; answers y
 mt_tg_pair 'mtp_bad;rm -rf /' > "$T_W/out" 2>&1; rc=$?
 check "кривой код → 1, без запросов"        '[ $rc = 1 ] && [ "$(t_calls)" = 0 ] && grep -qF "не код из бота" "$T_W/out"'
+
+# --- один вопрос: привязка и запуск тестов из Telegram -------------------------------------
+mkdir -p "$T_W/systemd"; MT_SYSTEMD="$T_W/systemd"
+rm -f "$MT_CONF" "$T_W/agent.calls"; fresh; answers y
+t_respond 200 "approved %40ivan"; t_respond 200 "ok AbCdEf123456"
+mt_tg_pair "$JOIN" > "$T_W/out" 2>&1; rc=$?
+check "«y»: привязка и служба одним вопросом" '[ $rc = 0 ] && [ -e "$MT_CONF" ] && [ "$(cat "$T_W/agent.calls")" = install ] && [ "$(grep -o "y/д — да" "$T_W/out" | wc -l)" = 1 ]'
+check "до вопроса — что может служба"        'grep -qF "исключительно" "$T_W/out" && grep -qF "BBR + Cake" "$T_W/out" && grep -qF "/security" "$T_W/out" && grep -qF "с — только сводки" "$T_W/out"'
+check "имя — в самом вопросе"                'grep -q "Команда из Telegram-аккаунта.*@ivan.*Привязать сервер.*с — только сводки" "$T_W/out"'
+
+rm -f "$MT_CONF" "$T_W/agent.calls"; fresh; answers с
+t_respond 200 "approved %40ivan"; t_respond 200 "ok AbCdEf123456"
+mt_tg_pair "$JOIN" > "$T_W/out" 2>&1; rc=$?
+check "«с»: только сводки, службы нет"       '[ $rc = 0 ] && [ -e "$MT_CONF" ] && [ ! -e "$T_W/agent.calls" ] && grep -qx "answer=yes" "$T_W/curl/argv.2" && grep -qF "не включён" "$T_W/out"'
+
+rm -f "$MT_CONF" "$T_W/agent.calls"; fresh; answers ""
+t_respond 200 "approved %40ivan"; t_respond 200 "cancelled"
+mt_tg_pair "$JOIN" > "$T_W/out" 2>&1; rc=$?
+check "Enter: ни привязки, ни службы"        '[ $rc = 1 ] && [ ! -e "$MT_CONF" ] && [ ! -e "$T_W/agent.calls" ] && grep -qx "answer=no" "$T_W/curl/argv.2"'
+
+rm -f "$MT_CONF" "$T_W/agent.calls"; fresh; answers y
+t_respond 200 "ok $CODE 600 47"; t_respond 200 "approved %40ivan"; t_respond 200 "ok AbCdEf123456"
+mt_tg_pair > "$T_W/out" 2>&1; rc=$?
+check "без кода: «Это вы?» тем же вопросом"  '[ $rc = 0 ] && [ "$(cat "$T_W/agent.calls")" = install ] && grep -q "Это вы? Привязать сервер?.*с — только сводки" "$T_W/out"'
+
+MT_SYSTEMD="$T_W/no-systemd"
+rm -f "$MT_CONF" "$T_W/agent.calls"; fresh; answers с
+t_respond 200 "approved %40ivan"; t_respond 200 "cancelled"
+mt_tg_pair "$JOIN" > "$T_W/out" 2>&1; rc=$?
+check "без systemd: вопрос только о привязке" '[ $rc = 1 ] && [ ! -e "$MT_CONF" ] && ! grep -qF "только сводки" "$T_W/out" && ! grep -qF "исключительно" "$T_W/out" && grep -qx "answer=no" "$T_W/curl/argv.2"'
 
 paired a; before=$(cat "$MT_CONF"); fresh; answers n
 mt_tg_pair > "$T_W/out" 2>&1
