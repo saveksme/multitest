@@ -650,11 +650,17 @@ run_tspu_check() {
     echo -e "  так со стороны выглядит фильтрация ТСПУ."
     echo ""
 
-    local port tmp code
+    local port tmp
     port=$(tspu_ssh_port)
     tmp=$(mktemp) || { echo -e "  ${RED}[TSPU] ОШИБКА: площадка проверки недоступна.${NC}"; return 1; }
-    code=$(MT_API_MAXTIME=180 mt_api POST /v1/tspu "$tmp" --data-urlencode "port=$port")
-    if [[ "$code" != 200 ]] || [[ "$(head -n 1 "$tmp")" != "v 1" ]]; then
+    # Площадки отвечают до 180 с — под крутилкой, иначе терминал выглядит зависшим.
+    # stderr запроса глушим: наружу только нейтральная строка ошибки, без деталей.
+    tspu_request() {
+        local code
+        code=$(MT_API_MAXTIME=180 mt_api POST /v1/tspu "$tmp" --data-urlencode "port=$port" 2>/dev/null)
+        [[ "$code" == 200 && "$(head -n 1 "$tmp")" == "v 1" ]]
+    }
+    if ! spin_run "Опрашиваю площадки РФ · порт $port (обычно ≈2 мин)" tspu_request; then
         rm -f "$tmp"
         echo -e "  ${RED}[TSPU] ОШИБКА: площадка проверки недоступна — попробуйте позже.${NC}"
         return 1
@@ -2336,7 +2342,10 @@ capture_test() {
     mt_is_test_fn "$fn" || { echo "capture_test: неизвестный тест «$fn»" >&2; return 2; }
 
     export RED GREEN YELLOW CYAN BOLD NC SCRIPT_VERSION
-    export -f print_separator check_and_install install_package detect_pkg_manager
+    # ТСПУ спрашивает наш API прямо из подоболочки — без этих функций и адресов он
+    # там не живёт. Ключ сервера не экспортируем: в окружении сторонних тестов ему не место.
+    export MT_BOT_API MT_API MT_CURL MT_UA
+    export -f print_separator check_and_install install_package detect_pkg_manager mt_api spin_run
     export -f "${MT_CAT_FUNCS[@]}"
 
     if [[ "$SCRIPT_CAPTURE" == "util" && -n "${MT_JOB_DIR:-}" && -n "${MT_TEST_NUM:-}" ]]; then
@@ -5417,11 +5426,16 @@ spin_run() {
     sleep "$delay" 2>/dev/null || delay=1
 
     printf '\033[?25l'
+    # Ctrl+C посреди ожидания не должен оставить терминал без курсора. Свой INT
+    # только на время крутилки, дальше возвращаем тот, что был у вызывающего.
+    local int_was; int_was=$(trap -p INT)
+    trap 'printf "\033[?25h\n"; exit 130' INT
     while kill -0 "$pid" 2>/dev/null; do
         printf '\r\033[K  %b%s%b %s %b%d c%b' "$CYAN" "${fr[i%n]}" "$NC" "$msg" "$YELLOW" "$((SECONDS-t0))" "$NC"
         i=$((i+1)); sleep "$delay" 2>/dev/null || sleep 1
     done
     wait "$pid"; rc=$?
+    eval "${int_was:-trap - INT}"
     printf '\r\033[K'
     printf '\033[?25h'
 

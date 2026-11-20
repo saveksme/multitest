@@ -38,6 +38,7 @@ check "прогон: код 0"                     '[ $rc = 0 ]'
 check "прогон: порт из SSH_CONNECTION"    'grep -q "203.0.\*.\*:2222" "$T_W/run_tspu_check.log"'
 check "прогон: строка ноды каноническая"  'grep -q "^  Moscow · Demo ISP · open · 24.0 мс$" "$T_W/run_tspu_check.log"'
 check "прогон: итоговая строка"           'grep -q "Итог: РАБОТАЕТ С ПОТЕРЯМИ · 1/2 · 50%" "$T_W/run_tspu_check.log"'
+check "прогон: видно, что идёт опрос"     'grep -q "Опрашиваю площадки РФ · порт 2222" "$T_W/run_tspu_check.log"'
 check "прогон: один запрос к нашему боту" '[ "$(t_calls)" = 1 ] && grep -qxF "https://bot.test/v1/tspu" "$T_W/curl/argv.1" && grep -qxF "port=2222" "$T_W/curl/argv.1"'
 check "прогон: цель наружу не передаётся" '! grep -q "target\|203.0.113.7" "$T_W/curl/argv.1"'
 check "скрытность: протокола в исходниках нет" 'no_markers'
@@ -76,4 +77,19 @@ cp "$T_W/err.log" "$T_W/run_tspu_check.log"; parse run_tspu_check
 check "ошибка: метрика недоступности"  'metric run_tspu_check "Проверка" "недоступна" bad'
 mt_read_metrics run_tspu_check; mt_read_rows run_tspu_check; mt_test_key run_tspu_check
 check "ошибка: ключ «сервис недоступен»" '[ "$K" = "сервис недоступен" ] && [ "$KC" = "$C_ERR" ]'
+
+# Альбом и задания из Telegram идут через capture_test: тест живёт в отдельной bash,
+# куда доезжает только экспортированное. Ключ сервера там быть не должен.
+MT_SRV_TOKEN="mtk_do_not_export_this_key"
+t_respond 200 'v 1
+  Цель: 203.0.*.*:2222
+  Moscow · Demo ISP · open · 24.0 мс
+  Итог: ДОСТУП ЕСТЬ · 1/1 · 100%'
+detect_script_flavor
+capture_test run_tspu_check "$T_W/cap.log" >/dev/null 2>&1
+strip_ansi < "$T_W/cap.log" > "$T_W/cap.txt"
+check "подоболочка: помощники доехали"   '! grep -qi "command not found\|не найдена" "$T_W/cap.txt"'
+check "подоболочка: строка ноды"         'grep -q "Moscow · Demo ISP · open · 24.0 мс" "$T_W/cap.txt"'
+check "подоболочка: итог"                'grep -q "Итог: ДОСТУП ЕСТЬ · 1/1 · 100%" "$T_W/cap.txt"'
+check "подоболочка: ключ не утекает"     '! grep -rq "mtk_do_not_export_this_key" "$T_W/curl/"'
 t_finish
