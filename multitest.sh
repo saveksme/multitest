@@ -123,12 +123,24 @@ mapfile -t MT_LOGO_WORD <<'LOGOWORD'
 |_|  |_|\___/|____|_| |___| |_| |___|___/ |_|
 LOGOWORD
 
-# Шапка собирается в MT_LOGO под ширину терминала: большая надпись и под ней
-# подпись, а если надпись не влезает — две строки текстом.
+# Мику слева от надписи: пиксель-арт, одна буква = одна клетка █.
+# H волосы, F лицо, E глаза, P резинки, B одежда, . пусто. Без цвета глаза —
+# пробелы, иначе силуэт не читается.
+mapfile -t MT_LOGO_MIKU <<'LOGOMIKU'
+...HHHHHHHHHH...
+.PPHFEFFFFEFHPP.
+.HHHFFFEEFFFHHH.
+.HH..HBBBBH..HH.
+LOGOMIKU
+
+# Шапка собирается в MT_LOGO под ширину терминала: мику и надпись рядом, под ними
+# подпись; если мику не влезает — одна надпись; если и она не влезает — две строки
+# текстом.
 # Ширину сначала спрашиваем у stty — его stdin это клавиатура меню, а у tput
 # внутри $(…) stdout — канал, и терминал он может не увидеть.
 mt_logo_lines() {
-    local cols w b='' r='' pink='' teal='' grey=''
+    local cols w b='' r='' pink='' teal='' grey='' hair='' face='' eye=''
+    local i j ch row
 
     cols=$(stty size 2>/dev/null); cols=${cols##* }
     [[ $cols =~ ^[1-9][0-9]*$ ]] || cols=$(tput cols 2>/dev/null)
@@ -137,16 +149,37 @@ mt_logo_lines() {
     if [[ -t 1 && "${NO_COLOR:-}" == "" ]]; then
         r=$'\033[0m'; b=$'\033[1m'; grey=$'\033[38;5;245m'
         pink=$'\033[1;38;5;204m'; teal=$'\033[1;38;5;79m'
+        hair=$'\033[38;5;44m'; face=$'\033[38;5;223m'; eye=$'\033[38;5;232m'
     fi
 
-    # Надписи с отступом нужно 2 + 47 колонок, последнюю колонку терминала не занимаем.
+    # Надписи с отступом нужно 2 + 47 колонок, мику добавляет 16 + 2 зазора;
+    # последнюю колонку терминала не занимаем.
     if (( cols < 50 )); then
         MT_LOGO=("  ${b}MULTI${r}${teal}TEST${r} ${pink}v${SCRIPT_VERSION}${r}"
                  "  Диагностика и тестирование сервера")
         return 0
     fi
     MT_LOGO=()
-    for w in "${MT_LOGO_WORD[@]}"; do MT_LOGO+=("  ${b}${w:0:27}${r}${teal}${w:27}${r}"); done
+    if (( cols >= 68 )); then
+        for i in "${!MT_LOGO_MIKU[@]}"; do
+            row=''
+            for (( j = 0; j < ${#MT_LOGO_MIKU[i]}; j++ )); do
+                ch=${MT_LOGO_MIKU[i]:j:1}
+                case $ch in
+                    H) row+="${hair}█${r}" ;;
+                    F) row+="${face}█${r}" ;;
+                    E) [[ $r ]] && row+="${eye}█${r}" || row+=' ' ;;
+                    P) row+="${pink}█${r}" ;;
+                    B) row+="${grey}█${r}" ;;
+                    *) row+=' ' ;;
+                esac
+            done
+            w=${MT_LOGO_WORD[i]}
+            MT_LOGO+=("  ${row}  ${b}${w:0:27}${r}${teal}${w:27}${r}")
+        done
+    else
+        for w in "${MT_LOGO_WORD[@]}"; do MT_LOGO+=("  ${b}${w:0:27}${r}${teal}${w:27}${r}"); done
+    fi
     MT_LOGO+=(""
               "  ${pink}v${SCRIPT_VERSION}${r} ${grey}─${r} диагностика и тестирование сервера"
               "  ${grey}IP · DPI · iPerf3 · YABS · Telegram${r}")
