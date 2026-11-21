@@ -39,10 +39,6 @@ MT_BOT_API="${MT_BOT_API:-https://mtbot.sixseven.cam}"
 # Открытые ключи «Подписи Multitest» (ECDSA P-256, SubjectPublicKeyInfo DER в base64):
 # «kid ключ [дата отзыва]». Приватный ключ живёт только на сервере бота.
 MT_PROOF_KEYS="${MT_PROOF_KEYS:-mt1 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE+jtC/IF2U1nUu4FwZRQHyoK0HFn+Uu6ytOkLZAjJudw+SdLT5yuM4IO4JBhJw0BWJ1VX40ZJL+r7PML6Qes9sQ==}"
-# Открытый ключ подписи РЕЛИЗОВ (ECDSA P-256, SPKI DER в base64). Скачанный скрипт
-# запускается как root, поэтому подпись проверяется ДО запуска: право пуша в репозиторий
-# само по себе больше не даёт код на серверах. Приватный ключ — у владельца, не на сервере.
-MT_RELEASE_KEY="${MT_RELEASE_KEY:-MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEjUX9WH57fLsr1TCf+XczZ0SYglEPucT5qtGWti8Tb73zb/Kx3oEeBcvib/g/QxwbiuJy/JOjWyXDNbHkmymbtQ==}"
 MT_STATE_DIR="${MT_STATE_DIR:-/etc/multitest}"
 MT_CONF="$MT_STATE_DIR/agent.conf"
 MT_CURL="${MT_CURL:-curl}"         # тесты подменяют curl
@@ -2107,52 +2103,17 @@ mt_agent_ok() {
     [[ "$out" == agent-ok ]]
 }
 
-# Подпись релиза: скрипт + файл подписи (base64 DER). 0 — подпись верна. Без openssl
-# отказываем: проверить нечем, а дальше этот файл исполняется как root (mt_agent_ok).
-mt_release_ok() {   # <скрипт> <подпись>
-    local d rc
-    command -v openssl >/dev/null 2>&1 || return 1
-    [[ -s "$1" && -s "$2" ]] || return 1
-    d=$(mktemp -d) || return 1
-    printf '%s' "$MT_RELEASE_KEY" | openssl base64 -d -A > "$d/key.der" 2>/dev/null
-    openssl pkey -pubin -inform DER -in "$d/key.der" -out "$d/key.pem" 2>/dev/null \
-        && openssl base64 -d -A < "$2" > "$d/sig.der" 2>/dev/null \
-        && openssl dgst -sha256 -verify "$d/key.pem" -signature "$d/sig.der" "$1" >/dev/null 2>&1
-    rc=$?
-    rm -rf "$d"
-    return $rc
-}
-
-# Скрипт и его подпись из репозитория -> файл. Отдаёт путь только если подпись сошлась:
-# неподписанное обновление не должно доезжать до запуска. --proto-redir =https обязателен —
-# иначе редирект увёл бы загрузку исполняемого кода на plaintext http.
-mt_release_fetch() {   # <файл-назначение>
-    local dest="$1" sig rc=1
-    sig=$(mktemp) || return 1
-    if command -v "$MT_CURL" >/dev/null 2>&1; then
-        "$MT_CURL" -fsSL --proto =https --proto-redir =https --connect-timeout 10 --max-time 60 \
-            "$REPO_URL" -o "$dest" 2>/dev/null \
-            && "$MT_CURL" -fsSL --proto =https --proto-redir =https --connect-timeout 10 --max-time 30 \
-                "$REPO_URL.sig" -o "$sig" 2>/dev/null && rc=0
-    elif command -v wget >/dev/null 2>&1; then
-        wget -qO "$dest" "$REPO_URL" 2>/dev/null && wget -qO "$sig" "$REPO_URL.sig" 2>/dev/null && rc=0
-    fi
-    if (( rc == 0 )) && mt_release_ok "$dest" "$sig"; then
-        rm -f "$sig"; return 0
-    fi
-    rm -f "$sig"
-    return 1
-}
-
-# Этот скрипт во временный файл -> путь: запущен файлом — копия себя (она уже исполняется,
-# доверять ей нечего проверять), через bash <(curl …) — подписанный релиз из репозитория.
+# Этот скрипт во временный файл -> путь: запущен файлом — копия себя, через bash <(curl …) — REPO_URL
 mt_candidate() {
     local tmp
     tmp=$(mktemp) || return 1
     if [[ -f "$MT_SELF" && -r "$MT_SELF" ]]; then
         cp "$MT_SELF" "$tmp" 2>/dev/null && { printf '%s' "$tmp"; return 0; }
-    elif mt_release_fetch "$tmp"; then
-        printf '%s' "$tmp"; return 0
+    elif command -v "$MT_CURL" >/dev/null 2>&1; then
+        "$MT_CURL" -fsSL --proto =https --proto-redir =https --connect-timeout 10 --max-time 60 \
+            "$REPO_URL" -o "$tmp" 2>/dev/null && { printf '%s' "$tmp"; return 0; }
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO "$tmp" "$REPO_URL" 2>/dev/null && { printf '%s' "$tmp"; return 0; }
     fi
     rm -f "$tmp"
     return 1
@@ -2164,8 +2125,11 @@ mt_candidate() {
 mt_repo_download() {
     local tmp
     tmp=$(mktemp) || return 1
-    if mt_release_fetch "$tmp"; then
-        printf '%s' "$tmp"; return 0
+    if command -v "$MT_CURL" >/dev/null 2>&1; then
+        "$MT_CURL" -fsSL --proto =https --proto-redir =https --connect-timeout 10 --max-time 60 \
+            "$REPO_URL" -o "$tmp" 2>/dev/null && [[ -s "$tmp" ]] && { printf '%s' "$tmp"; return 0; }
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO "$tmp" "$REPO_URL" 2>/dev/null && [[ -s "$tmp" ]] && { printf '%s' "$tmp"; return 0; }
     fi
     rm -f "$tmp"
     return 1

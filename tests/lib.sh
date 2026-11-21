@@ -49,19 +49,3 @@ t_respond() {   # <код> <строка>… — следующий по счё�
     printf '%s\n' "$@" > "$d/resp.$i.body"
 }
 t_calls() { cat "$T_W/curl/n" 2>/dev/null || echo 0; }
-
-# Обновление агент принимает только с верной подписью релиза. Для тестов — свой ключ
-# (релизный приватный ключ в тестах не участвует) и пара ответов: тело, затем подпись.
-t_release_key() {
-    t_need openssl
-    openssl ecparam -name prime256v1 -genkey -noout -out "$T_W/rel.pem" 2>/dev/null
-    MT_RELEASE_KEY=$(openssl pkey -in "$T_W/rel.pem" -pubout -outform DER 2>/dev/null | base64 -w0)
-}
-t_release() {   # <файл-скрипт> — подпись считается по точным байтам тела ответа
-    local d="$T_W/curl" i
-    i=$(( $(ls "$d"/resp.*.code 2>/dev/null | wc -l) + 1 ))
-    cp "$1" "$d/resp.$i.body"; printf '200' > "$d/resp.$i.code"
-    openssl dgst -sha256 -sign "$T_W/rel.pem" -out "$T_W/rel.der" "$d/resp.$i.body"
-    openssl base64 -A -in "$T_W/rel.der" > "$d/resp.$((i+1)).body"
-    printf '200' > "$d/resp.$((i+1)).code"
-}

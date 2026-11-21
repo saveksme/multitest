@@ -6,7 +6,6 @@
 t_need timeout cksum
 MULTITEST_TEST=1 source "$T_ROOT/multitest.sh" ""
 t_fake_curl
-t_release_key
 MT_STATE_DIR="$T_W/state"; MT_CONF="$MT_STATE_DIR/agent.conf"
 MT_AGENT_DIR="$T_W/agent"; MT_SYSTEMD="$T_W/systemd"; MT_LOCK_FILE="$T_W/lock"
 MT_AGENT_UNIT="$T_W/unit/multitest-agent.service"
@@ -86,10 +85,10 @@ fresh; MT_SELF="$T_W/old.sh"; printf '[Service]\nExecStart=%s --agent\n' "$MT_AG
 mkdir -p "${MT_AGENT_BIN%/*}"; cp "$T_W/new.sh" "$MT_AGENT_BIN"
 mt_install > "$T_W/out" 2>&1; rc=$?
 check "--install 2.0 при службе: отказ, служба цела"   '[ $rc != 0 ] && [ ! -e "$MT_CLI_BIN" ] && same "$MT_AGENT_BIN" "$T_W/new.sh" && grep -q "multitest-agent" "$T_W/out"'
-# запущен через bash <(curl …) — файла нет, качаем подписанный релиз; пришла 2.0 — отказ
-fresh; MT_SELF="/dev/fd/63"; t_release "$T_W/old.sh"
+# запущен через bash <(curl …) — файла нет, качаем; пришла 2.0 — отказ
+fresh; MT_SELF="/dev/fd/63"; t_respond 200 "$(cat "$T_W/old.sh")"
 mt_install > "$T_W/out" 2>&1; rc=$?
-check "--install из pipe: скачанная 2.0 — отказ"        '[ $rc != 0 ] && [ ! -e "$MT_CLI_BIN" ] && [ "$(t_calls)" = 2 ]'
+check "--install из pipe: скачанная 2.0 — отказ"        '[ $rc != 0 ] && [ ! -e "$MT_CLI_BIN" ] && [ "$(t_calls)" = 1 ]'
 
 # 5. Старый unit (ExecStart=/usr/local/bin/multitest) — агент сам переезжает в свою копию
 fresh; cp "$T_W/new.sh" "$MT_CLI_BIN"; MT_SELF="$MT_CLI_BIN"
