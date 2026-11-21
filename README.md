@@ -7,14 +7,16 @@
 **Запуск без установки:**
 
 ```bash
-bash <(curl -sL https://raw.githubusercontent.com/saveksme/multitest/master/multitest.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/saveksme/multitest/master/multitest.sh)
 ```
 
 **Установка как команда `multitest`:**
 
 ```bash
-curl -sL https://raw.githubusercontent.com/saveksme/multitest/master/multitest.sh -o /usr/local/bin/multitest && chmod +x /usr/local/bin/multitest && echo "Установлено! Запуск: multitest"
+curl -fsSL https://raw.githubusercontent.com/saveksme/multitest/master/multitest.sh -o /usr/local/bin/multitest && chmod +x /usr/local/bin/multitest && echo "Установлено! Запуск: multitest"
 ```
+
+`-f` обязателен: без него curl отдаст тело страницы 404, и оно уедет в bash или в файл команды.
 
 После установки скрипт доступен из любого места:
 
@@ -361,6 +363,23 @@ MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE+jtC/IF2U1nUu4FwZRQHyoK0HFn+Uu6ytOkLZAjJudw+
 - Linux (Debian/Ubuntu, CentOS/RHEL, Fedora, Alpine, Arch)
 - Права root (для установки пакетов и утилит)
 - Bash 4+
+- openssl — для проверки подписи обновлений и «Подписи Multitest»
+
+## Подпись релизов
+
+Агент обновляет себя сам и запускает скачанный скрипт как root, поэтому обновление принимается
+только с верной подписью: `multitest.sh.sig` рядом со скриптом, открытый ключ зашит в `MT_RELEASE_KEY`.
+Нет подписи, не тот ключ, нет openssl — обновления не будет (старая версия продолжит работать).
+Право пуша в репозиторий само по себе больше не даёт код на серверах.
+
+Подписывать после последней правки скрипта и до коммита — подпись считается по байтам файла:
+
+```bash
+MT_RELEASE_KEY_FILE=~/.ssh/multitest_release bash sign-release.sh
+```
+
+Тест `tests/test-release-sign.sh` проверяет и механизм, и то, что подпись в репозитории сходится
+с текущим скриптом: если он упал после правок — скрипт нужно переподписать.
 
 ## Используемые проекты
 

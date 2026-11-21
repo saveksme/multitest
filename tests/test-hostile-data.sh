@@ -85,4 +85,27 @@ check "отрисовка: ничего не выполнилось"         '! 
 check "отрисовка: все страницы собраны"           '[ "$(ls "$T_W"/p-*.svg | wc -l)" -eq $(( ${#MT_PAGE_IDX[@]} + 1 )) ] && ! grep -L "</svg>" "$T_W"/p-*.svg | grep -q .'
 check "отрисовка: чужой разметки в SVG нет"       '! grep -q "<image\|<script\|href=\"x.png" "$T_W"/p-*.svg'
 check "summary.txt: управляющих символов нет"     '! LC_ALL=C grep -q "$(printf "[\001-\011\013-\036\177]")" "$T_W/summary.txt"'
+check "summary.txt: bidi вырезан"                 '! LC_ALL=C grep -q "$RLO" "$T_W/summary.txt"'
+
+# Текст от бэкенда/хостинга: mt_clean обязан убрать и «\», иначе echo -e/printf %b
+# соберёт из него ESC уже после чистки (\033 -> 0x1b = OSC-52, запись в буфер обмена).
+CLEAN=$(mt_clean '\033]52;c;QUJD\007')
+check "mt_clean: слэш вырезан"                    '[[ "$CLEAN" != *\\* ]]'
+check "mt_clean: echo -e не оживляет ESC"         '! echo -e "$CLEAN" | LC_ALL=C grep -q "$(printf "\033")"'
+check "mt_clean: bidi вырезан"                    '[[ "$(mt_clean "abc${RLO}def")" == abcdef ]]'
+check "mt_clean: кириллица цела"                  '[ "$(mt_clean "Москва · open · 24.0 мс")" == "Москва · open · 24.0 мс" ]'
+
+# Тело ответа ТСПУ и ссылка хостинга — тоже недоверенный текст
+t_fake_curl
+MT_API=https://bot.test; export SSH_CONNECTION="10.0.0.2 51111 203.0.113.7 2222"
+t_respond 200 'v 1' "  Цель: 203.0.*.*:2222" \
+    "$(printf '  Moscow \033]52;c;QUJD\007 · ISP · open · 24.0 мс')" '  Итог: ДОСТУП ЕСТЬ · 1/1 · 100%'
+run_tspu_check > "$T_W/tspu.out" 2>&1
+grep -a "Moscow" "$T_W/tspu.out" > "$T_W/tspu.node"
+check "ТСПУ: в строке узла нет ESC/BEL"            '! LC_ALL=C grep -q "$(printf "[\001-\010\013-\037\177]")" "$T_W/tspu.node"'
+check "ТСПУ: строка узла цела"                    'grep -q "Moscow .*· ISP · open · 24.0 мс" "$T_W/tspu.out"'
+check "ТСПУ: разбор всё ещё работает"             'parse_test_output run_tspu_check "$T_W/tspu.out" "$T_W/t.m" "$T_W/t.s" && grep -q "Доступно" "$T_W/t.m"'
+
+up_imgdb() { printf 'https://x.test/a\\033]52;c;QUJD\\007'; }
+check "хостинг: ссылка обезврежена"               '[[ "$(upload_report /dev/null 2>/dev/null)" != *\\* ]]'
 t_finish

@@ -39,6 +39,10 @@ MT_BOT_API="${MT_BOT_API:-https://mtbot.sixseven.cam}"
 # Открытые ключи «Подписи Multitest» (ECDSA P-256, SubjectPublicKeyInfo DER в base64):
 # «kid ключ [дата отзыва]». Приватный ключ живёт только на сервере бота.
 MT_PROOF_KEYS="${MT_PROOF_KEYS:-mt1 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE+jtC/IF2U1nUu4FwZRQHyoK0HFn+Uu6ytOkLZAjJudw+SdLT5yuM4IO4JBhJw0BWJ1VX40ZJL+r7PML6Qes9sQ==}"
+# Открытый ключ подписи РЕЛИЗОВ (ECDSA P-256, SPKI DER в base64). Скачанный скрипт
+# запускается как root, поэтому подпись проверяется ДО запуска: право пуша в репозиторий
+# само по себе больше не даёт код на серверах. Приватный ключ — у владельца, не на сервере.
+MT_RELEASE_KEY="${MT_RELEASE_KEY:-MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEjUX9WH57fLsr1TCf+XczZ0SYglEPucT5qtGWti8Tb73zb/Kx3oEeBcvib/g/QxwbiuJy/JOjWyXDNbHkmymbtQ==}"
 MT_STATE_DIR="${MT_STATE_DIR:-/etc/multitest}"
 MT_CONF="$MT_STATE_DIR/agent.conf"
 MT_CURL="${MT_CURL:-curl}"         # тесты подменяют curl
@@ -665,7 +669,7 @@ run_tspu_check() {
         echo -e "  ${RED}[TSPU] ОШИБКА: площадка проверки недоступна — попробуйте позже.${NC}"
         return 1
     fi
-    tail -n +2 "$tmp"
+    mt_resp_body "$tmp"
     rm -f "$tmp"
 }
 
@@ -1472,8 +1476,18 @@ mt_resp() {
 mt_clean() {
     local s="$1" LC_ALL=C
     s=${s//$'\xc2'[$'\x80'-$'\x9f']/}
+    # BIDI-переключатели: ими переставляют слова в вопросе «Это вы?» и в сводке.
+    s=${s//$'\xe2\x80'[$'\x8e\x8f\xaa\xab\xac\xad\xae']/}
+    s=${s//$'\xe2\x81'[$'\xa6\xa7\xa8\xa9']/}
+    s=${s//$'\xd8\x9c'/}
+    # C1 сырыми байтами не вырезаем: в UTF-8 тот же диапазон — продолжение кириллицы,
+    # побайтовая чистка ломала бы весь русский текст. Одиночный 0x9b опасен только на
+    # 8-битной не-UTF-8 консоли, где вывод и так нечитаем.
     s=${s//[$'\t\r\n\x1f']/}
     s=${s//[$MT_SUM_CTRL]/}
+    # «\» — единственное, чем из текста собирается escape для стоков с echo -e/printf %b
+    # (\033 снова стал бы ESC уже после чистки). Выводимый текст слэшей не требует.
+    s=${s//\\/}
     printf '%s' "$s"
 }
 
@@ -1577,7 +1591,8 @@ mt_tg_say_fail() {   # <HTTP-код> <файл ответа>
     elif [[ "$MT_RESP_V" == closed ]]; then
         echo -e "  ${YELLOW}Бот сейчас закрыт владельцем — попробуйте позже.${NC}"
     else
-        echo -e "  ${YELLOW}Бот ответил неожиданно (HTTP $(mt_clean "${code:0:3}")). Попробуйте позже.${NC}"
+        printf '  %sБот ответил неожиданно (HTTP %s). Попробуйте позже.%s\n' \
+            "$YELLOW" "$(mt_clean "${code:0:3}")" "$NC"
     fi
 }
 
@@ -1691,10 +1706,6 @@ mt_tg_pair() {
     elif (( approved )); then
         who=$(printf '%b' "${who//%/\\x}")
         who=$(mt_clean "$who")
-        # Имя — недоверенный ввод бэкенда. mt_clean вырезает управляющие, но не «\»,
-        # а он — единственное, чем из текста собирается escape-последовательность для
-        # стоков с `echo -e` (\e, \c): вырезаем до показа имени.
-        who=${who//\\/}
         who=$(vcut "$who" 64)
         # Один вопрос на всё: «да» — привязка и запуск тестов из Telegram, «с» — только сводки.
         # Без systemd службы не будет — тогда вопрос только про привязку.
@@ -1798,7 +1809,8 @@ mt_tg_status() {
         fi
         return 0
     fi
-    echo -e "  ${YELLOW}Привязан к @${MT_BOT} · бот сейчас недоступен (HTTP $(mt_clean "${code:0:3}")).${NC}"
+    printf '  %sПривязан к @%s · бот сейчас недоступен (HTTP %s).%s\n' \
+        "$YELLOW" "$MT_BOT" "$(mt_clean "${code:0:3}")" "$NC"
     return 2
 }
 
@@ -2095,16 +2107,52 @@ mt_agent_ok() {
     [[ "$out" == agent-ok ]]
 }
 
-# Этот скрипт во временный файл -> путь: запущен файлом — копия себя, через bash <(curl …) — REPO_URL
+# Подпись релиза: скрипт + файл подписи (base64 DER). 0 — подпись верна. Без openssl
+# отказываем: проверить нечем, а дальше этот файл исполняется как root (mt_agent_ok).
+mt_release_ok() {   # <скрипт> <подпись>
+    local d rc
+    command -v openssl >/dev/null 2>&1 || return 1
+    [[ -s "$1" && -s "$2" ]] || return 1
+    d=$(mktemp -d) || return 1
+    printf '%s' "$MT_RELEASE_KEY" | openssl base64 -d -A > "$d/key.der" 2>/dev/null
+    openssl pkey -pubin -inform DER -in "$d/key.der" -out "$d/key.pem" 2>/dev/null \
+        && openssl base64 -d -A < "$2" > "$d/sig.der" 2>/dev/null \
+        && openssl dgst -sha256 -verify "$d/key.pem" -signature "$d/sig.der" "$1" >/dev/null 2>&1
+    rc=$?
+    rm -rf "$d"
+    return $rc
+}
+
+# Скрипт и его подпись из репозитория -> файл. Отдаёт путь только если подпись сошлась:
+# неподписанное обновление не должно доезжать до запуска. --proto-redir =https обязателен —
+# иначе редирект увёл бы загрузку исполняемого кода на plaintext http.
+mt_release_fetch() {   # <файл-назначение>
+    local dest="$1" sig rc=1
+    sig=$(mktemp) || return 1
+    if command -v "$MT_CURL" >/dev/null 2>&1; then
+        "$MT_CURL" -fsSL --proto =https --proto-redir =https --connect-timeout 10 --max-time 60 \
+            "$REPO_URL" -o "$dest" 2>/dev/null \
+            && "$MT_CURL" -fsSL --proto =https --proto-redir =https --connect-timeout 10 --max-time 30 \
+                "$REPO_URL.sig" -o "$sig" 2>/dev/null && rc=0
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO "$dest" "$REPO_URL" 2>/dev/null && wget -qO "$sig" "$REPO_URL.sig" 2>/dev/null && rc=0
+    fi
+    if (( rc == 0 )) && mt_release_ok "$dest" "$sig"; then
+        rm -f "$sig"; return 0
+    fi
+    rm -f "$sig"
+    return 1
+}
+
+# Этот скрипт во временный файл -> путь: запущен файлом — копия себя (она уже исполняется,
+# доверять ей нечего проверять), через bash <(curl …) — подписанный релиз из репозитория.
 mt_candidate() {
     local tmp
     tmp=$(mktemp) || return 1
     if [[ -f "$MT_SELF" && -r "$MT_SELF" ]]; then
         cp "$MT_SELF" "$tmp" 2>/dev/null && { printf '%s' "$tmp"; return 0; }
-    elif command -v "$MT_CURL" >/dev/null 2>&1; then
-        "$MT_CURL" -fsSL --proto =https --max-time 60 "$REPO_URL" -o "$tmp" 2>/dev/null && { printf '%s' "$tmp"; return 0; }
-    elif command -v wget >/dev/null 2>&1; then
-        wget -qO "$tmp" "$REPO_URL" 2>/dev/null && { printf '%s' "$tmp"; return 0; }
+    elif mt_release_fetch "$tmp"; then
+        printf '%s' "$tmp"; return 0
     fi
     rm -f "$tmp"
     return 1
@@ -2116,11 +2164,8 @@ mt_candidate() {
 mt_repo_download() {
     local tmp
     tmp=$(mktemp) || return 1
-    if command -v "$MT_CURL" >/dev/null 2>&1; then
-        "$MT_CURL" -fsSL --proto =https --max-time 60 "$REPO_URL" -o "$tmp" 2>/dev/null \
-            && [[ -s "$tmp" ]] && { printf '%s' "$tmp"; return 0; }
-    elif command -v wget >/dev/null 2>&1; then
-        wget -qO "$tmp" "$REPO_URL" 2>/dev/null && [[ -s "$tmp" ]] && { printf '%s' "$tmp"; return 0; }
+    if mt_release_fetch "$tmp"; then
+        printf '%s' "$tmp"; return 0
     fi
     rm -f "$tmp"
     return 1
@@ -2344,8 +2389,9 @@ capture_test() {
     export RED GREEN YELLOW CYAN BOLD NC SCRIPT_VERSION
     # ТСПУ спрашивает наш API прямо из подоболочки — без этих функций и адресов он
     # там не живёт. Ключ сервера не экспортируем: в окружении сторонних тестов ему не место.
-    export MT_BOT_API MT_API MT_CURL MT_UA
+    export MT_BOT_API MT_API MT_CURL MT_UA MT_SUM_CTRL
     export -f print_separator check_and_install install_package detect_pkg_manager mt_api spin_run
+    export -f mt_clean mt_resp_body
     export -f "${MT_CAT_FUNCS[@]}"
 
     if [[ "$SCRIPT_CAPTURE" == "util" && -n "${MT_JOB_DIR:-}" && -n "${MT_TEST_NUM:-}" ]]; then
@@ -2461,7 +2507,7 @@ upload_report() {
     # imgdb.io — основной (анонимно, работает с VPS, лайфтайм ссылки задаём сами). Остальные — запас.
     for name in imgdb x0 catbox litterbox uguu tmpfiles pixeldrain fileio telegraph; do
         echo -ne "${CYAN}Загружаю на ${name}...${NC} " >&2
-        url=$("up_${name}" "$file" 2>/dev/null); url=$(printf '%s' "$url" | tr -d '\r\n[:space:]')
+        url=$("up_${name}" "$file" 2>/dev/null); url=$(mt_clean "$(printf '%s' "$url" | tr -d '\r\n[:space:]')")
         if [[ "$url" == https://* ]]; then echo -e "${GREEN}✓${NC}" >&2; printf '%s\n' "$url"; return 0; fi
         echo -e "${YELLOW}нет${NC}" >&2
     done
@@ -4780,6 +4826,10 @@ mt_sum_put() {
     for f in "$@"; do
         f=${f//[$'\x1f\r\n\t']/ }
         f=${f//[$MT_SUM_CTRL]/}
+        # BIDI: в сводке и на картинке ими переставляют слова — тот же обман, что в терминале.
+        f=${f//$'\xe2\x80'[$'\x8e\x8f\xaa\xab\xac\xad\xae']/}
+        f=${f//$'\xe2\x81'[$'\xa6\xa7\xa8\xa9']/}
+        f=${f//$'\xd8\x9c'/}
         (( ${#f} > 199 )) && f=$(vcut "$f" 199)
         out+=( "$f" )
     done
@@ -5650,6 +5700,7 @@ step_upload_album() {
     while IFS= read -r f; do [[ -s "$f" ]] && files+=( "$f" ); done < "$SUMMARY_DIR/pages.list"
     (( ${#files[@]} > 0 )) || return 1
     url=$(up_imgdb_album "${files[@]}") || return 1
+    url=$(mt_clean "$url")
     [[ "$url" == https://* ]] || return 1
     printf '%s' "$url" > "$SUMMARY_DIR/url.txt"
 }
@@ -5776,7 +5827,7 @@ mt_proof_why() {   # <http> <глагол> <причина> → по-челов�
     esac
 }
 
-mt_say() { [[ "$MT_HEADLESS" == 1 ]] || echo -e "$1"; }
+mt_say() { [[ "$MT_HEADLESS" == 1 ]] || printf '%s\n' "$1"; }
 
 # Начало теста — ради длительности в записи; без повторов: необязательно.
 mt_proof_begin() {   # <номер> <функция>
@@ -5886,8 +5937,10 @@ mt_verify() {
                openssl pkey -pubin -inform DER -in "$d/key.der" -out "$d/key.pem" 2>/dev/null \
                    && openssl dgst -sha256 -verify "$d/key.pem" -signature "$d/sig.der" "$d/rec.txt" >/dev/null 2>&1 \
                    && rc=0 ;;
-            2) echo -e "${RED}Ключ $(mt_clean "$kid") отозван${NC} — записи после даты отзыва не принимаются." ;;
-            *) echo -e "${YELLOW}Незнакомый ключ $(mt_clean "$kid")${NC} — обновите multitest." ;;
+            2) printf '%sКлюч %s отозван%s — записи после даты отзыва не принимаются.\n' \
+                   "$RED" "$(mt_clean "$kid")" "$NC" ;;
+            *) printf '%sНезнакомый ключ %s%s — обновите multitest.\n' \
+                   "$YELLOW" "$(mt_clean "$kid")" "$NC" ;;
         esac
     fi
     if (( rc )); then
@@ -5930,7 +5983,8 @@ mt_tg_report() {
     elif [[ -e "$SUMMARY_DIR/tg.revoked" ]]; then
         echo -e "  ${YELLOW}Telegram: сервер отвязан в боте — ключ на сервере удалён.${NC}"
     elif [[ -e "$SUMMARY_DIR/tg.err" ]]; then
-        echo -e "  ${YELLOW}Telegram: сводка не отправилась ($(cat "$SUMMARY_DIR/tg.err")).${NC}"
+        printf '  %sTelegram: сводка не отправилась (%s).%s\n' \
+            "$YELLOW" "$(cat "$SUMMARY_DIR/tg.err")" "$NC"
     fi
 }
 
@@ -5985,7 +6039,8 @@ render_album_summary() {
         if spin_run "Подпись Multitest: бот рисует и подписывает картинки" step_proof_finish; then
             proofed=1; tg=1
         else
-            echo -e "  ${YELLOW}Без подписи:${NC} $(cat "$SUMMARY_DIR/proof/fail" 2>/dev/null || echo "бот не ответил") — отправлю как обычно."
+            printf '  %sБез подписи:%s %s — отправлю как обычно.\n' "$YELLOW" "$NC" \
+                "$(cat "$SUMMARY_DIR/proof/fail" 2>/dev/null || echo "бот не ответил")"
         fi
     fi
     # агенту (без imgdb) с подписанным прогоном свои картинки не нужны
@@ -6027,7 +6082,7 @@ render_album_summary() {
     url=$(cat "$SUMMARY_DIR/url.txt"); life=$(imgdb_life)
     echo ""
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "  ${BOLD}${GREEN}Альбом со сводкой:${NC} ${BOLD}${url}${NC}"
+    printf '  %s%sАльбом со сводкой:%s %s%s%s\n' "$BOLD" "$GREEN" "$NC" "$BOLD" "$url" "$NC"
     echo -e "  ${CYAN}Страниц: ${BOLD}${n}${NC}${CYAN} — обложка и по одной на тест.${NC}"
     # про постоянную ссылку молчим: строка была нужна, только пока срок конечный
     [[ "$life" != "постоянная" ]] && echo -e "  ${YELLOW}Ссылка ${life} — потом альбом удалится с хостинга.${NC}"
@@ -6082,7 +6137,7 @@ render_and_upload_summary() {
         esac
         echo ""
         echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-        echo -e "  ${BOLD}${GREEN}Ссылка на сводку:${NC} ${BOLD}${url}${NC}"
+        printf '  %s%sСсылка на сводку:%s %s%s%s\n' "$BOLD" "$GREEN" "$NC" "$BOLD" "$url" "$NC"
         [[ "$life" != "постоянная" ]] && echo -e "  ${YELLOW}Ссылка ${life} — потом файл удалится с хостинга.${NC}"
         echo -e "  ${YELLOW}Чтобы переслать надёжно/навсегда — ОБЯЗАТЕЛЬНО скачайте сам файл:${NC}"
         echo -e "    ${BOLD}${out}${NC}"
@@ -6174,7 +6229,7 @@ mt_cli_dispatch "$@"
 if [[ ! -t 0 ]]; then
     {
         echo "multitest: меню работает только в терминале, а stdin — не терминал."
-        echo "  Запуск: multitest   ·   без установки: bash <(curl -sL $REPO_URL)"
+        echo "  Запуск: multitest   ·   без установки: bash <(curl -fsSL $REPO_URL)"
         echo "  Без меню: multitest --help"
     } >&2
     exit 1

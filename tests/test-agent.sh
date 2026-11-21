@@ -3,6 +3,7 @@
 . "$(dirname "$0")/lib.sh"
 MULTITEST_TEST=1 source "$T_ROOT/multitest.sh" ""
 t_fake_curl
+t_release_key
 MT_STATE_DIR="$T_W/state"; MT_CONF="$MT_STATE_DIR/agent.conf"
 MT_AGENT_DIR="$T_W/agent"; MT_AGENT_UNIT="$T_W/unit/multitest-agent.service"; MT_SYSTEMD="$T_W/systemd"
 MT_LOCK_FILE="$T_W/lock"
@@ -113,7 +114,7 @@ check "unit: без Nice/ProtectSystem"     '! grep -qE "^(Nice|IOSchedulingClas
 pair; fresh
 t_respond 200 "ok"                                   # hello
 t_respond 200 "upgrade"                              # poll
-t_respond 200 "$(cat "$T_ROOT/multitest.sh")"        # «новый» скрипт из репозитория
+t_release "$T_ROOT/multitest.sh"                     # «новый» скрипт из репозитория + подпись
 MT_AGENT_POLLS=1 mt_agent_main > "$T_W/out" 2>&1
 check "upgrade: reexec вызван"             'grep -qx "REEXEC" "$T_W/calls"'
 check "upgrade: копия службы заменена"     'grep -q "run_tspu_check" "$MT_AGENT_BIN"'
@@ -122,9 +123,9 @@ check "upgrade: тянул из REPO_URL скрипта" 'grep -qxF "$REPO_URL" 
 # 12. Слежение за репозиторием: таймер — самообновление между опросами
 pair; fresh
 t_respond 200 "ok"                                   # hello
-t_respond 200 "$(cat "$T_ROOT/multitest.sh")"        # проверка репозитория (итерация 1)
+t_release "$T_ROOT/multitest.sh"                     # проверка репозитория (итерация 1)
 t_respond 200 "idle"                                 # poll
-t_respond 200 "$(cat "$T_ROOT/multitest.sh")"        # проверка репозитория (итерация 2)
+t_release "$T_ROOT/multitest.sh"                     # проверка репозитория (итерация 2)
 t_respond 200 "idle"                                 # poll
 MT_REPO_CHECK_EVERY=0 MT_AGENT_POLLS=2 mt_agent_main > "$T_W/out" 2>&1
 check "таймер: два скачивания из REPO_URL" '[ "$(grep -lxF "$REPO_URL" "$T_W"/curl/argv.* | wc -l)" = 2 ]'
@@ -134,12 +135,12 @@ check "таймер: опросы продолжались"        '[ "$(grep -l
 # 13. Репозиторий недоступен — строка в журнал, reexec нет, опрос продолжается
 pair; fresh
 t_respond 200 "ok"                                   # hello
-# ответа №2 нет: скачивание падает (поддельный curl отвечает кодом 7)
+# подписи нет: запрос .sig падает (поддельный curl отвечает кодом 7) — обновление не проходит
 t_respond 200 "idle"                                 # poll
 MT_REPO_CHECK_EVERY=0 MT_AGENT_POLLS=1 mt_agent_main > "$T_W/out" 2>&1
 check "репозиторий упал: reexec не было"   '[ ! -e "$T_W/calls" ]'
 check "репозиторий упал: строка в журнал"  'grep -q "проверка обновления не удалась" "$T_W/out"'
-check "репозиторий упал: опрос был"        'grep -qx "wait=25" "$T_W/curl/argv.3"'
+check "репозиторий упал: опрос был"        '[ "$(grep -lx "wait=25" "$T_W"/curl/argv.* | wc -l)" -ge 1 ]'
 
 # 14. BBR + Cake: отдельное действие, без запуска тестов и без сводки
 pair; fresh
